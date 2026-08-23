@@ -8,21 +8,27 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/styles.css">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="./assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
 </head>
 <body data-theme="dark">
 <div id="app">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand">
       <img class="brand-mark" src="./assets/logo.png" alt="Engineering Calculator Hub logo">
-      <div class="brand-text">Engineering<br>Calculator Hub<small>Calculate &bull; Convert &bull; Analyze &bull; Learn</small></div>
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
     </div>
     <nav class="nav" id="nav-root"></nav>
     <div class="sidebar-foot">
       <button class="theme-toggle" id="themeToggle">☾ Dark</button>
     </div>
   </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <div class="main">
     <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
       <div class="search-box">
         <span>⌕</span>
         <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
@@ -35,6 +41,7 @@
     <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review.</footer>
   </div>
 </div>
+<div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
 <script type="module" src="./js/app.js"></script>
 </body>
 </html>

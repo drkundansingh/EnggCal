@@ -131,6 +131,7 @@ let currentRoute = '';
 function navigate(route) {
   currentRoute = ROUTES[route] ? route : '';
   render();
+  closeMobileMenu();
 }
 function render() {
   renderNav(currentRoute);
@@ -138,6 +139,26 @@ function render() {
   (ROUTES[currentRoute] || pageDashboard)();
   app.scrollTop = 0;
 }
+
+// ---------- Mobile sidebar drawer ----------
+const sidebarEl = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const menuToggle = document.getElementById('menuToggle');
+function openMobileMenu() {
+  sidebarEl.classList.add('open');
+  sidebarBackdrop.classList.add('open');
+}
+function closeMobileMenu() {
+  sidebarEl.classList.remove('open');
+  sidebarBackdrop.classList.remove('open');
+}
+if (menuToggle) {
+  menuToggle.addEventListener('click', () => {
+    sidebarEl.classList.contains('open') ? closeMobileMenu() : openMobileMenu();
+  });
+}
+if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeMobileMenu);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMobileMenu(); });
 
 // ---------- Dashboard ----------
 function pageDashboard() {
@@ -2628,3 +2649,13 @@ async function initTheme() {
 initTheme();
 initGlobalSearch();
 navigate('');
+
+// Register the offline service worker if supported (progressive
+// enhancement — the app works fully without it, this just adds offline
+// support for repeat visits and installed/TWA usage). Never lets a
+// registration failure affect the rest of the app.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+  });
+}
