@@ -1,0 +1,6 @@
+{
+  "name": "engineering-calculator-hub",
+  "private": true,
+  "type": "module",
+  "description": "Modular engineering calculator source. Run tests with: node tests/test.js"
+}
