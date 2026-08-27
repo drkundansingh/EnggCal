@@ -2,12 +2,13 @@
 // client-side with no backend — caching the shell means it still opens and
 // works with no connection after the first successful load, which matters
 // for a Play Store app that might be opened without signal.
-const CACHE_NAME = 'enghub-shell-v1';
+const CACHE_NAME = 'enghub-shell-v2';
 const SHELL_FILES = [
   './index.html',
   './css/styles.css',
   './js/app.js',
   './data/formulaLibrary.json',
+  './data/content-visibility.json',
   './manifest.webmanifest',
   './assets/logo.png',
 ];

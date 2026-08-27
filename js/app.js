@@ -24,6 +24,15 @@ fetch('./data/formulaLibrary.json').then((r) => r.json()).then((data) => { FORMU
 function h(html) {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
+  // A template with multiple top-level siblings would silently lose every
+  // element after the first if we just returned firstElementChild — this
+  // has caused real bugs before. Auto-wrap in that case; single-root
+  // templates (the common case) are returned exactly as before.
+  if (t.content.children.length > 1) {
+    const wrapper = document.createElement('div');
+    wrapper.append(...t.content.childNodes);
+    return wrapper;
+  }
   return t.content.firstElementChild;
 }
 function fmt(v, dp = 3) {
@@ -91,14 +100,72 @@ const NAV = [
 function renderNav(active) {
   navRoot.innerHTML = '';
   for (const group of NAV) {
+    const visibleItems = group.items.filter((item) => adminMode || contentVisibility[item.id] !== false);
+    if (!visibleItems.length) continue;
     const g = h(`<div class="nav-group"><div class="nav-label">${group.group}</div></div>`);
-    for (const item of group.items) {
-      const a = h(`<div class="nav-item ${item.id === active ? 'active' : ''}" role="link" tabindex="0"><span class="ic">${item.icon}</span>${item.label}</div>`);
+    for (const item of visibleItems) {
+      const hidden = contentVisibility[item.id] === false;
+      const a = h(`<div class="nav-item ${item.id === active ? 'active' : ''}" role="link" tabindex="0">
+        <span class="ic">${item.icon}</span>${item.label}${adminMode && hidden ? ' <span class="badge out" style="margin-left:6px;">hidden</span>' : ''}
+      </div>`);
       a.addEventListener('click', () => navigate(item.id));
       a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(item.id); } });
       g.appendChild(a);
     }
     navRoot.appendChild(g);
+  }
+  if (adminMode) {
+    const g = h('<div class="nav-group"><div class="nav-label">Admin</div></div>');
+    const a = h(`<div class="nav-item ${active === 'admin' ? 'active' : ''}" role="link" tabindex="0"><span class="ic">\u2699</span>Admin Panel</div>`);
+    a.addEventListener('click', () => navigate('admin'));
+    a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('admin'); } });
+    g.appendChild(a);
+    navRoot.appendChild(g);
+  }
+}
+
+// ---------- Content visibility (admin-controlled) ----------
+// Static site, no backend: this config is a JSON file shipped with the
+// site. It genuinely filters the nav for every real visitor (since it's
+// baked into the deployed files everyone's browser loads) — but changing
+// it here only affects THIS browser's session until the updated file is
+// committed and pushed to the live site. See the Admin Panel for details.
+let contentVisibility = {};
+async function loadContentVisibility() {
+  try {
+    const res = await fetch('./data/content-visibility.json');
+    if (!res.ok) return;
+    const data = await res.json();
+    contentVisibility = data.items || {};
+  } catch (e) {
+    // Missing/unreachable (e.g. the single-file bundle, or file:// access) —
+    // fall back to "everything visible", the previous behavior.
+  }
+}
+
+// Admin gate — a LOCAL, soft deterrent only. This is client-side JavaScript
+// with no server to verify against, so it cannot be real security: anyone
+// with browser dev tools can see exactly how this check works and bypass
+// it. It exists to keep the admin panel out of casual visitors' way, not
+// to protect sensitive data — never put anything genuinely sensitive
+// behind this gate.
+let adminMode = false;
+const ADMIN_PASSWORD_HASH_PLACEHOLDER = '494a715f7e9b4071aca61bac42ca858a309524e5864f0920030862a4ae7589be'; // sha256("changeme123") — CHANGE THIS before publishing
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function attemptAdminLogin() {
+  const pw = prompt('Admin password (this is a local, soft gate only — see Admin Panel for details):');
+  if (pw === null) return;
+  const hash = await sha256Hex(pw);
+  if (hash === ADMIN_PASSWORD_HASH_PLACEHOLDER) {
+    adminMode = true;
+    toast('Admin mode on');
+    renderNav(currentRoute);
+    navigate('admin');
+  } else {
+    toast('Incorrect password');
   }
 }
 
@@ -120,6 +187,7 @@ const ROUTES = {
   'history': pageHistory,
   'support': pageSupport,
   'reviews': pageReviews,
+  'admin': pageAdmin,
 };
 
 // NOTE: navigation is driven entirely by JS state (`currentRoute`), not by
@@ -1624,14 +1692,10 @@ function pageProtection() {
   app.appendChild(h(`<div class="assumptions-note">${trip.CLASSIFICATIONS.join(' · ')} — this simulator is intended for engineering education, analysis, training and configurable plant-model simulation. It is not a replacement for OEM protection logic, approved plant procedures, actual DCS/SIS/FSSS/ETS systems, statutory requirements, or qualified engineering judgment. Never change actual plant protection settings based only on this tool.</div>`));
 
   const tabs = h(`<div class="tabs">
-    <div class="tab active" data-m="config">Plant Configuration</div>
-    <div class="tab" data-m="ets">ETS Dashboard</div>
+    <div class="tab active" data-m="ets">ETS Dashboard</div>
     <div class="tab" data-m="mft">MFT Dashboard</div>
-    <div class="tab" data-m="simulator">Trip Simulator</div>
+    <div class="tab" data-m="drives">Major Drives Dashboard</div>
     <div class="tab" data-m="diagram">Trip Logic Diagram</div>
-    <div class="tab" data-m="matrix">Trip Action Matrix</div>
-    <div class="tab" data-m="reference">Reference Profiles</div>
-    <div class="tab" data-m="history">Trip History</div>
   </div>`);
   app.appendChild(tabs);
   const layout = h('<div class="calc-layout"></div>');
@@ -1649,11 +1713,12 @@ function pageProtection() {
   // User-entered overrides of registry alarm/trip setpoints, keyed by parameter id.
   const overrides = {};
   function effectiveParam(p) {
+    const plantAdjusted = trip.applyPlantType(p, plantConfig.plantType);
     const o = overrides[p.id];
-    return o ? { ...p, alarmSetpoint: o.alarmSetpoint, tripSetpoint: o.tripSetpoint, dataType: 'User Configured' } : p;
+    return o ? { ...plantAdjusted, alarmSetpoint: o.alarmSetpoint, tripSetpoint: o.tripSetpoint, dataType: 'User Configured' } : plantAdjusted;
   }
 
-  let mode = 'config';
+  let mode = 'ets';
   tabs.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
     tabs.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
     t.classList.add('active'); mode = t.dataset.m; render();
@@ -1663,52 +1728,41 @@ function pageProtection() {
     layout.style.gridTemplateColumns = '';
     left.style.display = '';
     right.innerHTML = '<div class="empty-state">Select options and calculate.</div>';
-    if (mode === 'config') renderConfig();
-    else if (mode === 'ets') renderDashboard('ETS');
+    if (mode === 'ets') renderDashboard('ETS');
     else if (mode === 'mft') renderDashboard('MFT');
-    else if (mode === 'simulator') renderSimulator();
-    else if (mode === 'diagram') renderDiagram();
-    else if (mode === 'matrix') renderMatrix();
-    else if (mode === 'reference') renderReference();
-    else renderTripHistory();
+    else if (mode === 'drives') renderDashboard('DRIVES');
+    else renderDiagram();
   }
 
-  function renderConfig() {
-    left.innerHTML = `
-      <div class="panel-title">Plant Configuration</div>
-      <div class="field"><label>Plant type</label>
-        <select id="cfgPlantType">${trip.PLANT_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.plantType ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Boiler type</label>
-        <select id="cfgBoilerType">${trip.BOILER_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.boilerType ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Fuel</label>
-        <select id="cfgFuelType">${trip.FUEL_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.fuelType ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      </div>
-      <div class="field"><label>Unit rating (MW)</label><input type="number" id="cfgUnitMW" value="${plantConfig.unitMW}" min="25" max="1200"></div>
-      <div class="field"><label>OEM reference profile</label>
-        <select id="cfgOemProfile">${trip.OEM_REFERENCE_PROFILES.map((p) => `<option value="${p}" ${p === plantConfig.oemProfile ? 'selected' : ''}>${p}</option>`).join('')}</select>
-        <div class="hint">Changes attribution labeling only. Values shown remain generic/illustrative unless you override them yourself in the ETS/MFT dashboards — reference data never overrides your entered plant data.</div>
-      </div>
-      <div class="btn-row"><button class="btn" id="cfgApply">Apply</button></div>
-    `;
-    left.querySelector('#cfgApply').addEventListener('click', () => {
-      plantConfig.plantType = left.querySelector('#cfgPlantType').value;
-      plantConfig.boilerType = left.querySelector('#cfgBoilerType').value;
-      plantConfig.fuelType = left.querySelector('#cfgFuelType').value;
-      plantConfig.unitMW = +left.querySelector('#cfgUnitMW').value;
-      plantConfig.oemProfile = left.querySelector('#cfgOemProfile').value;
-      right.innerHTML = `<div class="panel-title">Configuration applied</div>
-        <div class="result-grid">
-          ${resultRow('Plant type', plantConfig.plantType)}
-          ${resultRow('Boiler type', plantConfig.boilerType)}
-          ${resultRow('Fuel', plantConfig.fuelType)}
-          ${resultRow('Unit rating', plantConfig.unitMW + ' MW')}
-          ${resultRow('OEM reference profile', plantConfig.oemProfile)}
+  function renderInlinePlantConfigBar(container) {
+    const bar = h(`<div class="card" style="background:var(--bg-inset);margin-bottom:16px;padding:12px 16px;">
+      <div class="input-row" style="align-items:flex-end;">
+        <div class="field" style="flex:1;margin-bottom:0;"><label>Plant type</label>
+          <select id="cfgPlantType">${trip.PLANT_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.plantType ? 'selected' : ''}>${t}</option>`).join('')}</select>
         </div>
-        <p style="color:var(--text-dim);font-size:.82rem;margin-top:10px;">This configuration now applies to the ETS/MFT dashboards, simulator, and reference profile tabs for the rest of this session (drum-only and once-through-only parameters are filtered accordingly).</p>`;
+        <div class="field" style="flex:1;margin-bottom:0;"><label>Boiler type</label>
+          <select id="cfgBoilerType">${trip.BOILER_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.boilerType ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="flex:1;margin-bottom:0;"><label>Fuel</label>
+          <select id="cfgFuelType">${trip.FUEL_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.fuelType ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="flex:1;margin-bottom:0;"><label>Unit rating (MW)</label><input type="number" id="cfgUnitMW" value="${plantConfig.unitMW}" min="25" max="1200"></div>
+        <div class="field" style="flex:1;margin-bottom:0;"><label>OEM reference profile</label>
+          <select id="cfgOemProfile">${trip.OEM_REFERENCE_PROFILES.map((p) => `<option value="${p}" ${p === plantConfig.oemProfile ? 'selected' : ''}>${p}</option>`).join('')}</select>
+        </div>
+        <button class="btn secondary" id="cfgApply" style="flex-shrink:0;">Apply</button>
+      </div>
+    </div>`);
+    container.appendChild(bar);
+    bar.querySelector('#cfgApply').addEventListener('click', () => {
+      plantConfig.plantType = bar.querySelector('#cfgPlantType').value;
+      plantConfig.boilerType = bar.querySelector('#cfgBoilerType').value;
+      plantConfig.fuelType = bar.querySelector('#cfgFuelType').value;
+      plantConfig.unitMW = +bar.querySelector('#cfgUnitMW').value;
+      plantConfig.oemProfile = bar.querySelector('#cfgOemProfile').value;
+      toast('Plant configuration updated');
+      render();
     });
-    right.innerHTML = `<div class="empty-state">Set plant configuration, then switch to ETS/MFT Dashboard, Simulator, or Reference Profiles.</div>`;
   }
 
   function statusBadgeClass(status) {
@@ -1718,17 +1772,62 @@ function pageProtection() {
   }
 
   function renderDashboard(system) {
-    layout.style.gridTemplateColumns = '1fr';
-    left.style.display = 'none';
-    const params = trip.parametersFor(plantConfig.boilerType).filter((p) => p.system === system).map(effectiveParam);
-    right.innerHTML = `
-      <div class="panel-title">${system === 'ETS' ? 'Turbine Trip Dashboard (ETS)' : 'Boiler Trip Dashboard (MFT)'} — ${plantConfig.plantType}, ${plantConfig.boilerType} boiler</div>
+    layout.style.gridTemplateColumns = '';
+    left.style.display = '';
+    if (plantConfig.plantType === 'ultra-supercritical') plantConfig.boilerType = 'once-through';
+    left.innerHTML = `
+      <div class="panel-title">Plant Setup</div>
+      <p style="color:var(--text-dim);font-size:.78rem;">Affects which parameters apply below — e.g. boiler type filters drum-only vs once-through-only entries, and steam-condition setpoints (pressure/temperature) scale by plant type.</p>
+      <div class="field"><label>Plant type</label>
+        <select id="cfgPlantType">${trip.PLANT_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.plantType ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Boiler type</label>
+        <select id="cfgBoilerType" ${plantConfig.plantType === 'ultra-supercritical' ? 'disabled' : ''}>${trip.BOILER_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.boilerType ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        ${plantConfig.plantType === 'ultra-supercritical' ? '<div class="hint">Locked to once-through — ultra-supercritical operates above the critical point, where there is no distinct liquid/vapor phase for a drum to separate.</div>' : ''}
+      </div>
+      <div class="field"><label>Fuel type</label>
+        <select id="cfgFuelType">${trip.FUEL_TYPES.map((t) => `<option value="${t}" ${t === plantConfig.fuelType ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Unit rating (MW)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="cfgUnitMW" value="${plantConfig.unitMW}" step="1" style="flex:1;">
+          <button class="btn secondary" id="cfgUnitMWApply" style="padding:8px 14px;flex-shrink:0;">Submit</button>
+        </div>
+        <div class="hint">Type a value and click Submit (or press Enter) to apply it.</div>
+      </div>
+    `;
+    left.querySelector('#cfgPlantType').addEventListener('change', (e) => {
+      plantConfig.plantType = e.target.value;
+      if (plantConfig.plantType === 'ultra-supercritical') plantConfig.boilerType = 'once-through';
+      renderDashboard(system);
+    });
+    left.querySelector('#cfgBoilerType').addEventListener('change', (e) => { plantConfig.boilerType = e.target.value; renderDashboard(system); });
+    left.querySelector('#cfgFuelType').addEventListener('change', (e) => { plantConfig.fuelType = e.target.value; renderDashboard(system); });
+    function applyUnitMW() {
+      const val = +left.querySelector('#cfgUnitMW').value;
+      plantConfig.unitMW = val || plantConfig.unitMW;
+      renderDashboard(system);
+    }
+    left.querySelector('#cfgUnitMWApply').addEventListener('click', applyUnitMW);
+    left.querySelector('#cfgUnitMW').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyUnitMW(); } });
+
+    right.innerHTML = '';
+    const isDrives = system === 'DRIVES';
+    const params = trip.parametersFor(plantConfig.boilerType)
+      .filter((p) => (isDrives ? p.classification === 'AUXILIARY DRIVE' : p.system === system))
+      .map(effectiveParam);
+    const title = system === 'ETS' ? 'Turbine Trip Dashboard (ETS)' : system === 'MFT' ? 'Boiler Trip Dashboard (MFT)' : 'Major Drives Dashboard';
+    right.appendChild(h(`<div>
+      <div class="panel-title">${title} — ${plantConfig.plantType}, ${plantConfig.boilerType} boiler, ${plantConfig.unitMW} MW</div>
+      <p style="color:var(--text-dim);font-size:.78rem;">Enter a current value for any parameter and click its <b>Submit</b> button (or press Enter) to check status against its alarm/trip setpoints — each row evaluates independently.</p>
       <div style="overflow-x:auto;">
-        <table><thead><tr><th>Parameter</th><th>Category</th><th>Value</th><th>Alarm</th><th>Trip</th><th>Status</th><th>Data type</th></tr></thead><tbody>
+        <table><thead><tr><th>Parameter</th>${isDrives ? '<th>Drive</th>' : ''}<th>Category</th><th>Value</th><th></th><th>Alarm</th><th>Trip</th><th>Status</th><th>Data type</th></tr></thead><tbody>
           ${params.map((p) => `<tr data-id="${p.id}">
             <td>${p.label}</td>
+            ${isDrives ? `<td style="font-size:.76rem;color:var(--cyan);">${p.system}</td>` : ''}
             <td style="font-size:.76rem;color:var(--text-dim);">${p.category}</td>
             <td><input type="number" class="pv-input" data-id="${p.id}" value="${(p.normalMin + p.normalMax) / 2}" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">${p.unit}</span></td>
+            <td><button class="btn secondary eval-row-btn" data-id="${p.id}" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
             <td class="num">${fmt(p.alarmSetpoint, 3)}</td>
             <td class="num">${fmt(p.tripSetpoint, 3)}</td>
             <td class="status-cell"><span class="badge normal">NORMAL</span></td>
@@ -1737,16 +1836,26 @@ function pageProtection() {
         </tbody></table>
       </div>
       <div class="btn-row" style="margin-top:14px;"><button class="btn secondary" id="evalAllBtn">Evaluate all statuses</button></div>
-      <p style="color:var(--text-dim);font-size:.78rem;margin-top:10px;">Enter a current value per parameter and click Evaluate — this simulates live status against the configured setpoints. Click a row's alarm/trip cell in the Reference Profiles tab to override defaults.</p>
-    `;
-    right.querySelector('#evalAllBtn').addEventListener('click', () => {
-      right.querySelectorAll('tr[data-id]').forEach((tr) => {
-        const id = tr.dataset.id;
-        const p = params.find((x) => x.id === id);
-        const val = +tr.querySelector('.pv-input').value;
-        const status = trip.evaluateStatus(val, p.alarmSetpoint, p.tripSetpoint, p.direction);
-        tr.querySelector('.status-cell').innerHTML = `<span class="badge ${statusBadgeClass(status)}">${status}</span>`;
+      <p style="color:var(--text-dim);font-size:.78rem;margin-top:10px;">Enter a current value per parameter and click Evaluate — this simulates live status against the configured setpoints.</p>
+    </div>`));
+
+    function evaluateRow(tr) {
+      const id = tr.dataset.id;
+      const p = params.find((x) => x.id === id);
+      const val = +tr.querySelector('.pv-input').value;
+      const status = trip.evaluateStatus(val, p.alarmSetpoint, p.tripSetpoint, p.direction);
+      tr.querySelector('.status-cell').innerHTML = `<span class="badge ${statusBadgeClass(status)}">${status}</span>`;
+    }
+    right.querySelectorAll('.eval-row-btn').forEach((btn) => {
+      btn.addEventListener('click', () => evaluateRow(btn.closest('tr')));
+    });
+    right.querySelectorAll('.pv-input').forEach((input) => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); evaluateRow(input.closest('tr')); }
       });
+    });
+    right.querySelector('#evalAllBtn').addEventListener('click', () => {
+      right.querySelectorAll('tr[data-id]').forEach((tr) => evaluateRow(tr));
     });
   }
 
@@ -1837,62 +1946,304 @@ function pageProtection() {
   function renderDiagram() {
     layout.style.gridTemplateColumns = '1fr';
     left.style.display = 'none';
-    const examples = [
-      { title: 'Turbine Overspeed → ETS', sensors: ['Speed Probe 1', 'Speed Probe 2', 'Speed Probe 3'], voting: '2oo3', signal: 'ETS Trip', paramId: 'ets-overspeed' },
-      { title: 'Furnace Pressure HIGH-HIGH → MFT', sensors: ['Furnace PT-1', 'Furnace PT-2', 'Furnace PT-3'], voting: '2oo3', signal: 'MFT', paramId: 'mft-furnace-pressure-hh' },
-      { title: 'Loss of All Flame → MFT', sensors: ['Scanner Group A', 'Scanner Group B', 'Scanner Group C'], voting: '2oo3', signal: 'MFT', paramId: 'mft-loss-all-flame' },
-      { title: 'Drum Level LOW-LOW → MFT', sensors: ['Level TX-1', 'Level TX-2', 'Level TX-3'], voting: '2oo3', signal: 'MFT', paramId: 'mft-drum-level-ll' },
-    ];
+    const CLASS_COLORS = { 'ETS': 'var(--red)', 'MFT': 'var(--amber)', 'GENERATOR TRIP': 'var(--blue)', 'AUXILIARY DRIVE': 'var(--cyan)' };
+    function sensorCountFor(voting) {
+      const m = /(\d+)oo(\d+)/.exec(voting);
+      return m ? Math.min(+m[2], 3) : 1; // cap the drawn sensor count at 3 for readability
+    }
+    let classFilter = 'All';
     right.innerHTML = `<div class="panel-title">Trip Logic Diagram</div>
-      <p style="color:var(--text-dim);font-size:.82rem;">Click any block to see its signal, setpoint, logic, delay, action, and status. These are worked examples — actual sensor tag names and exact sequences are plant-configurable.</p>
+      <p style="color:var(--text-dim);font-size:.82rem;">Every registered ETS, MFT, and generator-trip parameter for the current plant configuration (${plantConfig.boilerType} boiler) — sensors, voting, trip signal, and the resulting downstream action. Click any block for details. Sensor tag names and exact sequences are illustrative and plant-configurable.</p>
+      <div class="tabs" id="diagramClassTabs" style="margin-bottom:16px;">
+        ${['All', 'ETS', 'GENERATOR TRIP', 'MFT', 'AUXILIARY DRIVE'].map((c) => `<div class="tab ${c === 'All' ? 'active' : ''}" data-c="${c}">${c}</div>`).join('')}
+      </div>
       <div id="diagrams"></div>
-      <div id="diagramDetail" class="card" style="margin-top:16px;background:var(--bg-inset);"><div class="empty-state">Click a block above for details.</div></div>`;
+      <div id="diagramDetail" class="card" style="margin-top:16px;background:var(--bg-inset);position:sticky;bottom:12px;"><div class="empty-state">Click a block above for details.</div></div>`;
+
     const container = right.querySelector('#diagrams');
-    for (const ex of examples) {
-      const param = trip.PARAMETER_REGISTRY.find((p) => p.id === ex.paramId);
-      const block = h(`<div style="margin-bottom:18px;">
-        <div class="panel-title" style="margin-bottom:8px;">${ex.title}</div>
-        <div class="pid-loop">
-          ${ex.sensors.map((s) => `<span class="stage diagram-block" data-role="sensor" data-label="${s}" style="cursor:pointer;">${s}</span>`).join('<span class="arrow">→</span>')}
-          <span class="arrow">→</span>
-          <span class="stage diagram-block" data-role="voting" style="cursor:pointer;color:var(--amber);">${ex.voting} VOTING</span>
-          <span class="arrow">→</span>
-          <span class="stage diagram-block" data-role="signal" style="cursor:pointer;color:var(--red);">${ex.signal}</span>
-        </div>
-      </div>`);
-      block.querySelectorAll('.diagram-block').forEach((el) => {
+    const params = trip.parametersFor(plantConfig.boilerType).map(effectiveParam);
+
+    function draw() {
+      container.innerHTML = '';
+      const shown = classFilter === 'All' ? params : params.filter((p) => p.classification === classFilter);
+      if (!shown.length) { container.innerHTML = '<div class="empty-state">No registered parameters in this category for the current boiler type.</div>'; return; }
+      for (const param of shown) {
+        const sensorCount = sensorCountFor(param.voting);
+        const sensors = Array.from({ length: sensorCount }, (_, i) => sensorCount === 1 ? param.label : `${param.label} — Ch.${i + 1}`);
+        const color = CLASS_COLORS[param.classification] || 'var(--red)';
+        const block = h(`<div style="margin-bottom:18px;">
+          <div class="panel-title" style="margin-bottom:8px;">${param.label} <span class="badge" style="border-color:${color};color:${color};">${param.classification}</span></div>
+          <div class="pid-loop">
+            ${sensors.map((s) => `<span class="stage diagram-block" data-role="sensor" data-label="${s}" data-id="${param.id}" style="cursor:pointer;">${s}</span>`).join('<span class="arrow">→</span>')}
+            <span class="arrow">→</span>
+            <span class="stage diagram-block" data-role="voting" data-id="${param.id}" style="cursor:pointer;color:var(--amber);">${param.voting} VOTING</span>
+            <span class="arrow">→</span>
+            <span class="stage diagram-block" data-role="signal" data-id="${param.id}" style="cursor:pointer;color:${color};">${param.classification === 'MFT' ? 'MFT' : param.classification === 'GENERATOR TRIP' ? 'GEN TRIP' : param.classification === 'AUXILIARY DRIVE' ? 'DRIVE TRIP' : 'ETS TRIP'}</span>
+            <span class="arrow">→</span>
+            <span class="stage diagram-block" data-role="action" data-id="${param.id}" style="cursor:pointer;color:var(--text-dim);font-size:.78rem;">Action ▸</span>
+          </div>
+        </div>`);
+        container.appendChild(block);
+      }
+      container.querySelectorAll('.diagram-block').forEach((el) => {
         el.addEventListener('click', () => {
           const role = el.dataset.role;
+          const p = params.find((x) => x.id === el.dataset.id);
           const detail = right.querySelector('#diagramDetail');
           if (role === 'sensor') {
             detail.innerHTML = `<div class="result-grid" style="grid-template-columns:1fr;">
               ${resultRow('Signal', el.dataset.label)}
-              ${resultRow('Parameter', param.label)}
-              ${resultRow('Unit', param.unit)}
-              ${resultRow('Normal range', `${fmt(param.normalMin,2)} – ${fmt(param.normalMax,2)} ${param.unit}`)}
+              ${resultRow('System', p.system + ' — ' + p.category)}
+              ${resultRow('Unit', p.unit)}
+              ${resultRow('Normal range', p.unit === 'boolean' ? 'N/A (discrete)' : `${fmt(p.normalMin,2)} – ${fmt(p.normalMax,2)} ${p.unit}`)}
               ${resultRow('Status', 'Simulated sensor — see ETS/MFT Dashboard for live evaluation')}
             </div>`;
           } else if (role === 'voting') {
             detail.innerHTML = `<div class="result-grid" style="grid-template-columns:1fr;">
-              ${resultRow('Logic', ex.voting + ' voting')}
-              ${resultRow('Setpoint (alarm)', fmt(param.alarmSetpoint,3) + ' ' + param.unit)}
-              ${resultRow('Setpoint (trip)', fmt(param.tripSetpoint,3) + ' ' + param.unit)}
-              ${resultRow('Time delay', param.timeDelaySec + ' s')}
-              ${resultRow('Permissive', param.permissive)}
+              ${resultRow('Logic', p.voting)}
+              ${resultRow('Setpoint (alarm)', p.unit === 'boolean' ? 'N/A' : fmt(p.alarmSetpoint,3) + ' ' + p.unit)}
+              ${resultRow('Setpoint (trip)', p.unit === 'boolean' ? 'N/A (discrete)' : fmt(p.tripSetpoint,3) + ' ' + p.unit)}
+              ${resultRow('Time delay', p.timeDelaySec + ' s')}
+              ${resultRow('Permissive', p.permissive)}
+            </div>`;
+          } else if (role === 'signal') {
+            detail.innerHTML = `<div class="result-grid" style="grid-template-columns:1fr;">
+              ${resultRow('Trip signal', p.classification)}
+              ${resultRow('Classification', p.classification)}
+              ${resultRow('Reset condition', p.resetCondition)}
+              ${resultRow('Status', `<span class="badge out">TRIP (example)</span>`)}
+              ${resultRow('Data type', `<span class="badge ${p.dataType === 'User Configured' ? 'normal' : 'warning'}">${p.dataType}</span>`)}
             </div>`;
           } else {
             detail.innerHTML = `<div class="result-grid" style="grid-template-columns:1fr;">
-              ${resultRow('Trip signal', ex.signal)}
-              ${resultRow('Classification', param.classification)}
-              ${resultRow('Action', param.tripAction)}
-              ${resultRow('Reset condition', param.resetCondition)}
-              ${resultRow('Status', '<span class="badge out">TRIP (example)</span>')}
-            </div>`;
+              ${resultRow('Downstream action', p.tripAction)}
+              ${resultRow('Reset condition', p.resetCondition)}
+              ${resultRow('Permissive', p.permissive)}
+            </div>
+            <p style="color:var(--text-faint);font-size:.76rem;margin-top:10px;">For the full plant-wide downstream effect (fans, feedwater, cooling, etc.), see the Cause &amp; Action Diary tab — this describes the immediate trip action only.</p>`;
           }
         });
       });
-      container.appendChild(block);
     }
+
+    right.querySelectorAll('#diagramClassTabs .tab').forEach((t) => t.addEventListener('click', () => {
+      right.querySelectorAll('#diagramClassTabs .tab').forEach((x) => x.classList.remove('active'));
+      t.classList.add('active');
+      classFilter = t.dataset.c;
+      draw();
+    }));
+    draw();
+  }
+
+  function renderCauseActionDiary() {
+    layout.style.gridTemplateColumns = '1fr';
+    left.style.display = 'none';
+    right.innerHTML = `
+      <div class="panel-title">Cause & Action Diary</div>
+      <div class="assumptions-note">Turbine trip does <b>not</b> automatically mean MFT — the exact wiring for any specific cause must come from your unit's approved Cause &amp; Effect (C&amp;E) drawings. This page is illustrative and educational, not a substitute for those documents.</div>
+
+      <h3 style="margin-top:18px;">Three general scenarios</h3>
+      <div id="scenarioChains"></div>
+
+      <h3 style="margin-top:24px;">Add to your diary</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">Pick a cause, describe what happens in plain language, and save it. That's it.</p>
+      <div class="card" style="background:var(--bg-inset);margin-top:12px;">
+        <div class="input-row">
+          <div class="field" style="flex:2;"><label>Initiating trip cause</label>
+            <input type="text" id="diaryCause" list="diaryCauseList" placeholder="e.g. Condenser vacuum low-low">
+            <datalist id="diaryCauseList">${Object.values(trip.MASTER_TRIP_CAUSES).flat().map((c) => `<option value="${c}">`).join('')}</datalist>
+          </div>
+          <div class="field" style="flex:1;"><label>Category (optional)</label>
+            <select id="diaryCategory"><option value="">\u2014</option>${trip.DIARY_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+          </div>
+        </div>
+        <div class="field"><label>What happens</label>
+          <textarea id="diaryResponse" rows="3" placeholder="e.g. ETS trips, generator breaker opens, MFT is C&amp;E dependent, BFP and CEP continue running, HP bypass opens." style="width:100%;padding:9px 11px;background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);color:var(--text);font-family:inherit;resize:vertical;"></textarea>
+        </div>
+        <div class="btn-row" style="margin-top:8px;"><button class="btn" id="diaryAddBtn">Add to Diary</button></div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-top:24px;">
+        <h3 style="margin:0;">Your plant's Trip Diary</h3>
+        <div style="display:flex;gap:14px;align-items:center;">
+          <select id="diaryFilterCategory" style="font-size:.78rem;padding:6px 8px;"><option value="">All categories</option>${trip.DIARY_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+          <span id="diaryExportBtn" role="link" tabindex="0" style="color:var(--amber);font-size:.82rem;cursor:pointer;text-decoration:underline;">Export to PDF</span>
+        </div>
+      </div>
+      <div id="diaryTableWrap" style="margin-top:10px;"></div>
+
+      <div style="margin-top:28px;border-top:1px solid var(--line);padding-top:14px;">
+        <span id="refToggle" role="link" tabindex="0" style="color:var(--amber);font-size:.85rem;cursor:pointer;text-decoration:underline;">\u25b8 Show reference material (worked examples, master cause list, sources)</span>
+        <div id="refMaterial" style="display:none;margin-top:16px;"></div>
+      </div>
+    `;
+    const chainsContainer = right.querySelector('#scenarioChains');
+    for (const scenario of trip.TRIP_SCENARIOS) {
+      const block = h(`<div style="margin-bottom:16px;">
+        <div style="font-weight:600;margin-bottom:8px;">${scenario.title}</div>
+        <div class="pid-loop">
+          ${scenario.chain.map((step) => `<span class="stage">${step}</span>`).join('<span class="arrow">\u2192</span>')}
+        </div>
+        <p style="color:var(--text-faint);font-size:.78rem;margin-top:6px;">${scenario.note}</p>
+      </div>`);
+      chainsContainer.appendChild(block);
+    }
+
+    const refToggle = right.querySelector('#refToggle');
+    const refMaterial = right.querySelector('#refMaterial');
+    refToggle.addEventListener('click', () => {
+      const showing = refMaterial.style.display !== 'none';
+      refMaterial.style.display = showing ? 'none' : 'block';
+      refToggle.textContent = showing
+        ? '\u25b8 Show reference material (worked examples, master cause list, sources)'
+        : '\u25be Hide reference material';
+      if (!showing && !refMaterial.dataset.loaded) {
+        refMaterial.dataset.loaded = '1';
+        refMaterial.innerHTML = `
+          <h3 style="margin-top:0;">System response after a turbine trip (general/typical)</h3>
+          <div style="overflow-x:auto;">
+            <table><thead><tr><th>System</th><th>Typical response</th></tr></thead><tbody>
+              ${trip.GENERAL_SYSTEM_RESPONSE.map((r) => `<tr><td><b>${r.system}</b></td><td style="font-size:.82rem;color:var(--text-dim);">${r.response}</td></tr>`).join('')}
+            </tbody></table>
+          </div>
+
+          <h3 style="margin-top:24px;">Worked examples</h3>
+          <div style="overflow-x:auto;">
+            <table><thead><tr><th>Initiating trip</th><th>Turbine</th><th>Generator</th><th>MFT</th><th>Mills</th><th>BFP</th><th>CEP</th><th>CW</th><th>Bypass</th></tr></thead><tbody>
+              ${trip.CAUSE_ACTION_DIARY.map((r) => `<tr>
+                <td><b>${r.cause}</b></td><td>${r.turbine}</td><td>${r.generator}</td>
+                <td style="font-size:.8rem;">${r.mft}</td><td style="font-size:.8rem;">${r.mills}</td>
+                <td style="font-size:.8rem;">${r.bfp}</td><td>${r.cep}</td><td>${r.cw}</td><td>${r.bypass}</td>
+              </tr>`).join('')}
+            </tbody></table>
+          </div>
+
+          <h3 style="margin-top:24px;">Master list of initiating trip causes</h3>
+          ${Object.entries(trip.MASTER_TRIP_CAUSES).map(([group, causes]) => `
+            <div class="diary-group-label" style="margin-top:12px;">${group}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">${causes.map((c) => `<span class="badge status-predicted">${c}</span>`).join('')}</div>
+          `).join('')}
+
+          <h3 style="margin-top:24px;">Researched examples (genuinely sourced)</h3>
+          <p style="color:var(--text-dim);font-size:.82rem;">A handful of publicly findable examples, attributed and confidence-rated — not a complete or verified cross-OEM database.</p>
+          ${trip.RESEARCHED_EXAMPLES.map((ex) => `
+            <div class="card" style="background:var(--bg-inset);margin-top:10px;">
+              <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+                <b>${ex.cause}</b>
+                <span class="badge ${ex.confidence.includes('General') ? 'warning' : 'out'}">${ex.confidence}</span>
+              </div>
+              <p style="font-size:.84rem;color:var(--text-dim);margin:6px 0;">${ex.summary}</p>
+              <div style="font-size:.74rem;color:var(--text-faint);">OEM: ${ex.oem} &middot; Unit: ${ex.unitMW} MW &middot; ${ex.scUsc}</div>
+              <div style="font-size:.74rem;color:var(--text-faint);margin-top:2px;">Source: ${ex.source}</div>
+            </div>
+          `).join('')}
+
+          <h3 style="margin-top:24px;">Source register</h3>
+          <div style="overflow-x:auto;">
+            <table><thead><tr><th>Title</th><th>Note</th><th>Link</th></tr></thead><tbody>
+              ${trip.SOURCE_REGISTER.map((s) => `<tr>
+                <td style="font-size:.8rem;">${s.title}</td>
+                <td style="font-size:.78rem;color:var(--text-dim);">${s.note}</td>
+                <td><a href="${s.url}" target="_blank" rel="noopener" style="color:var(--amber);font-size:.78rem;">Open \u2192</a></td>
+              </tr>`).join('')}
+            </tbody></table>
+          </div>
+        `;
+      }
+    });
+
+    const tableWrap = right.querySelector('#diaryTableWrap');
+    let filterCategory = '';
+
+    async function renderDiaryTable() {
+      let rows = await store.listHistory('trip-diary-entry');
+      if (filterCategory) rows = rows.filter((r) => r.result.category === filterCategory);
+      if (!rows.length) {
+        tableWrap.innerHTML = '<div class="empty-state">No entries yet — add your first initiating cause above.</div>';
+        return;
+      }
+      tableWrap.innerHTML = `<div style="overflow-x:auto;">
+        <table><thead><tr><th>Trip Cause</th><th>Category</th><th>What happens</th><th></th></tr></thead>
+        <tbody>${rows.map((r) => `<tr data-id="${r.id}">
+          <td><b>${r.result.cause}</b></td>
+          <td style="font-size:.78rem;color:var(--text-dim);">${r.result.category || '\u2014'}</td>
+          <td style="font-size:.84rem;color:var(--text-dim);">${(r.result.response || '\u2014').replace(/</g, '&lt;')}</td>
+          <td><span class="diary-del" data-id="${r.id}" role="link" tabindex="0" style="color:var(--red);cursor:pointer;font-size:.78rem;">Delete</span></td>
+        </tr>`).join('')}</tbody></table>
+      </div>`;
+      tableWrap.querySelectorAll('.diary-del').forEach((el) => {
+        const del = async () => { await store.deleteCalculation(el.dataset.id); renderDiaryTable(); };
+        el.addEventListener('click', del);
+        el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); del(); } });
+      });
+    }
+
+    right.querySelector('#diaryFilterCategory').addEventListener('change', (e) => { filterCategory = e.target.value; renderDiaryTable(); });
+
+    // Auto-fill "What happens" (and category, if not already set) when the
+    // typed cause matches a known worked example or researched example —
+    // never overwrites text the user has already typed themselves.
+    function findKnownCause(causeText) {
+      const needle = causeText.trim().toLowerCase();
+      if (!needle) return null;
+      const researched = trip.RESEARCHED_EXAMPLES.find((ex) => ex.cause.toLowerCase().includes(needle) || needle.includes(ex.cause.toLowerCase().split(' \u2013 ')[0]));
+      if (researched) return { response: researched.summary, category: researched.category };
+      const worked = trip.CAUSE_ACTION_DIARY.find((r) => r.cause.toLowerCase().includes(needle) || needle.includes(r.cause.toLowerCase()));
+      if (worked) {
+        const response = `Turbine: ${worked.turbine}. Generator: ${worked.generator}. MFT: ${worked.mft}. Mills: ${worked.mills}. BFP: ${worked.bfp}. CEP: ${worked.cep}. CW: ${worked.cw}. Bypass: ${worked.bypass}.`;
+        return { response, category: null };
+      }
+      return null;
+    }
+    const diaryCauseInput = right.querySelector('#diaryCause');
+    const diaryResponseInput = right.querySelector('#diaryResponse');
+    const diaryCategoryInput = right.querySelector('#diaryCategory');
+    let lastAutoFill = '';
+    diaryCauseInput.addEventListener('input', () => {
+      const match = findKnownCause(diaryCauseInput.value);
+      const untouched = !diaryResponseInput.value.trim() || diaryResponseInput.value === lastAutoFill;
+      if (match && untouched) {
+        diaryResponseInput.value = match.response;
+        lastAutoFill = match.response;
+        if (match.category && !diaryCategoryInput.value) diaryCategoryInput.value = match.category;
+      } else if (!match && diaryResponseInput.value === lastAutoFill) {
+        diaryResponseInput.value = '';
+        lastAutoFill = '';
+      }
+    });
+
+    right.querySelector('#diaryAddBtn').addEventListener('click', async () => {
+      const cause = right.querySelector('#diaryCause').value.trim();
+      if (!cause) { toast('Enter the initiating trip cause first'); return; }
+      const category = right.querySelector('#diaryCategory').value;
+      const response = right.querySelector('#diaryResponse').value.trim();
+      await store.saveCalculation({ calculatorId: 'trip-diary-entry', name: `Trip Diary — ${cause}`, inputs: { cause }, result: { cause, category, response } });
+      toast('Added to Trip Diary');
+      right.querySelector('#diaryCause').value = '';
+      right.querySelector('#diaryCategory').value = '';
+      right.querySelector('#diaryResponse').value = '';
+      lastAutoFill = '';
+      renderDiaryTable();
+    });
+
+    const exportDiary = async () => {
+      const rows = await store.listHistory('trip-diary-entry');
+      if (!rows.length) { toast('Add at least one diary entry first'); return; }
+      const resultForPdf = {};
+      for (const r of rows) {
+        resultForPdf[r.result.cause] = { Category: r.result.category || '—', 'What happens': r.result.response || '—' };
+      }
+      await exportCalculationPDF({
+        calculatorName: 'Turbine & Boiler Trip Diary — Cause & Action',
+        inputs: { plantType: plantConfig.plantType, unitMW: plantConfig.unitMW, entries: rows.length },
+        result: resultForPdf,
+        assumptions: { note: 'Sourced from the user\'s own entries — verify against the unit\'s approved C&E/ETS/FSSS drawings before use.' },
+      });
+    };
+    right.querySelector('#diaryExportBtn').addEventListener('click', exportDiary);
+    right.querySelector('#diaryExportBtn').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); exportDiary(); } });
+
+    renderDiaryTable();
   }
 
   function renderMatrix() {
@@ -2282,13 +2633,13 @@ function pageSupport() {
   // Real UPI ID and payee name, decoded directly from the site owner's own
   // uploaded PhonePe/ICICI Bank QR code — not a placeholder.
   const UPI_ID = 'getkundan.singh@ibl';
-  const PAYEE_NAME = 'KUNDAN KUMAR';
   // The site owner's actual QR image (cropped from their uploaded scan
-  // card). It's a static image, so — unlike a dynamically generated QR —
-  // it can't encode the donation amount; scanning it means entering the
-  // amount by hand in the UPI app. The "Open in UPI App" button below
-  // builds its own live link with the real UPI ID and the chosen amount,
-  // so that path still pre-fills the amount automatically.
+  // card). It's a static image, so it can't encode the donation amount —
+  // scanning it means entering the amount by hand in the UPI app. This is
+  // the only payment path shown (no separate deep-link button): UPI apps
+  // often show an extra security check for links opened from a website,
+  // which was confusing donors, while a QR scan is the path they already
+  // trust and use every day.
   const QR_IMAGE_SRC = './assets/support-qr.png';
 
   app.appendChild(h(`
@@ -2373,16 +2724,13 @@ function pageSupport() {
   }
 
   function renderPayStep() {
-    const upiUri = `upi://pay?${new URLSearchParams({ pa: UPI_ID, pn: PAYEE_NAME, am: selectedAmount, cu: 'INR', tn: 'Support the Project donation' }).toString()}`;
     modalBody.innerHTML = `
       <h3>Scan &amp; Pay — ₹${fmt(selectedAmount, 0)}</h3>
       <div class="qr-wrap"><img src="${QR_IMAGE_SRC}" alt="UPI QR code — Kundan Kumar"></div>
-      <div class="scan-pay-note">📱 Scan &amp; Pay using any UPI app (Google Pay, PhonePe, Paytm, BHIM) — then enter ₹${fmt(selectedAmount, 0)} manually, since this QR image doesn't carry the amount. Or tap "Open in UPI App" below to have the amount filled in for you.</div>
+      <div class="scan-pay-note">📱 <strong>Scan this QR with your UPI app's camera/scan option</strong> (Google Pay, PhonePe, Paytm, BHIM) — then enter ₹${fmt(selectedAmount, 0)}.</div>
       <div class="upi-id-row"><span id="donateUpiIdText">${UPI_ID}</span><button type="button" id="donateCopyUpiBtn">Copy</button></div>
-      <button class="btn secondary" id="openUpiAppBtn" type="button" style="width:100%;justify-content:center;margin-bottom:10px;">Open in UPI App</button>
       <button class="btn" id="haveDonatedBtn" type="button" style="width:100%;justify-content:center;background:var(--green);border-color:var(--green);color:#06210c;">I Have Donated</button>
     `;
-    modalBody.querySelector('#openUpiAppBtn').addEventListener('click', () => { window.location.href = upiUri; });
     modalBody.querySelector('#donateCopyUpiBtn').addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(UPI_ID);
@@ -2502,6 +2850,74 @@ async function pageReviews() {
   await renderList();
 }
 
+// ---------- Admin Panel ----------
+function pageAdmin() {
+  if (!adminMode) {
+    app.appendChild(h(`
+      <div>
+      <div class="page-head"><div class="eyebrow">Admin</div><h1>Admin Panel</h1></div>
+      <div class="card"><div class="empty-state">Not signed in. Use the "Admin" link at the bottom of the sidebar.</div></div>
+      </div>
+    `));
+    return;
+  }
+  app.appendChild(h(`
+    <div>
+    <div class="page-head">
+      <div class="eyebrow">Admin</div>
+      <h1>Content Visibility</h1>
+      <p class="lead">Tick which sidebar items are visible to public visitors. This updates your preview immediately, but real visitors won't see the change until you copy the JSON below into <code>data/content-visibility.json</code> and push it to your live site.</p>
+    </div>
+    <div class="assumptions-note">This admin gate is a local, soft deterrent only — this site has no backend server, so there's nothing for a password to be securely checked against. Anyone with browser dev tools could bypass it. Don't rely on it to protect anything sensitive, and change the default password (instructions in the README) before publishing.</div>
+    <div class="card" id="adminChecklist" style="margin-top:16px;"></div>
+    <div class="card" style="margin-top:16px;">
+      <div class="panel-title">Updated content-visibility.json</div>
+      <p style="color:var(--text-dim);font-size:.82rem;">Copy this into <code>data/content-visibility.json</code> in your repo, commit, and push.</p>
+      <textarea id="adminJsonOut" rows="10" readonly style="width:100%;padding:10px;background:var(--bg-inset);border:1px solid var(--line);border-radius:var(--radius);color:var(--text);font-family:var(--font-mono);font-size:.78rem;"></textarea>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn secondary" id="adminCopyBtn">Copy JSON</button>
+        <button class="btn secondary" id="adminLogoutBtn">Log out of admin mode</button>
+      </div>
+    </div>
+    </div>
+  `));
+
+  const checklist = document.getElementById('adminChecklist');
+  const rows = NAV.flatMap((group) => group.items.map((item) => ({ ...item, group: group.group })));
+  checklist.innerHTML = rows.map((item) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);cursor:pointer;">
+      <input type="checkbox" data-id="${item.id}" ${contentVisibility[item.id] !== false ? 'checked' : ''} style="width:16px;height:16px;">
+      <span style="color:var(--text-faint);font-size:.72rem;font-family:var(--font-mono);width:110px;flex-shrink:0;">${item.group}</span>
+      <span>${item.icon} ${item.label}</span>
+    </label>
+  `).join('');
+
+  function refreshJson() {
+    const out = { _comment: 'Controls which sidebar items are visible to public visitors. Edit via the app\'s Admin Panel (checkboxes generate updated JSON to paste here), or edit this file directly. Changes only take effect for real visitors after this file is committed and pushed to your live site.', items: { ...contentVisibility } };
+    document.getElementById('adminJsonOut').value = JSON.stringify(out, null, 2);
+  }
+  checklist.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      contentVisibility[cb.dataset.id] = cb.checked;
+      refreshJson();
+      renderNav(currentRoute); // live preview in this session
+    });
+  });
+  refreshJson();
+
+  document.getElementById('adminCopyBtn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById('adminJsonOut').value);
+      toast('Copied — paste into data/content-visibility.json');
+    } catch (e) { toast('Copy failed — select the text manually'); }
+  });
+  document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+    adminMode = false;
+    toast('Logged out of admin mode');
+    navigate('');
+  });
+}
+
 // ---------- Formula Library ----------
 function pageFormulaLibrary() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Reference</div><h1>Formula Library</h1>
@@ -2585,7 +3001,9 @@ async function pageHistory() {
     const allRows = await store.listHistory();
     // Reviews (and their comments) are stored, but this page is for
     // engineering calculations, not reviews — keep them out of this list.
-    const rows = allRows.filter((r) => r.calculatorId !== 'user-review');
+    // Reviews and trip-diary entries are reference records, not engineering
+    // calculations — keep this list focused on genuine calculations.
+    const rows = allRows.filter((r) => r.calculatorId !== 'user-review' && r.calculatorId !== 'trip-diary-entry');
     if (!rows.length) { tableWrap.innerHTML = '<div class="empty-state">No saved calculations yet. Calculate something and click "Save to history".</div>'; return; }
     tableWrap.innerHTML = `<table><thead><tr><th>Name</th><th>Calculator</th><th>Date</th><th></th></tr></thead><tbody>
       ${rows.map((r) => `<tr data-id="${r.id}">
@@ -2648,7 +3066,12 @@ async function initTheme() {
 // ---------- Boot ----------
 initTheme();
 initGlobalSearch();
-navigate('');
+loadContentVisibility().then(() => navigate(''));
+const adminLoginLink = document.getElementById('adminLoginLink');
+if (adminLoginLink) {
+  adminLoginLink.addEventListener('click', attemptAdminLogin);
+  adminLoginLink.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); attemptAdminLogin(); } });
+}
 
 // Register the offline service worker if supported (progressive
 // enhancement — the app works fully without it, this just adds offline

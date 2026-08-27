@@ -76,6 +76,37 @@ files as ES modules for local testing — this has no effect on how browsers
 load them, since browsers only look at the `<script type="module">` tag and
 the server's declared content type, never the file extension.
 
+## Admin Panel / Content Visibility
+
+There's a lightweight admin panel for controlling which sidebar items are
+visible to public visitors — click "Admin" at the bottom of the sidebar and
+enter the password (default: `changeme123`).
+
+**Important — read before publishing:**
+
+- This is a **static site with no backend server**, so there is nothing for
+  a password to be securely checked against server-side. The admin gate is
+  client-side JavaScript only: a soft deterrent to keep the panel out of
+  casual visitors' way, not real security. Anyone with browser dev tools
+  can see exactly how the check works and bypass it. Never put anything
+  genuinely sensitive behind it.
+- **Change the default password** before publishing. Generate a new hash:
+  ```
+  node -e "console.log(require('crypto').createHash('sha256').update('YOUR_NEW_PASSWORD').digest('hex'))"
+  ```
+  Then replace `ADMIN_PASSWORD_HASH_PLACEHOLDER` in `js/app.js` with the
+  output.
+- Ticking/unticking items in the admin panel updates your own browser's
+  preview immediately, but **does not change what real visitors see**.
+  Content visibility is controlled by `data/content-visibility.json`, a
+  file shipped with the site — every visitor's browser loads it and
+  filters the nav accordingly. To make a change live, copy the JSON the
+  admin panel generates into that file, commit, and push, the same way you
+  deploy any other change.
+- The single-file bundle (`index.html` / the preview build) has no
+  separate config file to fetch, so it always shows every item — content
+  visibility control only applies to the modular deployment.
+
 ## Testing
 
 `tests/test.js` is a real (not smoke) test suite — it checks each formula

@@ -1,0 +1,22 @@
+{
+  "_comment": "Controls which sidebar items are visible to public visitors. Edit via the app's Admin Panel (checkboxes generate updated JSON to paste here), or edit this file directly. Changes only take effect for real visitors after this file is committed and pushed to your live site.",
+  "items": {
+    "": true,
+    "thermal-plant": true,
+    "protection": true,
+    "dp-flow-wizard": true,
+    "transmitter": true,
+    "dp-level": true,
+    "orifice": true,
+    "control-valve": true,
+    "ip-converter": true,
+    "rtd": true,
+    "thermocouple": true,
+    "pid": true,
+    "converter": true,
+    "formula-library": true,
+    "history": true,
+    "support": true,
+    "reviews": true
+  }
+}
