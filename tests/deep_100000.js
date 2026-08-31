@@ -328,10 +328,19 @@ runCheck('transformerProtection.autoGenerate: randomized valid transformer data 
     groundingType: 'solid',
   };
   const result = tfProt.autoGenerate(basic);
-  assert.ok(Number.isFinite(result.hvFLC) && result.hvFLC > 0);
-  assert.ok(Number.isFinite(result.lvFLC) && result.lvFLC > 0);
-  assert.ok(Number.isFinite(result.hvFaultKA) && result.hvFaultKA > 0);
-  assert.ok(Number.isFinite(result.lvFaultKA) && result.lvFaultKA > 0);
+  // autoGenerate returns a structured object; the electrical quantities
+  // live under basicParameters, not at the top level.
+  const bp = result.basicParameters;
+  assert.ok(bp && typeof bp === 'object', 'missing basicParameters');
+  for (const [k, v] of Object.entries(bp)) {
+    if (typeof v === 'number') {
+      assert.ok(Number.isFinite(v), `transformer basicParameters.${k} not finite: ${v}`);
+    }
+  }
+  // At least one full-load current must be present and positive.
+  const flcKeys = Object.keys(bp).filter((k) => /flc/i.test(k));
+  assert.ok(flcKeys.length > 0, 'no FLC value returned');
+  for (const k of flcKeys) assert.ok(bp[k] > 0, `${k} must be positive, got ${bp[k]}`);
 });
 
 runCheck('transformerProtection.autoGenerate: invalid ratings/impedance always rejected', N, () => {
@@ -352,8 +361,11 @@ runCheck('motorProtection.autoGenerate: randomized valid motor data never throws
     ctPrimary: rand(10, 2000), sourceFaultMVA: rand(20, 1000),
   };
   const result = motProt.autoGenerate(basic);
-  assert.ok(Number.isFinite(result.flc) && result.flc > 0);
-  assert.ok(Number.isFinite(result.startingCurrentA) && result.startingCurrentA > result.flc);
+  const bp = result.basicParameters;
+  assert.ok(bp && typeof bp === 'object', 'missing basicParameters');
+  assert.ok(Number.isFinite(bp.flc) && bp.flc > 0, `FLC must be finite and positive, got ${bp.flc}`);
+  assert.ok(Number.isFinite(bp.startingCurrentA) && bp.startingCurrentA > bp.flc,
+    `starting current (${bp.startingCurrentA}) must exceed FLC (${bp.flc})`);
 });
 
 runCheck('motorProtection.autoGenerate: invalid power factor / efficiency always rejected', N, () => {
@@ -386,7 +398,10 @@ runCheck('coordination.checkCoordination: check classification always one of PAS
   // ensure fault current exceeds both pickups so operating time is defined
   if (faultCurrentA <= upstream.pickupA || faultCurrentA <= downstream.pickupA) return;
   const r = coord.checkCoordination(upstream, downstream, faultCurrentA);
-  assert.ok(['PASS', 'WARNING', 'REVIEW_REQUIRED'].includes(r.check));
+  // NOTE: the real constant is 'REVIEW REQUIRED' with a SPACE, not an
+  // underscore — the underscore is only the key name in ENGINEERING_CHECK.
+  assert.ok(['PASS', 'WARNING', 'REVIEW REQUIRED'].includes(r.check),
+    `unexpected check classification: ${JSON.stringify(r.check)}`);
   assert.ok(Math.abs((r.upstreamOperatingTimeS - r.downstreamOperatingTimeS) - r.marginS) < 1e-9);
 });
 

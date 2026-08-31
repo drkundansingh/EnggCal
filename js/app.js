@@ -12,6 +12,17 @@ import * as tpa from './calculators/thermalPlantAdvanced.js';
 import * as trip from './calculators/tripProtection.js';
 import * as flow from './calculators/flowEngine.js';
 import * as store from './storage.js';
+import * as lu from './calculators/loopUncertainty.js';
+import * as cl from './calculators/controlLoops.js';
+import * as ec from './calculators/electricalCommon.js';
+import * as sc from './calculators/shortCircuit.js';
+import * as idmt from './calculators/idmt.js';
+import * as ctEng from './calculators/ctEngine.js';
+import * as tfProt from './calculators/transformerProtection.js';
+import * as motProt from './calculators/motorProtection.js';
+import * as lsig from './calculators/lsigEngine.js';
+import * as coord from './calculators/coordination.js';
+import * as ed from './calculators/electricalDesign.js';
 import { exportCalculationPDF } from './pdfExport.js';
 
 const app = document.getElementById('content');
@@ -71,6 +82,7 @@ const NAV = [
     group: 'Power Plant', items: [
       { id: 'thermal-plant', label: 'Thermal Plant Estimator', icon: '⚡' },
       { id: 'protection', label: 'Turbine & Boiler Protection', icon: '🛡' },
+      { id: 'control-loops', label: 'Control Loops', icon: '↻' },
     ]
   },
   {
@@ -84,7 +96,26 @@ const NAV = [
       { id: 'rtd', label: 'RTD', icon: 'Ω' },
       { id: 'thermocouple', label: 'Thermocouple', icon: 'μV' },
       { id: 'pid', label: 'PID Controller', icon: '∫' },
+      { id: 'loop-uncertainty', label: 'Loop Uncertainty', icon: '±' },
+      { id: 'cavitation', label: 'Valve Cavitation', icon: '◌' },
     ]
+  },
+  {
+    group: 'Electrical', items: [
+      { id: 'short-circuit', label: 'Short Circuit / Fault', icon: '⚡' },
+      { id: 'idmt', label: 'IDMT Relay Curves', icon: '⌒' },
+      { id: 'ct-sizing', label: 'CT Sizing & Burden', icon: '⧖' },
+      { id: 'transformer-prot', label: 'Transformer Protection', icon: '⧉' },
+      { id: 'motor-prot', label: 'Motor Protection', icon: '⟳' },
+      { id: 'lsig', label: 'LSIG Breaker Settings', icon: '⌶' },
+      { id: 'coordination', label: 'Relay Coordination', icon: '⇅' },
+      { id: 'cable-sizing', label: 'Cable Sizing & Volt Drop', icon: '≡' },
+      { id: 'cable-withstand', label: 'Short-Circuit Withstand', icon: '⚡' },
+      { id: 'motor-start', label: 'Motor Starting Dip', icon: '↓' },
+      { id: 'pf-correction', label: 'Power Factor Correction', icon: '≅' },
+      { id: 'battery-sizing', label: 'Battery / DC Sizing', icon: '▤' },
+      { id: 'tx-loading', label: 'Transformer Loading', icon: '◱' },
+    ],
   },
   {
     group: 'Reference', items: [
@@ -173,6 +204,20 @@ const ROUTES = {
   '': pageDashboard,
   'thermal-plant': pageThermalPlant,
   'protection': pageProtection,
+  'control-loops': pageControlLoops,
+  'short-circuit': pageShortCircuit,
+  'idmt': pageIdmt,
+  'ct-sizing': pageCtSizing,
+  'transformer-prot': pageTransformerProt,
+  'motor-prot': pageMotorProt,
+  'lsig': pageLsig,
+  'coordination': pageCoordination,
+  'cable-sizing': pageCableSizing,
+  'cable-withstand': pageCableWithstand,
+  'motor-start': pageMotorStart,
+  'pf-correction': pagePfCorrection,
+  'battery-sizing': pageBatterySizing,
+  'tx-loading': pageTxLoading,
   'dp-flow-wizard': pageDPFlowWizard,
   'converter': pageConverter,
   'transmitter': pageTransmitter,
@@ -183,6 +228,8 @@ const ROUTES = {
   'rtd': pageRtd,
   'thermocouple': pageThermocouple,
   'pid': pagePid,
+  'loop-uncertainty': pageLoopUncertainty,
+  'cavitation': pageCavitation,
   'formula-library': pageFormulaLibrary,
   'history': pageHistory,
   'support': pageSupport,
@@ -1696,6 +1743,7 @@ function pageProtection() {
     <div class="tab" data-m="mft">MFT Dashboard</div>
     <div class="tab" data-m="drives">Major Drives Dashboard</div>
     <div class="tab" data-m="diagram">Trip Logic Diagram</div>
+    <div class="tab" data-m="usc">BTG Master Specification</div>
   </div>`);
   app.appendChild(tabs);
   const layout = h('<div class="calc-layout"></div>');
@@ -1731,6 +1779,7 @@ function pageProtection() {
     if (mode === 'ets') renderDashboard('ETS');
     else if (mode === 'mft') renderDashboard('MFT');
     else if (mode === 'drives') renderDashboard('DRIVES');
+    else if (mode === 'usc') renderUscSpec();
     else renderDiagram();
   }
 
@@ -1942,6 +1991,112 @@ function pageProtection() {
       } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
     });
   }
+
+  function renderUscSpec() {
+    layout.style.gridTemplateColumns = '1fr';
+    left.style.display = 'none';
+    right.innerHTML = `<div>
+      <div class="panel-title">BTG Master Specification — Ultra-Supercritical Power Plant</div>
+      <p style="color:var(--text-dim);font-size:.85rem;">A working reference for how a real USC boiler-turbine-generator unit is structured, protected, started, and stopped — built around the ${trip.PARAMETER_REGISTRY.length} live parameters in this app's own registry, not a generic textbook copy.</p>
+      <div class="assumptions-note">Plant/OEM-specific numeric limits (exact trip setpoints, ramp rates, generator ratings, etc.) vary by manufacturer and by unit and are marked accordingly below — they're not guessed. Where this page gives a real number, it's either the live registry (see ETS/MFT/Major Drives dashboards) or a cited public source.</div>
+
+      <h3 style="margin-top:22px;">Power Plant Systems</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">Click a major system to open it, then a subsystem to see its parameters.</p>
+      <div id="systemTree"></div>
+
+      <h3 style="margin-top:26px;">Permissive, Interlock, Trip, Alarm, Runback, MFT — what's the difference?</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">Mixing these up in a real C&amp;E document is a genuinely common and consequential mistake — they're never interchangeable.</p>
+      <div style="overflow-x:auto;">
+        <table><thead><tr><th>Term</th><th>What it actually means</th></tr></thead><tbody>
+          ${trip.CONCEPT_DEFINITIONS.map(([term, def]) => `<tr><td><b>${term}</b></td><td style="font-size:.84rem;color:var(--text-dim);">${def}</td></tr>`).join('')}
+        </tbody></table>
+      </div>
+
+      <h3 style="margin-top:26px;">Unit Operating States</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">The path a real unit moves through, from cold and off to synchronized and loaded — and how it gets pulled out of that path by a trip.</p>
+      <div class="pid-loop">
+        ${trip.MASTER_UNIT_STATES.map((s) => `<span class="stage">${s}</span>`).join('<span class="arrow">→</span>')}
+      </div>
+
+      <h3 style="margin-top:26px;">Automatic Start &amp; Stop Sequences</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">A boiler or turbine "stop" isn't one thing — normal, fast, and emergency stops are deliberately different philosophies with different risk trade-offs, never treated as interchangeable.</p>
+      ${Object.entries(trip.BTG_SEQUENCES).map(([name, steps]) => `
+        <div style="margin-top:16px;">
+          <div style="font-weight:600;margin-bottom:8px;">${name}</div>
+          <div class="pid-loop">
+            ${steps.map((s) => `<span class="stage">${s}</span>`).join('<span class="arrow">→</span>')}
+          </div>
+        </div>
+      `).join('')}
+
+      <h3 style="margin-top:26px;">Master Fuel Trip — What Actually Causes One</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">MFT is boiler-wide fuel isolation, not a single sensor tripping — it's triggered by any of these category failures, evaluated against the unit's own approved logic:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${trip.MFT_CAUSE_CATEGORIES.map((c) => `<span class="badge out">${c}</span>`).join('')}</div>
+
+      <h3 style="margin-top:26px;">Before an Automatic Unit Start Is Even Allowed</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">All of these must be true — an automatic start sequence won't even begin otherwise:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${trip.UNIT_AUTO_START_PERMISSIVES.map((p) => `<span class="badge normal">${p}</span>`).join('')}</div>
+
+      <h3 style="margin-top:26px;">Standby Equipment — What Auto-Starts When Something Fails</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">Every one of these has a running/standby pair with automatic changeover — losing the running unit doesn't (by itself) trip the plant:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${trip.STANDBY_AUTOSTART_EXAMPLES.map((e) => `<span class="badge warning">${e}</span>`).join('')}</div>
+
+      <h3 style="margin-top:26px;">Runback — Dropping Load Instead of Tripping</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">When equipment degrades but the unit doesn't need to trip outright, a runback pulls load down automatically to what the remaining equipment can actually support. Target load and ramp rate always come from the unit's own C&amp;E, never a generic number. Common triggers:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${trip.RUNBACK_TRIGGERS.map((r) => `<span class="badge normal">${r}</span>`).join('')}</div>
+
+    </div>`;
+
+    // Interactive Power Plant Systems tree: major system -> click to expand
+    // -> subsystem -> click to expand -> parameter list.
+    const treeRoot = document.getElementById('systemTree');
+    const majors = trip.PLANT_HIERARCHY.PLANT.UNIT;
+    for (const major of majors) {
+      const subsystems = trip.SYSTEM_TREE[major] || [];
+      const majorRow = h(`<div class="tree-node" role="link" tabindex="0" style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--line-soft);">
+        <span class="tree-caret" style="color:var(--amber);font-family:var(--font-mono);width:14px;flex-shrink:0;">${subsystems.length ? '▸' : '·'}</span>
+        <span style="font-weight:600;">${major}</span>
+        <span style="color:var(--text-faint);font-size:.72rem;margin-left:auto;">${subsystems.length ? subsystems.length + ' subsystem' + (subsystems.length === 1 ? '' : 's') : 'no dedicated subsystem — see a related system'}</span>
+      </div>`);
+      const subContainer = h('<div style="display:none;margin-left:22px;"></div>');
+      treeRoot.appendChild(majorRow);
+      treeRoot.appendChild(subContainer);
+
+      if (subsystems.length) {
+        const toggleMajor = () => {
+          const open = subContainer.style.display !== 'none';
+          subContainer.style.display = open ? 'none' : 'block';
+          majorRow.querySelector('.tree-caret').textContent = open ? '▸' : '▾';
+        };
+        majorRow.addEventListener('click', toggleMajor);
+        majorRow.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleMajor(); } });
+
+        for (const subKey of subsystems) {
+          const items = trip.BTG_PARAMETER_GROUPS[subKey] || [];
+          const isLive = subKey.includes('live data');
+          const cleanLabel = subKey.replace(/\s*\(live data:[^)]*\)/, '').replace(/\s*\([^)]*live[^)]*\)/i, '');
+          const subRow = h(`<div class="tree-node" role="link" tabindex="0" style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--line-soft);">
+            <span class="tree-caret" style="color:var(--cyan);font-family:var(--font-mono);width:14px;flex-shrink:0;">▸</span>
+            <span>${cleanLabel}</span>
+            ${isLive ? '<span class="badge normal" style="margin-left:8px;">live data</span>' : ''}
+            <span style="color:var(--text-faint);font-size:.72rem;margin-left:auto;">${items.length} parameters</span>
+          </div>`);
+          const itemContainer = h(`<div style="display:none;margin-left:22px;padding:10px 0;"><div style="display:flex;flex-wrap:wrap;gap:6px;">${items.map((i) => `<span class="badge status-predicted">${i}</span>`).join('')}</div></div>`);
+          subContainer.appendChild(subRow);
+          subContainer.appendChild(itemContainer);
+
+          const toggleSub = () => {
+            const open = itemContainer.style.display !== 'none';
+            itemContainer.style.display = open ? 'none' : 'block';
+            subRow.querySelector('.tree-caret').textContent = open ? '▸' : '▾';
+          };
+          subRow.addEventListener('click', (e) => { e.stopPropagation(); toggleSub(); });
+          subRow.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleSub(); } });
+        }
+      }
+    }
+  }
+
 
   function renderDiagram() {
     layout.style.gridTemplateColumns = '1fr';
@@ -2915,6 +3070,1275 @@ function pageAdmin() {
     adminMode = false;
     toast('Logged out of admin mode');
     navigate('');
+  });
+}
+
+// ---------- Cable Sizing & Voltage Drop ----------
+function pageCableSizing() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Cable Sizing &amp; Voltage Drop</h1>
+    <p class="lead">Voltage drop along a run, plus ampacity after derating. Cables are often sized by voltage drop rather than current \u2014 a cable that carries the load comfortably can still leave too little voltage at the far end.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Load &amp; Route</div>
+    <div class="input-row">
+      <div class="field"><label>Load current (A)</label><input type="number" id="i" step="any" value="100"></div>
+      <div class="field"><label>Route length (m)</label><input type="number" id="len" step="any" value="150"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>System voltage (V)</label><input type="number" id="v" step="any" value="415"></div>
+      <div class="field"><label>System</label><select id="sys">${ed.SYSTEM_TYPES.map((s) => `<option value="${s}">${s}</option>`).join('')}</select></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Power factor</label><input type="number" id="pf" step="any" value="0.85"></div>
+      <div class="field"><label>Parallel runs</label><input type="number" id="par" step="1" value="1"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Cable Data (from manufacturer)</div>
+    <div class="input-row">
+      <div class="field"><label>R (\u03a9/km)</label><input type="number" id="r" step="any" value="0.164"></div>
+      <div class="field"><label>X (\u03a9/km)</label><input type="number" id="x" step="any" value="0.08"></div>
+    </div>
+    <div class="hint">Per-conductor values straight off the cable datasheet. Set X to 0 for a DC circuit.</div>
+    <div class="panel-title" style="margin-top:14px;">Ampacity Derating (optional)</div>
+    <div class="input-row">
+      <div class="field"><label>Base ampacity (A)</label><input type="number" id="base" step="any" value="250"></div>
+      <div class="field"><label>Ambient factor</label><input type="number" id="fa" step="any" value="0.87"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Grouping factor</label><input type="number" id="fg" step="any" value="0.8"></div>
+      <div class="field"><label>Soil / other factor</label><input type="number" id="fs" step="any" value="1"></div>
+    </div>
+    <div class="hint">Base ampacity comes from the applicable cable table for your installation method \u2014 it isn't invented here.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter cable and load data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const i = +left.querySelector('#i').value;
+      const v = +left.querySelector('#v').value;
+      const vd = ed.voltageDrop({
+        currentA: i, lengthM: +left.querySelector('#len').value,
+        rOhmPerKm: +left.querySelector('#r').value, xOhmPerKm: +left.querySelector('#x').value,
+        voltageV: v, systemType: left.querySelector('#sys').value,
+        parallelRuns: +left.querySelector('#par').value, powerFactor: +left.querySelector('#pf').value,
+      });
+      const base = +left.querySelector('#base').value;
+      let ampHtml = '';
+      if (base > 0) {
+        const amp = ed.deratedAmpacity({
+          baseAmpacityA: base,
+          ambientFactor: +left.querySelector('#fa').value,
+          groupingFactor: +left.querySelector('#fg').value,
+          soilResistivityFactor: +left.querySelector('#fs').value,
+          designCurrentA: i,
+        });
+        ampHtml = `
+          <div class="panel-title" style="margin-top:16px;">Ampacity Check</div>
+          <div class="result-grid">
+            ${resultRow('Total derating factor', fmt(amp.totalDeratingFactor, 4))}
+            ${resultRow('Derated ampacity', fmt(amp.deratedAmpacityA, 2) + ' A')}
+            ${resultRow('Utilisation', fmt(amp.utilisationPct, 1) + ' %')}
+            ${resultRow('Verdict', amp.check === 'ADEQUATE' ? '<span class="badge normal">ADEQUATE</span>' : '<span class="badge out">UNDERSIZED</span>')}
+          </div>`;
+      }
+      const dropBadge = vd.dropPct <= 3 ? 'normal' : vd.dropPct <= 5 ? 'warning' : 'out';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(vd.dropPct, 3)}</span><span class="unit">% voltage drop</span></div>
+        <div class="result-grid">
+          ${resultRow('Voltage drop', fmt(vd.dropV, 3) + ' V')}
+          ${resultRow('Receiving-end voltage', fmt(vd.receivingEndV, 2) + ' V')}
+          ${resultRow('Effective resistance', fmt(vd.resistanceOhm, 5) + ' \u03a9')}
+          ${resultRow('Effective reactance', fmt(vd.reactanceOhm, 5) + ' \u03a9')}
+          ${resultRow('Drop band', `<span class="badge ${dropBadge}">${fmt(vd.dropPct, 2)} %</span>`)}
+        </div>
+        ${ampHtml}
+        <div class="formula-box" style="margin-top:12px;">3-phase: \u0394V = \u221a3 \u00b7 I \u00b7 L \u00b7 (R\u00b7cos\u03c6 + X\u00b7sin\u03c6)<br>1-phase: \u0394V = 2 \u00b7 I \u00b7 L \u00b7 (R\u00b7cos\u03c6 + X\u00b7sin\u03c6)</div>
+        <div class="assumptions-note" style="margin-top:12px;">Acceptable voltage drop limits are set by the applicable wiring standard and by the connected equipment's tolerance \u2014 commonly around 3% for lighting and 5% for power circuits, but confirm against the standard that applies to your installation rather than treating those figures as universal.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('cable-sizing',
+        `Cable \u2014 ${fmt(vd.dropPct, 2)}% drop`, { i, v }, { dropV: vd.dropV, dropPct: vd.dropPct }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Short-Circuit Withstand ----------
+function pageCableWithstand() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Short-Circuit Withstand</h1>
+    <p class="lead">Whether a conductor survives a fault before the protection clears it, by the standard adiabatic method. Applies equally to cable conductors and earthing conductors.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Fault</div>
+    <div class="input-row">
+      <div class="field"><label>Fault current (A)</label><input type="number" id="if" step="any" value="25000"></div>
+      <div class="field"><label>Clearing time (s)</label><input type="number" id="t" step="any" value="0.5"></div>
+    </div>
+    <div class="hint">Use the protection's <b>total</b> clearing time \u2014 relay operating time plus circuit-breaker opening time, not the relay alone.</div>
+    <div class="panel-title" style="margin-top:14px;">Conductor</div>
+    <div class="input-row">
+      <div class="field"><label>k factor</label><input type="number" id="k" step="any" value="143"></div>
+      <div class="field"><label>Actual CSA (mm\u00b2)</label><input type="number" id="csa" step="any" value="185"></div>
+    </div>
+    <div class="hint">k comes from the applicable standard for your conductor and insulation combination \u2014 it depends on the material and on the permitted initial and final temperatures, so it isn't assumed here.</div>
+    <div class="btn-row"><button class="btn" id="calc">Check</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter fault and conductor data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.adiabaticMinimumCsa({
+        faultCurrentA: +left.querySelector('#if').value,
+        faultDurationS: +left.querySelector('#t').value,
+        kFactor: +left.querySelector('#k').value,
+        actualCsaMm2: +left.querySelector('#csa').value || undefined,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.minCsaMm2, 2)}</span><span class="unit">mm\u00b2 minimum</span></div>
+        <div class="result-grid">
+          ${resultRow('Minimum required CSA', fmt(r.minCsaMm2, 3) + ' mm\u00b2')}
+          ${resultRow('Actual CSA', r.actualCsaMm2 === null ? 'not supplied' : fmt(r.actualCsaMm2, 1) + ' mm\u00b2')}
+          ${resultRow('Margin', r.marginPct === null ? '\u2014' : fmt(r.marginPct, 1) + ' %')}
+          ${resultRow('Withstand current', r.withstandA === null ? '\u2014' : fmt(r.withstandA, 0) + ' A for this duration')}
+          ${resultRow('Verdict', r.check === null ? '\u2014' : r.check === 'ADEQUATE' ? '<span class="badge normal">ADEQUATE</span>' : '<span class="badge out">INADEQUATE</span>')}
+          ${resultRow('Adiabatic assumption', r.adiabaticValid ? '<span class="badge normal">valid</span>' : '<span class="badge warning">questionable</span>')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">S = I \u00b7 \u221at / k</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Motor Starting Dip ----------
+function pageMotorStart() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Motor Starting Voltage Dip</h1>
+    <p class="lead">Bus voltage dip when a large motor starts direct-on-line. The dip matters twice over: other equipment may drop out, and the starting motor's own torque falls with the <b>square</b> of voltage.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Motor</div>
+    <div class="input-row">
+      <div class="field"><label>Rating (kW)</label><input type="number" id="kw" step="any" value="1000"></div>
+      <div class="field"><label>Voltage (kV)</label><input type="number" id="kv" step="any" value="6.6"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Power factor</label><input type="number" id="pf" step="any" value="0.85"></div>
+      <div class="field"><label>Efficiency (%)</label><input type="number" id="eff" step="any" value="95"></div>
+    </div>
+    <div class="field"><label>Starting current (\u00d7 FLC)</label><input type="number" id="mult" step="any" value="6"></div>
+    <div class="panel-title" style="margin-top:14px;">Supply</div>
+    <div class="input-row">
+      <div class="field"><label>Source fault level (MVA)</label><input type="number" id="mva" step="any" value="250"></div>
+      <div class="field"><label>Permitted dip (%)</label><input type="number" id="lim" step="any" value="15"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter motor and supply data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.motorStartingDip({
+        motorKW: +left.querySelector('#kw').value, voltageKV: +left.querySelector('#kv').value,
+        powerFactor: +left.querySelector('#pf').value, efficiencyPct: +left.querySelector('#eff').value,
+        startingCurrentMultiple: +left.querySelector('#mult').value,
+        sourceFaultMVA: +left.querySelector('#mva').value,
+        permittedDipPct: +left.querySelector('#lim').value,
+      });
+      const badge = r.check === 'ACCEPTABLE' ? 'normal' : 'out';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.dipPct, 2)}</span><span class="unit">% voltage dip</span></div>
+        <div class="result-grid">
+          ${resultRow('Full-load current', fmt(r.flcA, 1) + ' A')}
+          ${resultRow('Starting current', fmt(r.startingCurrentA, 1) + ' A')}
+          ${resultRow('Starting kVA', fmt(r.startingKVA, 1) + ' kVA')}
+          ${resultRow('Voltage dip', fmt(r.dipPct, 3) + ' %')}
+          ${resultRow('Residual voltage', fmt(r.residualVoltagePct, 2) + ' %')}
+          ${resultRow('Available torque', fmt(r.torqueAtDipPct, 1) + ' % of full-voltage torque')}
+          ${resultRow('Verdict', `<span class="badge ${badge}">${r.check}</span>`)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">dip(pu) = kVA_start / (kVA_start + MVA_fault \u00d7 1000)<br>torque \u221d V\u00b2</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="assumptions-note" style="margin-top:10px;">This is a screening calculation assuming a stiff source behind a single impedance and a direct-on-line start. It doesn't model intervening transformer and cable impedance in detail, motor dynamics, or reduced-voltage starting methods \u2014 a marginal result should go to a proper transient study.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('motor-start',
+        `Motor start \u2014 ${fmt(r.dipPct, 2)}% dip`, {}, { dipPct: r.dipPct, check: r.check }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Power Factor Correction ----------
+function pagePfCorrection() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Power Factor Correction</h1>
+    <p class="lead">Capacitor kVAr needed to reach a target power factor \u2014 and the transformer and cable capacity that correcting it frees up.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Load</div>
+    <div class="input-row">
+      <div class="field"><label>Real power (kW)</label><input type="number" id="kw" step="any" value="500"></div>
+      <div class="field"><label>Voltage (kV)</label><input type="number" id="kv" step="any" value="0.415"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Existing PF</label><input type="number" id="pf1" step="any" value="0.75"></div>
+      <div class="field"><label>Target PF</label><input type="number" id="pf2" step="any" value="0.95"></div>
+    </div>
+    <div class="field"><label>Frequency (Hz)</label><input type="number" id="hz" step="any" value="50"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter load and power factors.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.powerFactorCorrection({
+        loadKW: +left.querySelector('#kw').value,
+        existingPF: +left.querySelector('#pf1').value,
+        targetPF: +left.querySelector('#pf2').value,
+        voltageKV: +left.querySelector('#kv').value,
+        frequencyHz: +left.querySelector('#hz').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.kvarRequired, 1)}</span><span class="unit">kVAr required</span></div>
+        <div class="result-grid">
+          ${resultRow('Reactive power before', fmt(r.kvarBefore, 1) + ' kVAr')}
+          ${resultRow('Reactive power after', fmt(r.kvarAfter, 1) + ' kVAr')}
+          ${resultRow('Capacitor rating', fmt(r.kvarRequired, 2) + ' kVAr')}
+          ${resultRow('Apparent power before', fmt(r.kvaBefore, 1) + ' kVA')}
+          ${resultRow('Apparent power after', fmt(r.kvaAfter, 1) + ' kVA')}
+          ${resultRow('Capacity released', fmt(r.releasedKVA, 1) + ' kVA')}
+          ${resultRow('Current reduction', fmt(r.currentReductionPct, 1) + ' %')}
+          ${resultRow('Capacitance (per phase, star equiv.)', r.capacitanceUF === null ? '\u2014' : fmt(r.capacitanceUF, 1) + ' \u00b5F')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">kVAr = kW \u00b7 (tan\u03c6\u2081 \u2212 tan\u03c6\u2082)</div>
+        <div class="assumptions-note" style="margin-top:12px;">Correcting power factor frees ${fmt(r.releasedKVA, 1)} kVA of transformer and cable capacity that reactive current was previously consuming \u2014 often the strongest part of the business case. Watch for harmonics: capacitors and system inductance can resonate, and detuned reactors are commonly needed where significant harmonic sources are present.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('pf-correction',
+        `PF correction \u2014 ${fmt(r.kvarRequired, 1)} kVAr`, {}, { kvarRequired: r.kvarRequired }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Battery / DC Sizing ----------
+function pageBatterySizing() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Battery / DC System Sizing</h1>
+    <p class="lead">Required battery capacity from a DC duty cycle, with temperature, ageing and design margins applied. The plant DC system is what holds up protection, tripping and emergency lubrication when AC is gone.</p></div>`));
+
+  let steps = [{ currentA: 50, durationMin: 60 }, { currentA: 200, durationMin: 1 }];
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Duty Cycle</div>
+    <div id="stepsWrap"></div>
+    <div class="btn-row" style="margin-top:8px;"><button class="btn secondary" id="addStep">+ Add step</button></div>
+    <div class="panel-title" style="margin-top:14px;">Factors</div>
+    <div class="input-row">
+      <div class="field"><label>Temperature factor</label><input type="number" id="ft" step="any" value="1.0"></div>
+      <div class="field"><label>Ageing factor</label><input type="number" id="fa" step="any" value="1.25"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Design margin</label><input type="number" id="fd" step="any" value="1.10"></div>
+      <div class="field"><label>System voltage (V)</label><input type="number" id="sv" step="any" value="110"></div>
+    </div>
+    <div class="hint">Ageing factor is normally about 1.25, since batteries are sized to still perform at end of life (typically 80% of rated capacity).</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Define the duty cycle and calculate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  const stepsWrap = left.querySelector('#stepsWrap');
+  function renderSteps() {
+    stepsWrap.innerHTML = steps.map((s, i) => `
+      <div class="input-row" data-i="${i}" style="align-items:flex-end;flex-wrap:nowrap;gap:8px;">
+        <div class="field" style="flex:1;min-width:0;"><label>${i === 0 ? 'Current (A)' : ''}</label><input type="number" class="s-i" step="any" value="${s.currentA}"></div>
+        <div class="field" style="flex:1;min-width:0;"><label>${i === 0 ? 'Duration (min)' : ''}</label><input type="number" class="s-d" step="any" value="${s.durationMin}"></div>
+        <div class="field" style="flex:0 0 auto;"><label>${i === 0 ? '&nbsp;' : ''}</label><button class="btn secondary s-del" style="padding:8px 10px;">\u2715</button></div>
+      </div>`).join('');
+    stepsWrap.querySelectorAll('.s-del').forEach((b, i) => b.addEventListener('click', () => {
+      if (steps.length === 1) { toast('Keep at least one load step'); return; }
+      readSteps(); steps.splice(i, 1); renderSteps();
+    }));
+  }
+  function readSteps() {
+    steps = [...stepsWrap.querySelectorAll('.input-row')].map((r) => ({
+      currentA: +r.querySelector('.s-i').value,
+      durationMin: +r.querySelector('.s-d').value,
+    }));
+  }
+  renderSteps();
+  left.querySelector('#addStep').addEventListener('click', () => { readSteps(); steps.push({ currentA: 10, durationMin: 30 }); renderSteps(); });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      readSteps();
+      const r = ed.batterySizing({
+        loadSteps: steps,
+        temperatureFactor: +left.querySelector('#ft').value,
+        ageingFactor: +left.querySelector('#fa').value,
+        designMargin: +left.querySelector('#fd').value,
+        systemVoltageV: +left.querySelector('#sv').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.requiredAh, 1)}</span><span class="unit">Ah required</span></div>
+        <div class="result-grid">
+          ${resultRow('Duty cycle demand', fmt(r.dutyAh, 3) + ' Ah')}
+          ${resultRow('Combined factor', fmt(r.combinedFactor, 4))}
+          ${resultRow('Required capacity', fmt(r.requiredAh, 2) + ' Ah')}
+          ${resultRow('Total duration', fmt(r.totalDurationMin, 1) + ' min')}
+          ${resultRow('Peak current', fmt(r.peakCurrentA, 1) + ' A')}
+          ${resultRow('Cells in series', r.cellCount === null ? '\u2014' : r.cellCount + ' (at 2.0 V/cell)')}
+        </div>
+        <div style="overflow-x:auto;margin-top:14px;">
+          <table><thead><tr><th class="num">Step</th><th class="num">Current</th><th class="num">Duration</th><th class="num">Ah</th></tr></thead><tbody>
+            ${steps.map((s, i) => `<tr><td class="num">${i + 1}</td><td class="num">${fmt(s.currentA, 1)} A</td><td class="num">${fmt(s.durationMin, 1)} min</td><td class="num">${fmt(s.currentA * s.durationMin / 60, 3)}</td></tr>`).join('')}
+          </tbody></table>
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Transformer Loading ----------
+function pageTxLoading() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Transformer Loading &amp; Losses</h1>
+    <p class="lead">Efficiency and loss breakdown at a given load. Iron loss is constant while copper loss varies with the square of load \u2014 which is why peak efficiency sits well below full load.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Transformer</div>
+    <div class="input-row">
+      <div class="field"><label>Rating (kVA)</label><input type="number" id="rating" step="any" value="1000"></div>
+      <div class="field"><label>Load (kVA)</label><input type="number" id="load" step="any" value="600"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>No-load (iron) loss (W)</label><input type="number" id="nll" step="any" value="1500"></div>
+      <div class="field"><label>Full-load (copper) loss (W)</label><input type="number" id="fll" step="any" value="10000"></div>
+    </div>
+    <div class="field"><label>Power factor</label><input type="number" id="pf" step="any" value="0.9"></div>
+    <div class="hint">Both loss figures come from the transformer test certificate or datasheet.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter transformer data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.transformerLoading({
+        ratingKVA: +left.querySelector('#rating').value,
+        loadKVA: +left.querySelector('#load').value,
+        noLoadLossW: +left.querySelector('#nll').value,
+        fullLoadLossW: +left.querySelector('#fll').value,
+        powerFactor: +left.querySelector('#pf').value,
+      });
+      const badge = r.check === 'NORMAL' ? 'normal' : r.check === 'HIGH LOADING' ? 'warning' : 'out';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.efficiencyPct, 3)}</span><span class="unit">% efficiency</span></div>
+        <div class="result-grid">
+          ${resultRow('Loading', fmt(r.loadingPct, 1) + ' %')}
+          ${resultRow('Status', `<span class="badge ${badge}">${r.check}</span>`)}
+          ${resultRow('Iron (no-load) loss', fmt(r.noLoadLossW, 0) + ' W')}
+          ${resultRow('Copper (load) loss', fmt(r.copperLossW, 0) + ' W')}
+          ${resultRow('Total loss', fmt(r.totalLossW, 0) + ' W')}
+          ${resultRow('Efficiency', fmt(r.efficiencyPct, 4) + ' %')}
+          ${resultRow('Peak-efficiency loading', fmt(r.optimalLoadingPct, 1) + ' % (' + fmt(r.optimalLoadKVA, 0) + ' kVA)')}
+          ${resultRow('Annual energy lost', fmt(r.annualLossKWh, 0) + ' kWh/yr')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">P_cu = P_cu(FL) \u00b7 (load/rating)\u00b2<br>Peak efficiency where P_cu = P_fe</div>
+        <div class="assumptions-note" style="margin-top:12px;">Peak efficiency occurs at ${fmt(r.optimalLoadingPct, 0)}% loading, where copper loss equals iron loss. Annual loss assumes continuous operation at this load (8,760 h) \u2014 scale it to your actual duty cycle for a real energy cost.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('tx-loading',
+        `Transformer \u2014 ${fmt(r.efficiencyPct, 2)}% eff`, {}, { efficiencyPct: r.efficiencyPct, totalLossW: r.totalLossW }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ================= ELECTRICAL SECTION =================
+// These pages surface the electrical protection engines that were already
+// in the codebase (and covered by the 100,000-point fuzz suite) but had no
+// UI. Every engine returns explicit status flags (CALCULATED / RECOMMENDED
+// / USER_SELECTED) and the shared PROTECTION_DISCLAIMER, both of which are
+// shown rather than hidden: auto-generated protection settings are a
+// starting point for a study, never a substitute for one.
+
+function protectionDisclaimer() {
+  return `<div class="assumptions-note" style="margin-top:14px;">${ec.PROTECTION_DISCLAIMER}</div>`;
+}
+
+function statusBadge(status) {
+  const cls = status === ec.SETTING_STATUS.VERIFIED ? 'normal'
+    : status === ec.SETTING_STATUS.CALCULATED ? 'normal'
+    : status === ec.SETTING_STATUS.USER_SELECTED ? 'warning' : 'warning';
+  return `<span class="badge ${cls}">${status}</span>`;
+}
+
+/** Renders any engine sub-object (oc, ef, diff, ...) as a readable block. */
+function protectionBlock(title, obj) {
+  const rows = Object.entries(obj)
+    .filter(([k]) => k !== 'status' && k !== 'ansi')
+    .map(([k, v]) => {
+      const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+      let val;
+      if (v === null || v === undefined) val = '<span style="color:var(--text-faint);">not calculated \u2014 input not supplied</span>';
+      else if (Array.isArray(v)) val = v.join(', ');
+      else if (typeof v === 'number') val = fmt(v, 4);
+      else val = String(v);
+      return resultRow(label, val);
+    }).join('');
+  return `<div style="margin-top:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div class="panel-title" style="margin:0;">${title}${obj.ansi ? ` <span style="color:var(--text-faint);font-weight:400;">\u00b7 ANSI ${obj.ansi}</span>` : ''}</div>
+      ${obj.status ? statusBadge(obj.status) : ''}
+    </div>
+    <div class="result-grid" style="grid-template-columns:1fr;">${rows}</div>
+  </div>`;
+}
+
+// ---------- Short Circuit / Fault Level ----------
+function pageShortCircuit() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Short Circuit / Fault Level</h1>
+    <p class="lead">Fault MVA and fault current at a bus, combining the upstream source with the transformer impedance. This is the number every downstream protection setting and equipment rating depends on.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">System Data</div>
+    <div class="input-row">
+      <div class="field"><label>Source fault level (MVA)</label><input type="number" id="srcMva" step="any" value="2000"></div>
+      <div class="field"><label>Bus voltage (kV)</label><input type="number" id="kv" step="any" value="11"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Transformer (optional)</div>
+    <div class="input-row">
+      <div class="field"><label>Rating (MVA)</label><input type="number" id="txMva" step="any" value="25"></div>
+      <div class="field"><label>Impedance (%)</label><input type="number" id="txZ" step="any" value="10"></div>
+    </div>
+    <div class="hint">Leave the transformer blank to get the fault level at the source bus itself.</div>
+    <div class="panel-title" style="margin-top:14px;">Earth Fault</div>
+    <div class="input-row">
+      <div class="field"><label>Grounding</label><select id="grounding">${ec.GROUNDING_TYPES.map((g) => `<option${g === 'solid' ? ' selected' : ''}>${g}</option>`).join('')}</select></div>
+      <div class="field"><label>NGR let-through (A)</label><input type="number" id="ngr" step="any" placeholder="if resistance/reactance"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter system data and calculate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const srcMva = +left.querySelector('#srcMva').value;
+      const kv = +left.querySelector('#kv').value;
+      const txMva = +left.querySelector('#txMva').value;
+      const txZ = +left.querySelector('#txZ').value;
+      const grounding = left.querySelector('#grounding').value;
+      const ngrRaw = left.querySelector('#ngr').value.trim();
+
+      const source = sc.sourceFaultMVA(srcMva);
+      let busMva = source, path = 'Source bus only';
+      if (txMva > 0 && txZ > 0) {
+        const txf = sc.transformerFaultMVA(txMva, txZ);
+        busMva = sc.combineSeriesFaultMVA([source, txf]);
+        path = `Source (${fmt(source, 0)} MVA) in series with transformer (${fmt(txf, 1)} MVA)`;
+      }
+      const i3ph = sc.threePhaseFaultCurrentKA(busMva, kv);
+
+      let efRow = '';
+      try {
+        const opts = ngrRaw === '' ? {} : { ngrLetThroughA: +ngrRaw };
+        const ilg = sc.lineToGroundFaultCurrentKA(i3ph, grounding, opts);
+        efRow = resultRow('Line-to-ground fault current', ilg === null ? 'negligible (ungrounded system)' : fmt(ilg, 4) + ' kA');
+      } catch (e) {
+        efRow = resultRow('Line-to-ground fault current', `<span style="color:var(--amber);">${e.message}</span>`);
+      }
+
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(i3ph, 3)}</span><span class="unit">kA (3-phase)</span></div>
+        <div class="result-grid">
+          ${resultRow('Fault level at bus', fmt(busMva, 1) + ' MVA')}
+          ${resultRow('Contribution path', path)}
+          ${resultRow('3-phase fault current', fmt(i3ph, 4) + ' kA')}
+          ${efRow}
+          ${resultRow('Grounding', grounding)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Fault MVA (series) = 1 / (1/MVA\u2081 + 1/MVA\u2082)<br>I\u2083\u03c6 = MVA_fault / (\u221a3 \u00b7 kV)</div>
+        ${protectionDisclaimer()}
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('short-circuit',
+        `Fault level \u2014 ${fmt(i3ph, 2)} kA at ${kv} kV`, { srcMva, kv, txMva, txZ }, { busMva, i3ph }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- IDMT Relay Curves ----------
+function pageIdmt() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>IDMT Relay Curves</h1>
+    <p class="lead">Inverse-time overcurrent relay operating time from the standard IEC curves. Also solves the reverse problem: what TMS do I need to hit a target operating time?</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Relay Setting</div>
+    <div class="input-row">
+      <div class="field"><label>Fault current (A)</label><input type="number" id="ifault" step="any" value="4000"></div>
+      <div class="field"><label>Pickup current (A)</label><input type="number" id="ipickup" step="any" value="500"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Curve</label><select id="curve">${Object.keys(idmt.CURVES).map((k) => `<option value="${k}">${k} \u2014 ${idmt.CURVES[k].name || k}</option>`).join('')}</select></div>
+      <div class="field"><label>TMS</label><input type="number" id="tms" step="any" value="0.2"></div>
+    </div>
+    <div class="hint">SI = standard inverse, VI = very inverse, EI = extremely inverse, LTI = long-time inverse.</div>
+    <div class="panel-title" style="margin-top:14px;">Reverse Solve (optional)</div>
+    <div class="field"><label>Desired operating time (s)</label><input type="number" id="desiredT" step="any" placeholder="leave blank to skip"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter relay settings and calculate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const ifault = +left.querySelector('#ifault').value;
+      const ipickup = +left.querySelector('#ipickup').value;
+      const curve = left.querySelector('#curve').value;
+      const tms = +left.querySelector('#tms').value;
+      const desiredRaw = left.querySelector('#desiredT').value.trim();
+
+      const m = idmt.psm(ifault, ipickup);
+      const t = idmt.operatingTime(ifault, ipickup, tms, curve);
+
+      let reverse = '';
+      if (desiredRaw !== '') {
+        const need = idmt.tmsForDesiredTime(ifault, ipickup, +desiredRaw, curve);
+        reverse = `<div class="assumptions-note" style="margin-top:12px;">To operate in <b>${fmt(+desiredRaw, 3)} s</b> at this fault current on the ${curve} curve, set <b>TMS = ${fmt(need, 4)}</b>. Round to the nearest step your relay actually supports \u2014 most relays have discrete TMS steps, not a continuous dial.</div>`;
+      }
+
+      // A small operating-time table across a range of fault currents makes
+      // the shape of the curve obvious in a way a single number does not.
+      const multiples = [1.5, 2, 3, 5, 10, 20];
+      const rows = multiples.map((mult) => {
+        const i = ipickup * mult;
+        let tt;
+        try { tt = fmt(idmt.operatingTime(i, ipickup, tms, curve), 3) + ' s'; }
+        catch { tt = '\u2014'; }
+        return `<tr><td class="num">${mult}\u00d7</td><td class="num">${fmt(i, 0)} A</td><td class="num">${tt}</td></tr>`;
+      }).join('');
+
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(t, 3)}</span><span class="unit">seconds</span></div>
+        <div class="result-grid">
+          ${resultRow('PSM (plug setting multiplier)', fmt(m, 3))}
+          ${resultRow('Curve', curve)}
+          ${resultRow('TMS', fmt(tms, 4))}
+          ${resultRow('Operating time', fmt(t, 4) + ' s')}
+        </div>
+        ${reverse}
+        <div class="panel-title" style="margin-top:16px;">Operating time vs fault current</div>
+        <div style="overflow-x:auto;">
+          <table><thead><tr><th class="num">PSM</th><th class="num">Current</th><th class="num">Trip time</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>
+        ${protectionDisclaimer()}
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('idmt',
+        `IDMT ${curve} \u2014 ${fmt(t, 3)} s`, { ifault, ipickup, curve, tms }, { psm: m, operatingTimeS: t }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- CT Sizing & Burden ----------
+function pageCtSizing() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>CT Sizing &amp; Burden</h1>
+    <p class="lead">Whether a current transformer can actually deliver what the protection scheme needs. An undersized CT saturates during a fault, and a saturated CT can make a differential scheme mis-operate on an external fault.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">CT &amp; Circuit</div>
+    <div class="input-row">
+      <div class="field"><label>Primary current (A)</label><input type="number" id="prim" step="any" value="1000"></div>
+      <div class="field"><label>CT ratio primary</label><input type="number" id="ctp" step="any" value="1000"></div>
+      <div class="field"><label>CT secondary</label><input type="number" id="cts" step="any" value="1"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Burden</div>
+    <div class="input-row">
+      <div class="field"><label>Relay burden (VA)</label><input type="number" id="relayVA" step="any" value="0.1"></div>
+      <div class="field"><label>Lead resistance (\u03a9)</label><input type="number" id="leadR" step="any" value="0.5"></div>
+      <div class="field"><label>Other burden (VA)</label><input type="number" id="otherVA" step="any" value="0"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Stability (differential / REF)</div>
+    <div class="input-row">
+      <div class="field"><label>Secondary fault current (A)</label><input type="number" id="ifsec" step="any" value="20"></div>
+      <div class="field"><label>CT resistance (\u03a9)</label><input type="number" id="ctR" step="any" value="2"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Stability factor K</label><input type="number" id="kfac" step="any" value="2"></div>
+      <div class="field"><label>Actual knee-point (V)</label><input type="number" id="vk" step="any" placeholder="from CT nameplate"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>CT class</label><input type="text" id="ctClass" placeholder="e.g. 5P20, PX"></div>
+      <div class="field"><label>CT rated burden (VA)</label><input type="number" id="ratedVA" step="any" placeholder="optional"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Assess</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter CT and burden data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const prim = +left.querySelector('#prim').value;
+      const ctp = +left.querySelector('#ctp').value;
+      const cts = +left.querySelector('#cts').value;
+      const relayVA = +left.querySelector('#relayVA').value;
+      const leadR = +left.querySelector('#leadR').value;
+      const otherVA = +left.querySelector('#otherVA').value;
+      const ifsec = +left.querySelector('#ifsec').value;
+      const ctR = +left.querySelector('#ctR').value;
+      const kfac = +left.querySelector('#kfac').value;
+      const vkRaw = left.querySelector('#vk').value.trim();
+      const ctClass = left.querySelector('#ctClass').value.trim();
+      const ratedVARaw = left.querySelector('#ratedVA').value.trim();
+
+      const secA = ctEng.ctSecondaryCurrent(prim, ctp, cts);
+      const cableVA = ctEng.cableBurdenVA(secA, leadR);
+      const totalVA = ctEng.totalBurdenVA(relayVA, cableVA, otherVA);
+      const vkReq = ctEng.requiredKneePointVoltage(ifsec, ctR, leadR, kfac);
+
+      const suff = ctEng.checkCtSufficiency({
+        actualKneePointV: vkRaw === '' ? undefined : +vkRaw,
+        requiredKneePointV: vkReq,
+        ctClass: ctClass || undefined,
+        ctRatedBurdenVA: ratedVARaw === '' ? undefined : +ratedVARaw,
+        actualBurdenVA: totalVA,
+      });
+
+      const warnHtml = (suff.warnings && suff.warnings.length)
+        ? suff.warnings.map((w) => `<div class="assumptions-note" style="margin-top:8px;">${w}</div>`).join('')
+        : '<div class="assumptions-note" style="margin-top:8px;">No warnings raised for the data supplied.</div>';
+
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(vkReq, 1)}</span><span class="unit">V knee-point required</span></div>
+        <div class="result-grid">
+          ${resultRow('CT secondary current', fmt(secA, 4) + ' A')}
+          ${resultRow('Cable (lead) burden', fmt(cableVA, 4) + ' VA')}
+          ${resultRow('Total burden', fmt(totalVA, 4) + ' VA')}
+          ${resultRow('Required knee-point voltage', fmt(vkReq, 2) + ' V')}
+          ${resultRow('Actual knee-point', vkRaw === '' ? 'not supplied' : fmt(+vkRaw, 2) + ' V')}
+          ${resultRow('Sufficient?', suff.sufficient === true ? '<span class="badge normal">YES</span>' : suff.sufficient === false ? '<span class="badge out">NO</span>' : '<span class="badge warning">CANNOT CONFIRM</span>')}
+        </div>
+        ${warnHtml}
+        <div class="formula-box" style="margin-top:12px;">V\u2096(required) = K \u00b7 I_f(sec) \u00b7 (R_ct + 2\u00b7R_lead)<br>Cable burden = I\u00b2 \u00b7 R (per lead, both legs counted)</div>
+        ${protectionDisclaimer()}`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Transformer Protection ----------
+function pageTransformerProt() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Transformer Protection</h1>
+    <p class="lead">Generates a starting set of transformer protection settings \u2014 overcurrent, earth fault, differential, REF, thermal and over-fluxing \u2014 from the transformer nameplate and system fault level.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Transformer Nameplate</div>
+    <div class="input-row">
+      <div class="field"><label>Rating (MVA)</label><input type="number" id="mva" step="any" value="25"></div>
+      <div class="field"><label>Impedance (%)</label><input type="number" id="z" step="any" value="10"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>HV (kV)</label><input type="number" id="hv" step="any" value="132"></div>
+      <div class="field"><label>LV (kV)</label><input type="number" id="lv" step="any" value="11"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">CTs &amp; System</div>
+    <div class="input-row">
+      <div class="field"><label>HV CT primary (A)</label><input type="number" id="hvct" step="any" value="200"></div>
+      <div class="field"><label>LV CT primary (A)</label><input type="number" id="lvct" step="any" value="1500"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Source fault (MVA)</label><input type="number" id="srcMva" step="any" value="2000"></div>
+      <div class="field"><label>Grounding</label><select id="grounding">${ec.GROUNDING_TYPES.map((g) => `<option${g === 'solid' ? ' selected' : ''}>${g}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>NGR let-through (A)</label><input type="number" id="ngr" step="any" placeholder="if resistance/reactance grounded"></div>
+    <div class="btn-row"><button class="btn" id="calc">Generate Settings</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter transformer data and generate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const ngrRaw = left.querySelector('#ngr').value.trim();
+      const basic = {
+        ratingMVA: +left.querySelector('#mva').value,
+        hvKV: +left.querySelector('#hv').value,
+        lvKV: +left.querySelector('#lv').value,
+        impedancePct: +left.querySelector('#z').value,
+        hvCtPrimary: +left.querySelector('#hvct').value || undefined,
+        lvCtPrimary: +left.querySelector('#lvct').value || undefined,
+        sourceFaultMVA: +left.querySelector('#srcMva').value || undefined,
+        groundingType: left.querySelector('#grounding').value,
+        ngrLetThroughA: ngrRaw === '' ? undefined : +ngrRaw,
+      };
+      const r = tfProt.autoGenerate(basic);
+      const bp = r.basicParameters;
+      const blocks = Object.entries(r.protection).map(([k, v]) => {
+        const titles = { oc: 'Overcurrent', ef: 'Earth Fault', diff: 'Differential', ref: 'Restricted Earth Fault', thermal: 'Thermal', overfluxing: 'Over-fluxing' };
+        return protectionBlock(titles[k] || k, v);
+      }).join('');
+
+      right.innerHTML = `
+        <div class="panel-title">Basic Parameters</div>
+        <div class="result-grid">
+          ${resultRow('HV full-load current', fmt(bp.hvFLC, 2) + ' A')}
+          ${resultRow('LV full-load current', fmt(bp.lvFLC, 2) + ' A')}
+          ${resultRow('Turns ratio', fmt(bp.turnsRatio, 3))}
+          ${resultRow('HV fault current', fmt(bp.hvFaultKA, 3) + ' kA')}
+          ${resultRow('LV fault current', fmt(bp.lvFaultKA, 3) + ' kA')}
+          ${resultRow('HV CT secondary at FLC', bp.hvCtSecondaryA === null ? 'CT not supplied' : fmt(bp.hvCtSecondaryA, 4) + ' A')}
+          ${resultRow('LV CT secondary at FLC', bp.lvCtSecondaryA === null ? 'CT not supplied' : fmt(bp.lvCtSecondaryA, 4) + ' A')}
+        </div>
+        ${blocks}
+        ${protectionDisclaimer()}`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Motor Protection ----------
+function pageMotorProt() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Motor Protection</h1>
+    <p class="lead">Generates a starting set of motor protection settings \u2014 thermal overload, overcurrent, earth fault, negative sequence, locked rotor, under-current and voltage \u2014 from motor nameplate data.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Motor Nameplate</div>
+    <div class="input-row">
+      <div class="field"><label>Rating (kW)</label><input type="number" id="kw" step="any" value="1000"></div>
+      <div class="field"><label>Voltage (kV)</label><input type="number" id="kv" step="any" value="6.6"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Power factor</label><input type="number" id="pf" step="any" value="0.86"></div>
+      <div class="field"><label>Efficiency (%)</label><input type="number" id="eff" step="any" value="95"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Starting</div>
+    <div class="input-row">
+      <div class="field"><label>Starting current (\u00d7 FLC)</label><input type="number" id="startMult" step="any" value="6"></div>
+      <div class="field"><label>Starting time (s)</label><input type="number" id="startT" step="any" value="8"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">CT &amp; System</div>
+    <div class="input-row">
+      <div class="field"><label>CT primary (A)</label><input type="number" id="ctp" step="any" value="150"></div>
+      <div class="field"><label>Source fault (MVA)</label><input type="number" id="srcMva" step="any" value="250"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Grounding</label><select id="grounding">${ec.GROUNDING_TYPES.map((g) => `<option${g === 'resistance' ? ' selected' : ''}>${g}</option>`).join('')}</select></div>
+      <div class="field"><label>NGR let-through (A)</label><input type="number" id="ngr" step="any" value="200"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Generate Settings</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter motor data and generate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const ngrRaw = left.querySelector('#ngr').value.trim();
+      const basic = {
+        ratingKW: +left.querySelector('#kw').value,
+        voltageKV: +left.querySelector('#kv').value,
+        powerFactor: +left.querySelector('#pf').value,
+        efficiencyPct: +left.querySelector('#eff').value,
+        startingCurrentMultiple: +left.querySelector('#startMult').value,
+        startingTimeS: +left.querySelector('#startT').value,
+        ctPrimary: +left.querySelector('#ctp').value || undefined,
+        sourceFaultMVA: +left.querySelector('#srcMva').value || undefined,
+        groundingType: left.querySelector('#grounding').value,
+        ngrLetThroughA: ngrRaw === '' ? undefined : +ngrRaw,
+      };
+      const r = motProt.autoGenerate(basic);
+      const bp = r.basicParameters;
+      const titles = { thermal: 'Thermal Overload', oc: 'Overcurrent', ef: 'Earth Fault', negSeq: 'Negative Sequence', lockedRotor: 'Locked Rotor', underCurrent: 'Under-current', voltage: 'Voltage' };
+      const blocks = Object.entries(r.protection).map(([k, v]) => protectionBlock(titles[k] || k, v)).join('');
+
+      right.innerHTML = `
+        <div class="panel-title">Basic Parameters</div>
+        <div class="result-grid">
+          ${resultRow('Full-load current', fmt(bp.flc, 2) + ' A')}
+          ${resultRow('Starting current', fmt(bp.startingCurrentA, 2) + ' A')}
+          ${resultRow('Starting kVA', fmt(bp.startingKVA, 1) + ' kVA')}
+          ${resultRow('Fault current', fmt(bp.faultKA, 3) + ' kA')}
+          ${resultRow('CT secondary at FLC', bp.ctSecondaryA === null ? 'CT not supplied' : fmt(bp.ctSecondaryA, 4) + ' A')}
+        </div>
+        ${blocks}
+        ${protectionDisclaimer()}`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- LSIG Breaker Settings ----------
+function pageLsig() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>LSIG Breaker Settings</h1>
+    <p class="lead">Long-time, Short-time, Instantaneous and Ground-fault settings for an electronic-trip circuit breaker \u2014 snapped to the discrete steps real breakers actually offer, not idealised continuous values.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Breaker &amp; Load</div>
+    <div class="input-row">
+      <div class="field"><label>Frame rating (A)</label><input type="number" id="frame" step="any" value="630"></div>
+      <div class="field"><label>Load current (A)</label><input type="number" id="load" step="any" value="400"></div>
+    </div>
+    <div class="field"><label>Fault current (kA)</label><input type="number" id="fault" step="any" value="25"></div>
+    <div class="panel-title" style="margin-top:14px;">Available Functions</div>
+    <div class="input-row" style="flex-wrap:nowrap;gap:8px;">
+      ${['L', 'S', 'I', 'G'].map((f) => `<label style="display:flex;align-items:center;gap:6px;font-size:.85rem;"><input type="checkbox" class="fnChk" data-f="${f}" checked> ${f}</label>`).join('')}
+    </div>
+    <div class="hint">Untick any protection function your breaker doesn't have \u2014 many MCCBs are LI only, without short-time or ground-fault stages.</div>
+    <div class="btn-row"><button class="btn" id="calc">Generate Settings</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter breaker data and generate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const availableFunctions = {};
+      left.querySelectorAll('.fnChk').forEach((cb) => { availableFunctions[cb.dataset.f] = cb.checked; });
+      const r = lsig.autoGenerate({
+        frameRatingA: +left.querySelector('#frame').value,
+        loadCurrentA: +left.querySelector('#load').value,
+        faultCurrentKA: +left.querySelector('#fault').value,
+        availableFunctions,
+      });
+      const titles = { longTime: 'Long-Time (L)', shortTime: 'Short-Time (S)', instantaneous: 'Instantaneous (I)', groundFault: 'Ground Fault (G)' };
+      const blocks = Object.entries(r).map(([k, v]) => protectionBlock(titles[k] || k, v)).join('');
+      right.innerHTML = blocks
+        ? blocks + protectionDisclaimer()
+        : '<div class="empty-state">No protection functions selected.</div>';
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Relay Coordination ----------
+function pageCoordination() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Relay Coordination</h1>
+    <p class="lead">Checks grading between an upstream and downstream relay at a common fault current. The downstream relay must clear first, with enough margin that the upstream one doesn't also trip and take out more of the system than necessary.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Fault</div>
+    <div class="input-row">
+      <div class="field"><label>Fault current (A)</label><input type="number" id="ifault" step="any" value="4000"></div>
+      <div class="field"><label>Required margin (s)</label><input type="number" id="margin" step="any" value="0.3"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Upstream Relay</div>
+    <div class="input-row">
+      <div class="field"><label>Pickup (A)</label><input type="number" id="upPickup" step="any" value="500"></div>
+      <div class="field"><label>TMS</label><input type="number" id="upTms" step="any" value="0.3"></div>
+      <div class="field"><label>Curve</label><select id="upCurve">${Object.keys(idmt.CURVES).map((k) => `<option value="${k}">${k}</option>`).join('')}</select></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Downstream Relay</div>
+    <div class="input-row">
+      <div class="field"><label>Pickup (A)</label><input type="number" id="dnPickup" step="any" value="200"></div>
+      <div class="field"><label>TMS</label><input type="number" id="dnTms" step="any" value="0.1"></div>
+      <div class="field"><label>Curve</label><select id="dnCurve">${Object.keys(idmt.CURVES).map((k) => `<option value="${k}">${k}</option>`).join('')}</select></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Check Coordination</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter both relays and check.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const ifault = +left.querySelector('#ifault').value;
+      const margin = +left.querySelector('#margin').value;
+      const upstream = { pickupA: +left.querySelector('#upPickup').value, tms: +left.querySelector('#upTms').value, curve: left.querySelector('#upCurve').value };
+      const downstream = { pickupA: +left.querySelector('#dnPickup').value, tms: +left.querySelector('#dnTms').value, curve: left.querySelector('#dnCurve').value };
+      const r = coord.checkCoordination(upstream, downstream, ifault, margin);
+
+      const badge = r.check === ec.ENGINEERING_CHECK.PASS ? 'normal'
+        : r.check === ec.ENGINEERING_CHECK.WARNING ? 'warning' : 'out';
+      const explain = r.check === ec.ENGINEERING_CHECK.PASS
+        ? 'The downstream relay operates first with at least the required grading margin. Only the faulted section is disconnected.'
+        : r.check === ec.ENGINEERING_CHECK.WARNING
+          ? 'The downstream relay is faster, but the margin is tighter than typical practice. Relay tolerance, CT error and breaker operating time can all eat into this \u2014 with too little margin, both relays may trip on the same fault.'
+          : 'No discrimination: the downstream relay is not faster than the upstream one at this fault current. The upstream relay may trip first and disconnect far more of the system than the fault requires.';
+
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <span class="badge ${badge}" style="font-size:1rem;padding:8px 18px;">${r.check}</span>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Upstream operating time', fmt(r.upstreamOperatingTimeS, 4) + ' s')}
+          ${resultRow('Downstream operating time', fmt(r.downstreamOperatingTimeS, 4) + ' s')}
+          ${resultRow('Actual margin', fmt(r.marginS, 4) + ' s')}
+          ${resultRow('Required margin', fmt(r.minGradingMarginS, 3) + ' s')}
+        </div>
+        <div class="assumptions-note" style="margin-top:14px;">${explain}</div>
+        ${protectionDisclaimer()}
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('coordination',
+        `Coordination \u2014 ${r.check}`, { ifault, upstream, downstream }, { check: r.check, marginS: r.marginS }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Power Plant Control Loops (visual) ----------
+function pageControlLoops() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Control Loops \u2014 Visual Reference</h1>
+    <p class="lead">The major control loops of a thermal power plant, drawn as live block diagrams. Move the disturbance slider and watch the signals actually propagate \u2014 these loops are far easier to understand seeing them move than reading about them.</p></div>`));
+
+  const loopTabs = h(`<div class="tabs" id="loopTabs">${cl.LOOP_IDS.map((id, i) =>
+    `<div class="tab ${i === 0 ? 'active' : ''}" data-l="${id}">${cl.CONTROL_LOOPS[id].name}</div>`).join('')}</div>`);
+  app.appendChild(loopTabs);
+
+  const body = h('<div></div>');
+  app.appendChild(body);
+
+  // --- SVG diagram renderer -------------------------------------------
+  const NODE_W = 108, NODE_H = 52;
+  function anchorPoint(n, toward) {
+    // Pick the edge midpoint of the node box facing the target, so arrows
+    // meet the box cleanly instead of running to its centre.
+    const cx = n.x + NODE_W / 2, cy = n.y + NODE_H / 2;
+    const dx = toward.x + NODE_W / 2 - cx, dy = toward.y + NODE_H / 2 - cy;
+    if (Math.abs(dx) * NODE_H > Math.abs(dy) * NODE_W) {
+      return { x: cx + Math.sign(dx) * (NODE_W / 2), y: cy };
+    }
+    return { x: cx, y: cy + Math.sign(dy) * (NODE_H / 2) };
+  }
+
+  function drawLoop(loop, values) {
+    const nodeById = Object.fromEntries(loop.nodes.map((n) => [n.id, n]));
+    const maxX = Math.max(...loop.nodes.map((n) => n.x)) + NODE_W + 40;
+    const maxY = Math.max(...loop.nodes.map((n) => n.y)) + NODE_H + 40;
+
+    // Edge labels are placed at the line midpoint, but two edges crossing
+    // the same area put their labels on top of each other and the text
+    // becomes unreadable. Track used label positions and nudge later ones
+    // vertically until they clear.
+    const usedLabelSpots = [];
+    function labelOffset(x, y) {
+      let dy = 0;
+      for (let guard = 0; guard < 8; guard++) {
+        const clash = usedLabelSpots.some((s) => Math.abs(s.x - x) < 70 && Math.abs(s.y - (y + dy)) < 11);
+        if (!clash) break;
+        dy = dy <= 0 ? -dy + 12 : -dy;   // alternate above/below, widening
+      }
+      usedLabelSpots.push({ x, y: y + dy });
+      return dy;
+    }
+
+    const edgeSvg = loop.edges.map((e, i) => {
+      const a = nodeById[e.from], b = nodeById[e.to];
+      const p1 = anchorPoint(a, b), p2 = anchorPoint(b, a);
+      const st = cl.EDGE_STYLES[e.style || 'normal'];
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2 + (e.label ? labelOffset((p1.x + p2.x) / 2, (p1.y + p2.y) / 2) : 0);
+      return `
+        <line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"
+              stroke="${st.color}" stroke-width="1.6" ${st.dash ? `stroke-dasharray="${st.dash}"` : ''}
+              marker-end="url(#arrow-${e.style || 'normal'})" opacity="0.85"/>
+        <circle r="3.5" fill="${st.color}">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="${(i * 0.18).toFixed(2)}s"
+            path="M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}"/>
+        </circle>
+        ${e.label ? `<text x="${midX}" y="${midY - 5}" fill="${st.color}" font-size="9"
+             font-family="var(--font-mono)" text-anchor="middle" opacity="0.9">${e.label}</text>` : ''}`;
+    }).join('');
+
+    const nodeSvg = loop.nodes.map((n) => {
+      const st = cl.NODE_STYLES[n.type];
+      const val = values && values[n.id] ? values[n.id] : '';
+      return `
+        <g class="loop-node" data-node="${n.id}" style="cursor:pointer;">
+          <rect x="${n.x}" y="${n.y}" width="${NODE_W}" height="${NODE_H}" rx="6"
+                fill="var(--bg-panel)" stroke="${st.color}" stroke-width="1.8"/>
+          <text x="${n.x + NODE_W / 2}" y="${n.y + 19}" fill="${st.color}" font-size="11"
+                font-family="var(--font-mono)" font-weight="600" text-anchor="middle">${n.label.replace(/<br\/>/g, ' ')}</text>
+          <text x="${n.x + NODE_W / 2}" y="${n.y + 32}" fill="var(--text-faint)" font-size="8"
+                font-family="var(--font-mono)" text-anchor="middle">${n.sub}</text>
+          <text x="${n.x + NODE_W / 2}" y="${n.y + 45}" fill="var(--text)" font-size="10"
+                font-family="var(--font-mono)" font-weight="600" text-anchor="middle">${val}</text>
+        </g>`;
+    }).join('');
+
+    const markers = Object.entries(cl.EDGE_STYLES).map(([k, st]) => `
+      <marker id="arrow-${k}" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="${st.color}"/>
+      </marker>`).join('');
+
+    return `<svg viewBox="0 0 ${maxX} ${maxY}" style="width:100%;height:auto;min-width:640px;">
+      <defs>${markers}</defs>${edgeSvg}${nodeSvg}</svg>`;
+  }
+
+  // --- Page for one loop ----------------------------------------------
+  function showLoop(loopId) {
+    const loop = cl.CONTROL_LOOPS[loopId];
+    let simInput = loop.sim.inputDefault;
+    let prevInput = loop.sim.inputDefault;
+
+    body.innerHTML = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div class="panel-title" style="margin-bottom:2px;">${loop.name}</div>
+            <div style="font-size:.76rem;color:var(--text-faint);font-family:var(--font-mono);">${loop.system} \u00b7 ${loop.difficulty}</div>
+          </div>
+        </div>
+        <p style="color:var(--text-dim);font-size:.86rem;margin-top:10px;">${loop.why}</p>
+
+        <div class="input-row" style="margin-top:14px;align-items:center;flex-wrap:nowrap;gap:12px;">
+          <div class="field" style="flex:1;min-width:0;margin-bottom:0;">
+            <label>${loop.sim.inputLabel}</label>
+            <input type="range" id="simSlider" min="${loop.sim.inputMin}" max="${loop.sim.inputMax}" step="1" value="${simInput}" style="width:100%;">
+          </div>
+          <div style="flex:0 0 auto;text-align:center;">
+            <div style="font-family:var(--font-mono);font-size:1.4rem;color:var(--amber);" id="simVal">${simInput}</div>
+            <div style="font-size:.68rem;color:var(--text-faint);">drag to disturb</div>
+          </div>
+          <button class="btn secondary" id="simReset" style="flex:0 0 auto;">Reset</button>
+        </div>
+
+        <div id="loopSvg" style="overflow-x:auto;margin-top:14px;padding:10px 0;"></div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-size:.72rem;color:var(--text-faint);">
+          ${Object.entries(cl.EDGE_STYLES).map(([, st]) =>
+            `<span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="display:inline-block;width:18px;height:0;border-top:2px ${st.dash ? 'dashed' : 'solid'} ${st.color};"></span>${st.label}</span>`).join('')}
+        </div>
+
+        <div class="assumptions-note" id="simInsight" style="margin-top:14px;"></div>
+      </div>
+
+      <div class="calc-layout" style="margin-top:16px;">
+        <div class="card">
+          <div class="panel-title">The Problem</div>
+          <p style="color:var(--text-dim);font-size:.86rem;">${loop.problem}</p>
+          <div class="panel-title" style="margin-top:16px;">The Solution</div>
+          <p style="color:var(--text-dim);font-size:.86rem;">${loop.solution}</p>
+        </div>
+        <div class="card">
+          <div class="panel-title">Key Elements</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+            ${loop.elements.map((el) => `<div style="display:flex;gap:8px;align-items:flex-start;">
+              <span style="color:var(--amber);flex-shrink:0;">\u25b8</span>
+              <span style="font-size:.85rem;color:var(--text-dim);">${el}</span></div>`).join('')}
+          </div>
+          <div class="panel-title" style="margin-top:18px;">Block Types</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+            ${[...new Set(loop.nodes.map((n) => n.type))].map((t) =>
+              `<span class="badge" style="border:1px solid ${cl.NODE_STYLES[t].color};color:${cl.NODE_STYLES[t].color};">${cl.NODE_STYLES[t].hint}</span>`).join('')}
+          </div>
+          <div class="panel-title" style="margin-top:18px;">Sources</div>
+          <ul style="margin:6px 0 0 16px;padding:0;color:var(--text-faint);font-size:.76rem;line-height:1.7;">
+            ${loop.sources.map((s) => `<li>${s}</li>`).join('')}
+          </ul>
+        </div>
+      </div>`;
+
+    const svgWrap = body.querySelector('#loopSvg');
+    const insight = body.querySelector('#simInsight');
+    const slider = body.querySelector('#simSlider');
+    const valEl = body.querySelector('#simVal');
+
+    function refresh() {
+      const r = loop.sim.run(simInput, prevInput);
+      svgWrap.innerHTML = drawLoop(loop, r.nodeValues);
+      insight.innerHTML = r.insight;
+      valEl.textContent = simInput;
+      // Clicking a block explains what it is.
+      svgWrap.querySelectorAll('.loop-node').forEach((g) => {
+        g.addEventListener('click', () => {
+          const n = loop.nodes.find((x) => x.id === g.dataset.node);
+          const st = cl.NODE_STYLES[n.type];
+          insight.innerHTML = `<b style="color:${st.color};">${n.label.replace(/<br\/>/g, ' ')} \u2014 ${n.sub}</b><br>${st.hint}. Current value: <b>${r.nodeValues[n.id] || 'n/a'}</b>.`;
+        });
+      });
+    }
+    slider.addEventListener('input', (e) => { prevInput = simInput; simInput = +e.target.value; refresh(); });
+    body.querySelector('#simReset').addEventListener('click', () => {
+      prevInput = loop.sim.inputDefault; simInput = loop.sim.inputDefault;
+      slider.value = simInput; refresh();
+    });
+    refresh();
+  }
+
+  loopTabs.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+    loopTabs.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+    t.classList.add('active');
+    showLoop(t.dataset.l);
+  }));
+  showLoop(cl.LOOP_IDS[0]);
+}
+
+// ---------- Loop Measurement Uncertainty ----------
+function pageLoopUncertainty() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>Measurement Loop Uncertainty</h1>
+    <p class="lead">A "\u00b10.1% accurate" transmitter is never the real accuracy of the measurement. This builds the full error budget across the loop and combines the terms properly \u2014 by root-sum-square, not by adding them up.</p></div>`));
+
+  const DEFAULT_TERMS = [
+    { label: 'Transmitter reference accuracy', value: 0.075, basis: '% of span', kind: 'random' },
+    { label: 'Ambient temperature effect', value: 0.15, basis: '% of span', kind: 'random' },
+    { label: 'Static pressure effect', value: 0.10, basis: '% of span', kind: 'random' },
+    { label: 'Drift since last calibration', value: 0.10, basis: '% of span', kind: 'random' },
+    { label: 'Analogue input card', value: 0.05, basis: '% of span', kind: 'random' },
+  ];
+  let terms = DEFAULT_TERMS.map((t) => ({ ...t }));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Range &amp; Operating Point</div>
+    <div class="input-row">
+      <div class="field"><label>LRV</label><input type="number" id="lrv" value="0"></div>
+      <div class="field"><label>URV</label><input type="number" id="urv" value="100"></div>
+      <div class="field"><label>Reading</label><input type="number" id="reading" value="50"></div>
+    </div>
+    <div class="hint">Enter the range and the process value you want the uncertainty evaluated at. "% of reading" terms change with the reading; "% of span" terms don't.</div>
+    <div class="panel-title" style="margin-top:16px;">Error Terms</div>
+    <div id="termsWrap"></div>
+    <div class="btn-row" style="margin-top:10px;"><button class="btn secondary" id="addTerm">+ Add term</button><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter the loop\u2019s error terms and calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  const termsWrap = left.querySelector('#termsWrap');
+  function renderTerms() {
+    termsWrap.innerHTML = terms.map((t, i) => `
+      <div class="input-row" data-i="${i}" style="align-items:flex-end;gap:6px;flex-wrap:nowrap;">
+        <div class="field" style="flex:2 1 0;min-width:0;"><label>${i === 0 ? 'Description' : ''}</label><input type="text" class="t-label" value="${t.label.replace(/"/g, '&quot;')}"></div>
+        <div class="field" style="flex:0 0 68px;min-width:0;"><label>${i === 0 ? 'Value' : ''}</label><input type="number" class="t-value" step="any" value="${t.value}"></div>
+        <div class="field" style="flex:0 0 112px;min-width:0;"><label>${i === 0 ? 'Basis' : ''}</label><select class="t-basis" style="padding:8px 4px;">${lu.ERROR_BASIS.map((b) => `<option ${b === t.basis ? 'selected' : ''}>${b}</option>`).join('')}</select></div>
+        <div class="field" style="flex:0 0 96px;min-width:0;"><label>${i === 0 ? 'Type' : ''}</label><select class="t-kind" style="padding:8px 4px;">${lu.ERROR_KIND.map((k) => `<option ${k === t.kind ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+        <div class="field" style="flex:0 0 auto;min-width:0;"><label>${i === 0 ? '&nbsp;' : ''}</label><button class="btn secondary t-del" style="padding:8px 9px;">\u2715</button></div>
+      </div>`).join('');
+    termsWrap.querySelectorAll('.t-del').forEach((b, i) => b.addEventListener('click', () => {
+      if (terms.length === 1) { toast('Keep at least one error term'); return; }
+      readTerms(); terms.splice(i, 1); renderTerms();
+    }));
+  }
+  function readTerms() {
+    const rows = [...termsWrap.querySelectorAll('.input-row')];
+    terms = rows.map((r) => ({
+      label: r.querySelector('.t-label').value.trim() || 'Unnamed term',
+      value: +r.querySelector('.t-value').value,
+      basis: r.querySelector('.t-basis').value,
+      kind: r.querySelector('.t-kind').value,
+    }));
+  }
+  renderTerms();
+
+  left.querySelector('#addTerm').addEventListener('click', () => {
+    readTerms();
+    terms.push({ label: '', value: 0.05, basis: '% of span', kind: 'random' });
+    renderTerms();
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    readTerms();
+    const lrv = +left.querySelector('#lrv').value;
+    const urv = +left.querySelector('#urv').value;
+    const reading = +left.querySelector('#reading').value;
+    try {
+      const r = lu.loopUncertainty({ lrv, urv, reading, terms });
+      const overstatement = r.totalAbsolute > 0 ? r.linearSumAbsolute / r.totalAbsolute : 1;
+      right.innerHTML = `
+        <div class="readout"><span class="value">\u00b1${fmt(r.totalPctSpan, 3)}</span><span class="unit">% of span</span></div>
+        <div class="result-grid">
+          ${resultRow('Total uncertainty', '\u00b1' + fmt(r.totalAbsolute, 4) + ' engineering units')}
+          ${resultRow('As % of reading', r.totalPctReading === null ? 'n/a at zero reading' : '\u00b1' + fmt(r.totalPctReading, 3) + ' %')}
+          ${resultRow('Random terms (RSS)', '\u00b1' + fmt(r.rssAbsolute, 4))}
+          ${resultRow('Systematic terms (added)', r.systematicAbsolute > 0 ? '\u00b1' + fmt(r.systematicAbsolute, 4) : 'none')}
+          ${resultRow('Dominant term', r.dominant ? r.dominant.label + ' (' + fmt(r.dominant.contributionPct, 1) + '% of the budget)' : 'n/a')}
+        </div>
+        <div class="assumptions-note" style="margin-top:14px;">If you had added every term together instead of combining them by RSS, you'd get \u00b1${fmt(r.linearSumAbsolute, 4)} \u2014 <b>${fmt(overstatement, 2)}\u00d7 larger</b> than the real figure. That's the classic error budget mistake, and it leads to over-specifying instruments that were never the problem.</div>
+        <div style="overflow-x:auto;margin-top:14px;">
+          <table><thead><tr><th>Term</th><th>Spec</th><th>Type</th><th class="num">Absolute</th><th class="num">Share of budget</th></tr></thead><tbody>
+            ${r.detail.map((d) => `<tr>
+              <td>${d.label}</td>
+              <td style="font-size:.78rem;color:var(--text-dim);">${fmt(d.value, 3)} ${d.basis}</td>
+              <td><span class="badge ${d.kind === 'systematic' ? 'warning' : 'normal'}">${d.kind}</span></td>
+              <td class="num">${fmt(d.absolute, 4)}</td>
+              <td class="num">${d.kind === 'random' ? fmt(d.contributionPct, 1) + '%' : '\u2014'}</td>
+            </tr>`).join('')}
+          </tbody></table>
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">Independent random errors combine as root-sum-square \u2014 the standard method in ISA/IEC instrument uncertainty practice. Terms marked <b>systematic</b> are known one-directional biases and are added arithmetically instead. Tag a term correctly: calling a real bias "random" understates your true uncertainty.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('loop-uncertainty', `Loop uncertainty \u2014 \u00b1${fmt(r.totalPctSpan,3)}% span`, { lrv, urv, reading, terms }, { totalPctSpan: r.totalPctSpan, totalAbsolute: r.totalAbsolute }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Measurement Loop Uncertainty',
+        inputs: { LRV: lrv, URV: urv, Reading: reading, Terms: terms.length },
+        result: { 'Total (% span)': fmt(r.totalPctSpan, 3), 'Total (abs)': fmt(r.totalAbsolute, 4), 'Dominant term': r.dominant ? r.dominant.label : 'n/a' },
+        assumptions: { method: 'Random terms combined by RSS; systematic terms added arithmetically.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Control Valve Cavitation / Flashing ----------
+function pageCavitation() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>Valve Cavitation &amp; Flashing Predictor</h1>
+    <p class="lead">Sizing a valve for capacity doesn't tell you whether it will destroy itself. A correctly-sized valve can still cavitate badly \u2014 this checks the pressure conditions that decide it.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Service Conditions</div>
+    <div class="hint" style="margin-bottom:10px;">All pressures must be <b>absolute</b> and in the same unit (bar a, psia, kPa a \u2014 the analysis is unit-agnostic as long as you're consistent).</div>
+    <div class="input-row">
+      <div class="field"><label>P\u2081 inlet (abs)</label><input type="number" id="p1" step="any" value="10"></div>
+      <div class="field"><label>P\u2082 outlet (abs)</label><input type="number" id="p2" step="any" value="2"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Vapour pressure P\u1d65</label><input type="number" id="pv" step="any" value="1.0"></div>
+      <div class="field"><label>Critical pressure P\u1d04</label><input type="number" id="pc" step="any" value="221"></div>
+    </div>
+    <div class="hint">P\u1d65 is at the flowing temperature, not ambient. P\u1d04 is a fluid property (water \u2248 221 bar a).</div>
+    <div class="panel-title" style="margin-top:16px;">Valve Data (from manufacturer)</div>
+    <div class="field"><label>F\u029f \u2014 liquid pressure recovery factor</label><input type="number" id="fl" step="any" value="0.9"></div>
+    <div class="hint">Valve-specific. Roughly: globe \u2248 0.9 (low recovery), butterfly/ball \u2248 0.5\u20130.7 (high recovery, far more cavitation-prone). Use your actual valve's published figure.</div>
+    <div class="input-row" style="margin-top:10px;">
+      <div class="field"><label>\u03c3 incipient (optional)</label><input type="number" id="sigI" step="any" placeholder="e.g. 2.0"></div>
+      <div class="field"><label>\u03c3 damage (optional)</label><input type="number" id="sigD" step="any" placeholder="e.g. 1.5"></div>
+    </div>
+    <div class="hint">Leave blank if you don't have them \u2014 the tool will say plainly what it can and can't conclude without them.</div>
+    <div class="btn-row"><button class="btn" id="calc">Assess</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter service conditions and assess.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const p1 = +left.querySelector('#p1').value;
+    const p2 = +left.querySelector('#p2').value;
+    const pv = +left.querySelector('#pv').value;
+    const pc = +left.querySelector('#pc').value;
+    const fl = +left.querySelector('#fl').value;
+    const sigIRaw = left.querySelector('#sigI').value.trim();
+    const sigDRaw = left.querySelector('#sigD').value.trim();
+    try {
+      const r = lu.cavitationCheck({
+        p1, p2, pv, pc, fl,
+        sigmaIncipient: sigIRaw === '' ? undefined : +sigIRaw,
+        sigmaDamage: sigDRaw === '' ? undefined : +sigDRaw,
+      });
+      const badge = r.severity === 'high' ? 'out' : r.severity === 'medium' ? 'warning' : 'normal';
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <span class="badge ${badge}" style="font-size:1rem;padding:8px 18px;">${r.regime}</span>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Actual \u0394P', fmt(r.dpActual, 3))}
+          ${resultRow('Choked \u0394P limit', fmt(r.dpChoked, 3))}
+          ${resultRow('Fraction of choked limit', fmt(r.chokedRatio * 100, 1) + ' %')}
+          ${resultRow('Service \u03c3 index', fmt(r.sigmaService, 3))}
+          ${resultRow('F\ua730 (critical pressure ratio)', fmt(r.ff, 4))}
+          ${resultRow('Choked?', r.isChoked ? '<span class="badge out">YES</span>' : '<span class="badge normal">No</span>')}
+          ${resultRow('Flashing?', r.isFlashing ? '<span class="badge out">YES</span>' : '<span class="badge normal">No</span>')}
+        </div>
+        <div class="assumptions-note" style="margin-top:14px;">${r.note}</div>
+        <div class="formula-box" style="margin-top:12px;">F\ua730 = 0.96 \u2212 0.28\u221a(P\u1d65/P\u1d04)<br>\u0394P_choked = F\u029f\u00b2 \u00b7 (P\u2081 \u2212 F\ua730\u00b7P\u1d65)<br>\u03c3 = (P\u2081 \u2212 P\u1d65) / (P\u2081 \u2212 P\u2082)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.assumptions} Method follows the standard IEC 60534 / ISA-75 liquid sizing approach. This is a screening assessment for engineering study \u2014 final valve selection needs the manufacturer's own sizing software and review.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('cavitation', `Cavitation check \u2014 ${r.regime}`, { p1, p2, pv, pc, fl }, { regime: r.regime, sigmaService: r.sigmaService, dpChoked: r.dpChoked }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Control Valve Cavitation / Flashing Assessment',
+        inputs: { P1: p1, P2: p2, Pv: pv, Pc: pc, FL: fl },
+        result: { Regime: r.regime, 'Service sigma': fmt(r.sigmaService, 3), 'Choked dP': fmt(r.dpChoked, 3), 'Actual dP': fmt(r.dpActual, 3) },
+        assumptions: { note: r.assumptions },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
   });
 }
 

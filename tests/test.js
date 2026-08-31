@@ -18,6 +18,8 @@ import * as tpa from '../js/calculators/thermalPlantAdvanced.js';
 import * as trip from '../js/calculators/tripProtection.js';
 import * as flow from '../js/calculators/flowEngine.js';
 import * as sc from '../js/calculators/shortCircuit.js';
+import * as lu from '../js/calculators/loopUncertainty.js';
+import * as ed from '../js/calculators/electricalDesign.js';
 import * as idmt from '../js/calculators/idmt.js';
 import * as ctEngine from '../js/calculators/ctEngine.js';
 import * as tfProt from '../js/calculators/transformerProtection.js';
@@ -896,6 +898,233 @@ test('checkCoordination: downstream slower than or equal to upstream gives REVIE
   const r = coord.checkCoordination({ pickupA: 100, tms: 0.3, curve: 'VI' }, { pickupA: 50, tms: 2, curve: 'VI' }, 1000, 0.3);
   assert.equal(r.check, 'REVIEW REQUIRED');
   assert.ok(r.downstreamOperatingTimeS >= r.upstreamOperatingTimeS);
+});
+
+console.log('\n--- loopUncertainty.js (measurement loop error budget) ---');
+test('loopUncertainty: RSS combination matches hand calculation, and is well below the linear sum', () => {
+  const r = lu.loopUncertainty({
+    lrv: 0, urv: 100, reading: 50,
+    terms: [
+      { label: 'Transmitter accuracy', value: 0.075, basis: '% of span', kind: 'random' },
+      { label: 'Ambient temp effect', value: 0.15, basis: '% of span', kind: 'random' },
+      { label: 'Static pressure effect', value: 0.10, basis: '% of span', kind: 'random' },
+      { label: 'Drift', value: 0.10, basis: '% of span', kind: 'random' },
+      { label: 'AI card', value: 0.05, basis: '% of span', kind: 'random' },
+    ],
+  });
+  const expected = Math.sqrt(0.075 ** 2 + 0.15 ** 2 + 0.10 ** 2 + 0.10 ** 2 + 0.05 ** 2);
+  approx(r.totalPctSpan, expected, 1e-9);
+  // The whole point of RSS: it must be smaller than naive linear addition.
+  assert.ok(r.rssAbsolute < r.linearSumAbsolute);
+});
+test('loopUncertainty: identifies the dominant term correctly', () => {
+  const r = lu.loopUncertainty({
+    lrv: 0, urv: 100, reading: 50,
+    terms: [
+      { label: 'Small', value: 0.05, basis: '% of span', kind: 'random' },
+      { label: 'Big', value: 0.40, basis: '% of span', kind: 'random' },
+      { label: 'Medium', value: 0.10, basis: '% of span', kind: 'random' },
+    ],
+  });
+  assert.equal(r.dominant.label, 'Big');
+  // Dominant term should carry the large majority of the squared budget.
+  assert.ok(r.dominant.contributionPct > 90);
+});
+test('loopUncertainty: systematic terms add arithmetically on top of the RSS result', () => {
+  const withoutSys = lu.loopUncertainty({
+    lrv: 0, urv: 100, reading: 50,
+    terms: [{ label: 'A', value: 0.3, basis: '% of span', kind: 'random' }],
+  });
+  const withSys = lu.loopUncertainty({
+    lrv: 0, urv: 100, reading: 50,
+    terms: [
+      { label: 'A', value: 0.3, basis: '% of span', kind: 'random' },
+      { label: 'Known bias', value: 0.2, basis: '% of span', kind: 'systematic' },
+    ],
+  });
+  approx(withSys.totalAbsolute - withoutSys.totalAbsolute, 0.2, 1e-9);
+});
+test('loopUncertainty: % of reading vs % of span differ correctly away from full scale', () => {
+  const atHalf = lu.loopUncertainty({
+    lrv: 0, urv: 100, reading: 50,
+    terms: [{ label: 'R', value: 1, basis: '% of reading', kind: 'random' }],
+  });
+  // 1% of a reading of 50 = 0.5 engineering units
+  approx(atHalf.totalAbsolute, 0.5, 1e-9);
+  // which is only 0.5% of the 100-unit span
+  approx(atHalf.totalPctSpan, 0.5, 1e-9);
+});
+test('loopUncertainty: rejects zero span and empty term list', () => {
+  assert.throws(() => lu.loopUncertainty({ lrv: 50, urv: 50, reading: 50, terms: [{ label: 'A', value: 1, basis: '% of span', kind: 'random' }] }));
+  assert.throws(() => lu.loopUncertainty({ lrv: 0, urv: 100, reading: 50, terms: [] }));
+});
+test('loopUncertainty: %reading is reported as null at a zero reading rather than Infinity', () => {
+  const r = lu.loopUncertainty({
+    lrv: 0, urv: 100, reading: 0,
+    terms: [{ label: 'A', value: 0.5, basis: '% of span', kind: 'random' }],
+  });
+  assert.equal(r.totalPctReading, null);
+  assert.ok(Number.isFinite(r.totalPctSpan));
+});
+test('scaleDrift: sqrt model scales by root of the interval ratio; linear model scales directly', () => {
+  approx(lu.scaleDrift(0.1, 12, 48, 'sqrt'), 0.1 * 2, 1e-9);   // 4x time -> 2x drift
+  approx(lu.scaleDrift(0.1, 12, 48, 'linear'), 0.1 * 4, 1e-9); // 4x time -> 4x drift
+  assert.throws(() => lu.scaleDrift(0.1, 12, 48, 'nonsense'));
+});
+
+console.log('\n--- loopUncertainty.js (control valve cavitation) ---');
+test('liquidCriticalPressureRatio: matches the standard IEC/ISA FF correlation', () => {
+  const ff = lu.liquidCriticalPressureRatio(1.0, 221);
+  approx(ff, 0.96 - 0.28 * Math.sqrt(1 / 221), 1e-12);
+});
+test('cavitationCheck: choked pressure drop matches FL^2*(P1 - FF*Pv)', () => {
+  const r = lu.cavitationCheck({ p1: 10, p2: 2, pv: 1.0, pc: 221, fl: 0.6 });
+  const ff = 0.96 - 0.28 * Math.sqrt(1 / 221);
+  approx(r.dpChoked, 0.36 * (10 - ff * 1.0), 1e-12);
+  assert.equal(r.isChoked, true);
+});
+test('cavitationCheck: flags FLASHING when outlet pressure is at or below vapour pressure', () => {
+  const r = lu.cavitationCheck({ p1: 10, p2: 0.8, pv: 1.0, pc: 221, fl: 0.9 });
+  assert.equal(r.isFlashing, true);
+  assert.equal(r.regime, 'FLASHING');
+});
+test('cavitationCheck: benign low-dP cold-water service is not flagged', () => {
+  const r = lu.cavitationCheck({ p1: 10, p2: 8, pv: 0.03, pc: 221, fl: 0.9, sigmaIncipient: 2.0, sigmaDamage: 1.5 });
+  assert.equal(r.isChoked, false);
+  assert.equal(r.isFlashing, false);
+  assert.equal(r.regime, 'NO CAVITATION PREDICTED');
+});
+test('cavitationCheck: damage-level sigma takes precedence over incipient', () => {
+  // sigma service = (10-1)/(10-2) = 1.125, below both indices
+  const r = lu.cavitationCheck({ p1: 10, p2: 2, pv: 1.0, pc: 221, fl: 0.6, sigmaIncipient: 2.0, sigmaDamage: 1.5 });
+  approx(r.sigmaService, 9 / 8, 1e-12);
+  assert.ok(r.regime.includes('damage level'));
+});
+test('cavitationCheck: honestly reports when no manufacturer sigma data was supplied', () => {
+  const withData = lu.cavitationCheck({ p1: 10, p2: 8, pv: 0.03, pc: 221, fl: 0.9, sigmaIncipient: 2.0 });
+  const without = lu.cavitationCheck({ p1: 10, p2: 8, pv: 0.03, pc: 221, fl: 0.9 });
+  assert.equal(withData.indicesSupplied, true);
+  assert.equal(without.indicesSupplied, false);
+  assert.ok(without.assumptions.includes('cannot be assessed'));
+});
+test('cavitationCheck: rejects physically invalid inputs', () => {
+  // P2 above P1
+  assert.throws(() => lu.cavitationCheck({ p1: 5, p2: 8, pv: 1, pc: 221, fl: 0.9 }));
+  // Vapour pressure at/above inlet — already boiling, not a liquid sizing case
+  assert.throws(() => lu.cavitationCheck({ p1: 5, p2: 2, pv: 6, pc: 221, fl: 0.9 }));
+  // FL out of range
+  assert.throws(() => lu.cavitationCheck({ p1: 10, p2: 2, pv: 1, pc: 221, fl: 1.5 }));
+});
+
+console.log('\n--- electricalDesign.js (cable, motor, PF, battery, transformer) ---');
+test('voltageDrop: three-phase matches sqrt(3)*I*L*(R.cos + X.sin) by hand', () => {
+  const r = ed.voltageDrop({ currentA: 100, lengthM: 150, rOhmPerKm: 0.164, xOhmPerKm: 0.08, voltageV: 415, powerFactor: 0.85 });
+  const R = 0.164 * 0.15, X = 0.08 * 0.15, cos = 0.85, sin = Math.sqrt(1 - 0.85 * 0.85);
+  approx(r.dropV, Math.sqrt(3) * 100 * (R * cos + X * sin), 1e-9);
+  approx(r.dropPct, (r.dropV / 415) * 100, 1e-9);
+});
+test('voltageDrop: single-phase uses factor 2 (out and back), DC ignores reactance', () => {
+  const base = { currentA: 50, lengthM: 100, rOhmPerKm: 0.5, xOhmPerKm: 0.1, voltageV: 230, powerFactor: 1 };
+  const sp = ed.voltageDrop({ ...base, systemType: 'single-phase' });
+  const dc = ed.voltageDrop({ ...base, systemType: 'dc' });
+  // At unity PF the reactive term vanishes, so single-phase and DC agree.
+  approx(sp.dropV, dc.dropV, 1e-9);
+  approx(dc.dropV, 2 * 50 * (0.5 * 0.1), 1e-9);
+});
+test('voltageDrop: parallel runs reduce the drop proportionally', () => {
+  const one = ed.voltageDrop({ currentA: 200, lengthM: 100, rOhmPerKm: 0.2, voltageV: 415 });
+  const two = ed.voltageDrop({ currentA: 200, lengthM: 100, rOhmPerKm: 0.2, voltageV: 415, parallelRuns: 2 });
+  approx(two.dropV, one.dropV / 2, 1e-9);
+});
+test('voltageDrop: rejects invalid inputs', () => {
+  assert.throws(() => ed.voltageDrop({ currentA: 0, lengthM: 100, rOhmPerKm: 0.2, voltageV: 415 }));
+  assert.throws(() => ed.voltageDrop({ currentA: 10, lengthM: 100, rOhmPerKm: 0.2, voltageV: 415, powerFactor: 1.5 }));
+  assert.throws(() => ed.voltageDrop({ currentA: 10, lengthM: 100, rOhmPerKm: 0.2, voltageV: 415, systemType: 'nonsense' }));
+});
+
+test('deratedAmpacity: factors multiply, and the adequacy check is correct', () => {
+  const r = ed.deratedAmpacity({ baseAmpacityA: 300, ambientFactor: 0.87, groupingFactor: 0.8, designCurrentA: 200 });
+  approx(r.deratedAmpacityA, 300 * 0.87 * 0.8, 1e-9);
+  assert.equal(r.check, 'ADEQUATE');
+  const bad = ed.deratedAmpacity({ baseAmpacityA: 300, ambientFactor: 0.5, groupingFactor: 0.5, designCurrentA: 200 });
+  assert.equal(bad.check, 'UNDERSIZED');
+});
+
+test('adiabaticMinimumCsa: S = I*sqrt(t)/k, and withstand current inverts it', () => {
+  const r = ed.adiabaticMinimumCsa({ faultCurrentA: 25000, faultDurationS: 0.5, kFactor: 143, actualCsaMm2: 185 });
+  approx(r.minCsaMm2, 25000 * Math.sqrt(0.5) / 143, 1e-9);
+  assert.equal(r.check, 'ADEQUATE');
+  // Withstand current for the actual CSA must invert the same relationship.
+  approx(r.withstandA, 143 * 185 / Math.sqrt(0.5), 1e-9);
+});
+test('adiabaticMinimumCsa: flags an undersized conductor and long-duration invalidity', () => {
+  const small = ed.adiabaticMinimumCsa({ faultCurrentA: 25000, faultDurationS: 1, kFactor: 143, actualCsaMm2: 50 });
+  assert.equal(small.check, 'INADEQUATE');
+  assert.ok(small.marginPct < 0);
+  const long = ed.adiabaticMinimumCsa({ faultCurrentA: 5000, faultDurationS: 8, kFactor: 143 });
+  assert.equal(long.adiabaticValid, false);
+});
+
+test('motorStartingDip: dip formula and the square-law torque relationship hold', () => {
+  const r = ed.motorStartingDip({ motorKW: 1000, voltageKV: 6.6, startingCurrentMultiple: 6, powerFactor: 0.85, efficiencyPct: 95, sourceFaultMVA: 250 });
+  const kva = 1000 / (0.85 * 0.95);
+  const skva = kva * 6;
+  approx(r.dipPct, (skva / (skva + 250000)) * 100, 1e-9);
+  // Torque falls with the SQUARE of residual voltage.
+  approx(r.torqueAtDipPct, (r.residualVoltagePct ** 2) / 100, 1e-9);
+  assert.equal(r.check, 'ACCEPTABLE');
+});
+test('motorStartingDip: a weak source produces a larger dip and flags the limit', () => {
+  const stiff = ed.motorStartingDip({ motorKW: 1000, voltageKV: 6.6, sourceFaultMVA: 500 });
+  const weak = ed.motorStartingDip({ motorKW: 1000, voltageKV: 6.6, sourceFaultMVA: 10 });
+  assert.ok(weak.dipPct > stiff.dipPct, 'a weaker source must give a bigger dip');
+  assert.equal(weak.check, 'EXCEEDS LIMIT');
+});
+
+test('powerFactorCorrection: kVAr = kW*(tan1 - tan2), and released capacity is positive', () => {
+  const r = ed.powerFactorCorrection({ loadKW: 500, existingPF: 0.75, targetPF: 0.95 });
+  approx(r.kvarRequired, 500 * (Math.tan(Math.acos(0.75)) - Math.tan(Math.acos(0.95))), 1e-9);
+  approx(r.kvaBefore, 500 / 0.75, 1e-9);
+  approx(r.kvaAfter, 500 / 0.95, 1e-9);
+  assert.ok(r.releasedKVA > 0, 'correcting PF must release capacity');
+  assert.ok(r.currentReductionPct > 0);
+});
+test('powerFactorCorrection: rejects a target at or below the existing PF', () => {
+  assert.throws(() => ed.powerFactorCorrection({ loadKW: 500, existingPF: 0.9, targetPF: 0.85 }));
+  assert.throws(() => ed.powerFactorCorrection({ loadKW: 500, existingPF: 0.9, targetPF: 0.9 }));
+});
+
+test('batterySizing: duty Ah sums the steps, and factors compound onto it', () => {
+  const r = ed.batterySizing({
+    loadSteps: [{ currentA: 50, durationMin: 60 }, { currentA: 200, durationMin: 1 }],
+    systemVoltageV: 110,
+  });
+  approx(r.dutyAh, 50 * 60 / 60 + 200 * 1 / 60, 1e-9);
+  approx(r.requiredAh, r.dutyAh * r.combinedFactor, 1e-9);
+  assert.equal(r.peakCurrentA, 200);
+  assert.equal(r.cellCount, 55); // 110 V / 2.0 V per cell
+});
+test('batterySizing: rejects an empty or invalid duty cycle', () => {
+  assert.throws(() => ed.batterySizing({ loadSteps: [] }));
+  assert.throws(() => ed.batterySizing({ loadSteps: [{ currentA: 0, durationMin: 10 }] }));
+});
+
+test('transformerLoading: copper loss follows the square of loading', () => {
+  const r = ed.transformerLoading({ ratingKVA: 1000, loadKVA: 600, noLoadLossW: 1500, fullLoadLossW: 10000, powerFactor: 0.9 });
+  approx(r.copperLossW, 10000 * 0.6 * 0.6, 1e-9);
+  approx(r.totalLossW, 1500 + 3600, 1e-9);
+  approx(r.loadingPct, 60, 1e-9);
+});
+test('transformerLoading: peak efficiency is where copper loss equals iron loss', () => {
+  const r = ed.transformerLoading({ ratingKVA: 1000, loadKVA: 500, noLoadLossW: 1500, fullLoadLossW: 10000 });
+  approx(r.optimalLoadingPct, Math.sqrt(1500 / 10000) * 100, 1e-9);
+  // Verify the claim directly: at optimal loading the two losses must match.
+  const at = ed.transformerLoading({ ratingKVA: 1000, loadKVA: r.optimalLoadKVA, noLoadLossW: 1500, fullLoadLossW: 10000 });
+  approx(at.copperLossW, 1500, 1e-6);
+});
+test('transformerLoading: flags overload', () => {
+  const r = ed.transformerLoading({ ratingKVA: 1000, loadKVA: 1200, noLoadLossW: 1500, fullLoadLossW: 10000 });
+  assert.equal(r.check, 'OVERLOADED');
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

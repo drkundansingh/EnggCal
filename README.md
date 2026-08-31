@@ -162,9 +162,73 @@ randomized test cases each run) with zero failures, and confirmed the
 error surfaces cleanly in the actual UI (both the Mode 4 DP Flow Element
 calculator and the DP → Flow Wizard) rather than crashing the page.
 
+`tests/deep_50000.js` is the widest sweep in the suite: 50,000 randomized
+points spread across 20 property checks covering the whole calculation
+engine, including the newest modules (`loopUncertainty`, `controlLoops`).
+It leans entirely on properties that must always hold rather than fixed
+expected answers:
+
+- Round-trips close (pressure, temperature, PV↔percent↔signal, RTD
+  resistance↔temperature, I/P current↔pressure, hydrostatic level↔DP)
+- Monotonic relationships stay monotonic (RTD resistance rises with
+  temperature, level rises with DP and falls with density, Cv rises with
+  flow, drift grows with calibration interval)
+- Physical bounds hold (Kelvin never negative above absolute zero, beta
+  ratio strictly between 0 and 1, FF within the IEC/ISA correlation band,
+  efficiency between 0 and 1, choked ΔP positive)
+- Method correctness: the RSS loop-uncertainty total can *never* exceed
+  the naive linear sum, and random-term contributions must sum to exactly
+  100% of the budget
+- Alarm setpoints always sit inside trip setpoints, in the correct
+  direction, across every plant-type variant
+- No NaN, Infinity, or `undefined` leaks into any control-loop node
+  display value across every loop's full input range — these would render
+  as literal broken text in the diagrams
+
+```bash
+node tests/deep_50000.js
+```
+
+**Worth noting about this suite**: on its first run, five checks failed —
+all five were bugs in the *test*, not the app. I'd guessed at function
+names and signatures (`dpToLevel` instead of `openTankLevel`, an RTD `r0`
+argument instead of a named type key, a Rankine temperature unit that
+doesn't exist in this codebase) rather than reading the actual exports.
+Worth stating plainly because a test suite that's wrong about the API is
+worse than no test at all — it produces confident-looking failures that
+send you hunting for bugs that were never there. Fixed by checking the
+real signatures and rewriting those five checks against them.
+
+`tests/deep_100000.js` runs 100,000 points per check and additionally covers
+the electrical protection engines (shortCircuit, idmt, ctEngine,
+transformerProtection, motorProtection, lsigEngine, coordination).
+
+```bash
+node tests/deep_100000.js
+```
+
+**Three stale assertions were found and fixed in this suite** — all three
+were test bugs, not app bugs, and all three had been silently failing:
+
+- `transformerProtection.autoGenerate` and `motorProtection.autoGenerate`
+  return a *structured* object (`basicParameters` / `protection` /
+  `philosophy`). The test was reading `result.flc` and `result.hvFLC` at
+  the top level, where they don't exist, so every single point failed.
+- `coordination.checkCoordination` returns the string `'REVIEW REQUIRED'`
+  (with a **space**). The test asserted `'REVIEW_REQUIRED'` (underscore —
+  that's only the *key name* in the `ENGINEERING_CHECK` map). This one is
+  the subtle one: it only failed on the ~8% of randomized cases that
+  actually reached that branch, which is exactly the kind of intermittent
+  failure that's easy to dismiss as flakiness.
+
+The lesson worth recording: a test that's wrong about the API is worse
+than no test, because it manufactures confident-looking failures that send
+you hunting for bugs that were never there. Always verify the real export
+shape before asserting against it.
+
 I also ran a full headless-browser pass (Playwright) clicking through every
 route and every calculator's Calculate button, checking for JS errors and
-verifying computed values match the engine tests. All 13 routes render, all
+verifying computed values match the engine tests. All 20 routes render, all
 calculators produce correct results, history save/restore and the light/dark
 toggle work, and there are no console errors. Re-run the same style of check
 after any change — routing, storage, and PDF export are the parts most likely
