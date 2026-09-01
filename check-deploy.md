@@ -62,7 +62,7 @@ still active and Step 1 or Step 3 has not taken effect.
 
 Every deploy:
 
-    node stamp-build.mjs        # new BUILD_ID -> new cache name
+    node stamp-build.js        # new BUILD_ID -> new cache name
     git add . && git commit -m "..." && git push origin main
 
 Then upload to Hostinger, **including `service-worker.js` and `.htaccess`**.

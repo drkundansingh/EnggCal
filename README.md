@@ -614,7 +614,7 @@ it updates.
 - **Network-first** for HTML, JS, CSS and JSON, so a deploy is picked up on
   the next load. Cache is used only as an offline fallback.
 - **Cache-first** kept for images and fonts, which rarely change.
-- **`BUILD_ID` stamped into the cache name** by `stamp-build.mjs`, so every
+- **`BUILD_ID` stamped into the cache name** by `stamp-build.js`, so every
   deploy gets a fresh cache and the previous one is deleted.
 - **Update prompt**: if a new version installs while the app is open, a
   small banner offers "Update now" instead of leaving the user on old code.
@@ -625,7 +625,7 @@ it updates.
 ### Deploy steps
 
 ```bash
-node stamp-build.mjs      # new BUILD_ID -> new cache name
+node stamp-build.js      # new BUILD_ID -> new cache name
 git add . && git commit -m "..." && git push origin main
 ```
 

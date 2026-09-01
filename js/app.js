@@ -14,6 +14,7 @@ import * as flow from './calculators/flowEngine.js';
 import * as store from './storage.js';
 import * as lu from './calculators/loopUncertainty.js';
 import * as cl from './calculators/controlLoops.js';
+import * as steam from './calculators/steamTable.js';
 import * as ec from './calculators/electricalCommon.js';
 import * as sc from './calculators/shortCircuit.js';
 import * as idmt from './calculators/idmt.js';
@@ -88,6 +89,8 @@ const NAV = [
   {
     group: 'Instrumentation', items: [
       { id: 'dp-flow-wizard', label: 'DP → Flow Wizard', icon: '🧭' },
+      { id: 'dp-flow-cal', label: 'DP → Flow (Calibrated)', icon: '√' },
+      { id: 'steam-props', label: 'Steam Properties', icon: '♨' },
       { id: 'transmitter', label: '4–20 mA Transmitter', icon: '↯' },
       { id: 'dp-level', label: 'DP & Level', icon: '≈' },
       { id: 'orifice', label: 'Orifice Plate', icon: '◎' },
@@ -219,6 +222,8 @@ const ROUTES = {
   'battery-sizing': pageBatterySizing,
   'tx-loading': pageTxLoading,
   'dp-flow-wizard': pageDPFlowWizard,
+  'dp-flow-cal': pageDPFlowCalibrated,
+  'steam-props': pageSteamProps,
   'converter': pageConverter,
   'transmitter': pageTransmitter,
   'dp-level': pageDpLevel,
@@ -2499,7 +2504,223 @@ function pageProtection() {
 }
 
 
-// ---------- DP → Flow Wizard ----------
+// ---------- DP -> Flow (Calibrated Range + Geometric) ----------
+function pageDPFlowCalibrated() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div>
+    <h1>DP &rarr; Flow (Calibrated Range)</h1>
+    <p class="lead">For a flow element that is already installed and commissioned you don't need the bore or pipe ID \u2014 the calibrated range already contains all of it. This page does that, with real IAPWS-IF97 steam density for compensation, and will also run the geometric model alongside if you happen to have the dimensions.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Calibrated Range (from datasheet or DCS)</div>
+    <div class="input-row">
+      <div class="field"><label>Measured DP</label><input type="number" id="dp" step="any" value="1800"></div>
+      <div class="field"><label>DP at max flow</label><input type="number" id="dpMax" step="any" value="2500"></div>
+      <div class="field"><label>DP unit</label><input type="text" id="dpUnit" value="mmWC"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Max calibrated flow</label><input type="number" id="flowMax" step="any" value="100"></div>
+      <div class="field"><label>Flow unit</label><input type="text" id="flowUnit" value="t/h"></div>
+    </div>
+    <div class="hint">Both DP figures must share a unit; the answer comes back in whatever flow unit you name. No geometry needed \u2014 the calibration already encodes it.</div>
+
+    <div class="panel-title" style="margin-top:16px;">Density Compensation</div>
+    <div class="field"><label>Fluid</label><select id="fluid">
+      <option value="steam">Steam / water (IAPWS-IF97)</option>
+      <option value="manual">Enter densities directly</option>
+      <option value="none">None \u2014 assume design density</option>
+    </select></div>
+    <div id="steamInputs">
+      <div class="input-row">
+        <div class="field"><label>Design pressure (bar a)</label><input type="number" id="pD" step="any" value="170"></div>
+        <div class="field"><label>Design temp (\u00b0C)</label><input type="number" id="tD" step="any" value="540"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Actual pressure (bar a)</label><input type="number" id="pA" step="any" value="130"></div>
+        <div class="field"><label>Actual temp (\u00b0C)</label><input type="number" id="tA" step="any" value="520"></div>
+      </div>
+      <div class="hint">The conditions the element was <b>calibrated</b> at, versus what the plant is running <b>now</b>.</div>
+    </div>
+    <div id="manualInputs" style="display:none;">
+      <div class="input-row">
+        <div class="field"><label>Design density (kg/m\u00b3)</label><input type="number" id="rhoD" step="any" value="51.1"></div>
+        <div class="field"><label>Actual density (kg/m\u00b3)</label><input type="number" id="rhoA" step="any" value="39.2"></div>
+      </div>
+    </div>
+
+    <div class="panel-title" style="margin-top:16px;">Geometric Cross-Check (optional)</div>
+    <div class="input-row">
+      <div class="field"><label>Orifice bore (mm)</label><input type="number" id="bore" step="any" placeholder="leave blank to skip"></div>
+      <div class="field"><label>Pipe ID (mm)</label><input type="number" id="pipe" step="any" placeholder="optional"></div>
+      <div class="field"><label>C<sub>d</sub></label><input type="number" id="cd" step="any" value="0.61"></div>
+    </div>
+    <div class="hint">If you do have the dimensions, the geometric model runs too and the two are compared.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter the calibrated range and calculate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  const fluidSel = left.querySelector('#fluid');
+  fluidSel.addEventListener('change', () => {
+    const v = fluidSel.value;
+    left.querySelector('#steamInputs').style.display = v === 'steam' ? '' : 'none';
+    left.querySelector('#manualInputs').style.display = v === 'manual' ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const dp = +left.querySelector('#dp').value;
+      const dpMax = +left.querySelector('#dpMax').value;
+      const dpUnit = left.querySelector('#dpUnit').value.trim() || 'DP';
+      const flowMax = +left.querySelector('#flowMax').value;
+      const flowUnit = left.querySelector('#flowUnit').value.trim() || 'units';
+      const mode = fluidSel.value;
+
+      let rhoD, rhoA, steamHtml = '';
+      if (mode === 'steam') {
+        const pD = +left.querySelector('#pD').value, tD = +left.querySelector('#tD').value;
+        const pA = +left.querySelector('#pA').value, tA = +left.querySelector('#tA').value;
+        const sD = steam.steamState(pD, tD), sA = steam.steamState(pA, tA);
+        rhoD = sD.densityKgM3; rhoA = sA.densityKgM3;
+        steamHtml = `
+          <div class="panel-title" style="margin-top:16px;">Steam Properties (IAPWS-IF97)</div>
+          <div class="result-grid">
+            ${resultRow('Design density', fmt(rhoD, 4) + ' kg/m\u00b3')}
+            ${resultRow('Design state', sD.phase)}
+            ${resultRow('Actual density', fmt(rhoA, 4) + ' kg/m\u00b3')}
+            ${resultRow('Actual state', sA.phase)}
+          </div>
+          ${sA.phase === 'saturated / wet' ? `<div class="assumptions-note" style="margin-top:10px;">${sA.note}</div>` : ''}`;
+      } else if (mode === 'manual') {
+        rhoD = +left.querySelector('#rhoD').value;
+        rhoA = +left.querySelector('#rhoA').value;
+      }
+
+      const r = flow.calibratedRangeFlow({ dp, dpMax, flowMax, designDensity: rhoD, actualDensity: rhoA });
+
+      // Optional geometric cross-check.
+      let geomHtml = '';
+      const bore = +left.querySelector('#bore').value;
+      const pipe = +left.querySelector('#pipe').value;
+      if (bore > 0 && pipe > bore && rhoA > 0) {
+        // Convert DP to Pa. mmWC is the common field unit; otherwise assume Pa.
+        const toPa = /mmwc|mmh2o/i.test(dpUnit) ? 9.80665 : /kpa/i.test(dpUnit) ? 1000 : /bar/i.test(dpUnit) ? 1e5 : 1;
+        const dpPa = dp * toPa;
+        const wKgS = orf.massFlow(bore / 1000, pipe / 1000, dpPa, rhoA, +left.querySelector('#cd').value);
+        const beta = bore / pipe;
+        // Express in the same unit as the calibrated answer where we can.
+        const wTh = wKgS * 3.6;           // kg/s -> t/h
+        const sameUnit = /t\/h/i.test(flowUnit);
+        const diffPct = sameUnit && r.massFlow > 0 ? ((wTh - r.massFlow) / r.massFlow) * 100 : null;
+        geomHtml = `
+          <div class="panel-title" style="margin-top:16px;">Geometric Model (cross-check)</div>
+          <div class="result-grid">
+            ${resultRow('Beta ratio', fmt(beta, 4))}
+            ${resultRow('Mass flow', fmt(wTh, 3) + ' t/h')}
+            ${resultRow('Calibrated model', sameUnit ? fmt(r.massFlow, 3) + ' t/h' : fmt(r.massFlow, 3) + ' ' + flowUnit)}
+            ${diffPct !== null ? resultRow('Difference', fmt(diffPct, 2) + ' %') : ''}
+          </div>
+          <div class="assumptions-note" style="margin-top:10px;">${
+            diffPct === null
+              ? 'Set the flow unit to t/h to compare the two models numerically.'
+              : Math.abs(diffPct) < 5
+                ? `The two models agree within ${Math.abs(diffPct).toFixed(1)}%, which is a good sign the calibrated range and the physical element are consistent.`
+                : `The models differ by ${Math.abs(diffPct).toFixed(1)}%. Worth investigating: the calibrated range may not match the installed element, the C\u1d48 assumption may be off, or the bore may have worn or fouled.`
+          }</div>`;
+      }
+
+      const badge = r.belowCutoff ? 'out' : r.flowPct > 95 ? 'warning' : 'normal';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.massFlow, 3)}</span><span class="unit">${flowUnit}</span></div>
+        <div class="result-grid">
+          ${resultRow('DP reading', fmt(r.dpPct, 2) + ' % of span (' + fmt(dp, 1) + ' ' + dpUnit + ')')}
+          ${resultRow('Flow', fmt(r.flowPct, 2) + ' % of range')}
+          ${resultRow('Range status', `<span class="badge ${badge}">${r.belowCutoff ? 'BELOW RELIABLE RANGE' : r.flowPct > 95 ? 'NEAR TOP OF RANGE' : 'NORMAL'}</span>`)}
+          ${resultRow('Uncompensated flow', fmt(r.uncorrectedFlow, 3) + ' ' + flowUnit)}
+          ${resultRow('Density compensation', r.compensated ? fmt(r.densityCorrectionPct, 2) + ' %' : 'not applied')}
+          ${resultRow('Compensated flow', fmt(r.massFlow, 3) + ' ' + flowUnit)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">W = W_max \u00b7 \u221a(\u0394P / \u0394P_max) \u00b7 \u221a(\u03c1_actual / \u03c1_design)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        ${steamHtml}
+        ${geomHtml}
+        <div class="assumptions-note" style="margin-top:12px;">No bore, pipe ID or C\u1d48 is needed for the calibrated model \u2014 the calibration constant already absorbs all of the geometry. That is why this works on an installed element whose dimensions you don't have to hand.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('dp-flow-cal',
+        `DP flow \u2014 ${fmt(r.massFlow, 2)} ${flowUnit}`, { dp, dpMax, flowMax },
+        { massFlow: r.massFlow, densityCorrectionPct: r.densityCorrectionPct }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Steam Properties ----------
+function pageSteamProps() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div>
+    <h1>Steam Properties (IAPWS-IF97)</h1>
+    <p class="lead">Real steam-table density and specific volume from the IAPWS Industrial Formulation 1997 \u2014 the same basis used for plant heat balances, not an ideal-gas approximation.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">State Point</div>
+    <div class="input-row">
+      <div class="field"><label>Pressure (bar absolute)</label><input type="number" id="p" step="any" value="170"></div>
+      <div class="field"><label>Temperature (\u00b0C)</label><input type="number" id="t" step="any" value="540"></div>
+    </div>
+    <div class="hint">Pressure must be <b>absolute</b>. Gauge pressure + ~1.013 = absolute at sea level.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+    <div class="panel-title" style="margin-top:16px;">Saturation Lookup</div>
+    <div class="input-row">
+      <div class="field"><label>Pressure (bar a) &rarr; T<sub>sat</sub></label><input type="number" id="psat" step="any" value="170"></div>
+      <div class="field"><label>Temp (\u00b0C) &rarr; P<sub>sat</sub></label><input type="number" id="tsat" step="any" value="180"></div>
+    </div>
+    <div class="btn-row"><button class="btn secondary" id="calcSat">Look up saturation</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter a state point.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const p = +left.querySelector('#p').value, t = +left.querySelector('#t').value;
+      const s = steam.steamState(p, t);
+      const ideal = flow.steamDensityApprox(p * 1e5, t);
+      const idealErr = ((ideal - s.densityKgM3) / s.densityKgM3) * 100;
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(s.densityKgM3, 4)}</span><span class="unit">kg/m\u00b3</span></div>
+        <div class="result-grid">
+          ${resultRow('Density', fmt(s.densityKgM3, 5) + ' kg/m\u00b3')}
+          ${resultRow('Specific volume', fmt(s.specificVolumeM3Kg, 7) + ' m\u00b3/kg')}
+          ${resultRow('Phase', `<span class="badge ${s.phase === 'saturated / wet' ? 'warning' : 'normal'}">${s.phase}</span>`)}
+          ${resultRow('Saturation temperature', s.saturationTempC === null ? 'n/a (above critical pressure)' : fmt(s.saturationTempC, 2) + ' \u00b0C')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${s.note}</div>
+        <div class="panel-title" style="margin-top:16px;">Why this matters for DP flow</div>
+        <div class="result-grid">
+          ${resultRow('Ideal-gas density', fmt(ideal, 4) + ' kg/m\u00b3')}
+          ${resultRow('Ideal-gas error', fmt(idealErr, 2) + ' %')}
+          ${resultRow('Resulting flow error', fmt((Math.sqrt(ideal / s.densityKgM3) - 1) * 100, 2) + ' %')}
+        </div>
+        <div class="assumptions-note" style="margin-top:10px;">DP flow scales with \u221a\u03c1, so a density error carries through at roughly half its size. At high pressure the ideal-gas assumption is well outside normal measurement uncertainty, which is why real steam tables matter here.</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  left.querySelector('#calcSat').addEventListener('click', () => {
+    try {
+      const pv = +left.querySelector('#psat').value;
+      const tv = +left.querySelector('#tsat').value;
+      const tS = steam.tsat(pv / 10) - 273.15;
+      const pS = steam.psat(tv + 273.15) * 10;
+      right.innerHTML = `
+        <div class="panel-title">Saturation Lookup</div>
+        <div class="result-grid">
+          ${resultRow(`T_sat at ${fmt(pv, 2)} bar a`, fmt(tS, 3) + ' \u00b0C')}
+          ${resultRow(`P_sat at ${fmt(tv, 2)} \u00b0C`, fmt(pS, 4) + ' bar a')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">From the IAPWS-IF97 Region 4 saturation equations.</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- DP \u2192 Flow Wizard ----------
 function pageDPFlowWizard() {
   app.appendChild(h(`<div class="page-head">
     <div class="eyebrow">Instrumentation</div>
@@ -4592,6 +4813,20 @@ if (adminLoginLink) {
 // enhancement — the app works fully without it, this just adds offline
 // support for repeat visits and installed/TWA usage). Never lets a
 // registration failure affect the rest of the app.
+// Display the running build number. This is what makes "am I on the new
+// version?" a one-second check instead of a guess based on page content.
+const APP_BUILD = '20260901162932';
+(function showBuild() {
+  const foot = document.querySelector('.app-foot');
+  if (foot && !document.getElementById('buildTag')) {
+    const s = document.createElement('span');
+    s.id = 'buildTag';
+    s.style.cssText = 'margin-left:10px;color:var(--text-faint);font-family:var(--font-mono);font-size:.7rem;';
+    s.textContent = 'build ' + APP_BUILD;
+    foot.appendChild(s);
+  }
+})();
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js').then((reg) => {

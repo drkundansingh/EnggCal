@@ -20,6 +20,7 @@ import * as flow from '../js/calculators/flowEngine.js';
 import * as sc from '../js/calculators/shortCircuit.js';
 import * as lu from '../js/calculators/loopUncertainty.js';
 import * as ed from '../js/calculators/electricalDesign.js';
+import * as steam from '../js/calculators/steamTable.js';
 import * as idmt from '../js/calculators/idmt.js';
 import * as ctEngine from '../js/calculators/ctEngine.js';
 import * as tfProt from '../js/calculators/transformerProtection.js';
@@ -1125,6 +1126,115 @@ test('transformerLoading: peak efficiency is where copper loss equals iron loss'
 test('transformerLoading: flags overload', () => {
   const r = ed.transformerLoading({ ratingKVA: 1000, loadKVA: 1200, noLoadLossW: 1500, fullLoadLossW: 10000 });
   assert.equal(r.check, 'OVERLOADED');
+});
+
+console.log('\n--- steamTable.js (IAPWS-IF97) ---');
+test('IF97: matches official Region 1 reference specific volumes', () => {
+  // Official IAPWS-IF97 verification values, Table 5.
+  approx(steam.specificVolume(30, 300 - 273.15), 0.100215168e-2, 1e-9);
+  approx(steam.specificVolume(800, 300 - 273.15), 0.971180894e-3, 1e-9);
+  approx(steam.specificVolume(30, 500 - 273.15), 0.120241800e-2, 1e-8);
+});
+test('IF97: matches official Region 2 reference specific volumes', () => {
+  // Official IAPWS-IF97 verification values, Table 15.
+  approx(steam.specificVolume(0.035, 300 - 273.15), 0.394913866e2, 1e-6);
+  approx(steam.specificVolume(0.035, 700 - 273.15), 0.923015898e2, 1e-6);
+  approx(steam.specificVolume(300, 700 - 273.15), 0.542946619e-2, 1e-9);
+});
+test('IF97: saturation line matches reference psat and tsat', () => {
+  approx(steam.psat(300), 0.353658941e-2, 1e-10);
+  approx(steam.psat(500), 0.263889776e1, 1e-7);
+  approx(steam.psat(600), 0.123443146e2, 1e-6);
+  approx(steam.tsat(0.1), 372.755919, 1e-5);
+  approx(steam.tsat(1), 453.035632, 1e-5);
+  approx(steam.tsat(10), 584.149488, 1e-5);
+});
+test('IF97: psat and tsat are mutual inverses', () => {
+  for (const T of [300, 400, 500, 600]) approx(steam.tsat(steam.psat(T)), T, 1e-6);
+});
+test('IF97: density is the reciprocal of specific volume, and rises with pressure', () => {
+  approx(steam.density(170, 540), 1 / steam.specificVolume(170, 540), 1e-12);
+  assert.ok(steam.density(170, 540) > steam.density(100, 540));
+});
+test('IF97: real steam density differs materially from ideal gas at high pressure', () => {
+  // This is the whole reason for the module: at main-steam conditions the
+  // ideal-gas approximation is far enough off to matter for flow.
+  const real = steam.density(170, 540);
+  const ideal = flow.steamDensityApprox(170e5, 540);
+  assert.ok(Math.abs(ideal - real) / real > 0.08, 'expected >8% deviation at 170 bar');
+});
+test('IF97: Region 3 is refused explicitly rather than returning a wrong number', () => {
+  // Near-critical: not implemented, and must say so.
+  assert.throws(() => steam.specificVolume(230, 380), /Region 3/);
+});
+test('IF97: steamState classifies phase and flags near-saturation', () => {
+  assert.equal(steam.steamState(170, 540).phase, 'superheated steam');
+  assert.equal(steam.steamState(170, 200).phase, 'subcooled water');
+  const sat = steam.steamState(10, steam.tsat(1) - 273.15);
+  assert.equal(sat.phase, 'saturated / wet');
+  assert.ok(sat.note.includes('indicative only'));
+});
+
+console.log('\n--- flowEngine.js (calibrated-range DP flow) ---');
+test('calibratedRangeFlow: square-root law with no geometry required', () => {
+  const r = flow.calibratedRangeFlow({ dp: 1800, dpMax: 2500, flowMax: 100 });
+  approx(r.uncorrectedFlow, 100 * Math.sqrt(1800 / 2500), 1e-12);
+  approx(r.massFlow, r.uncorrectedFlow, 1e-12);   // no compensation supplied
+  assert.equal(r.compensated, false);
+});
+test('calibratedRangeFlow: full scale and zero behave correctly', () => {
+  approx(flow.calibratedRangeFlow({ dp: 2500, dpMax: 2500, flowMax: 100 }).massFlow, 100, 1e-12);
+  approx(flow.calibratedRangeFlow({ dp: 0, dpMax: 2500, flowMax: 100 }).massFlow, 0, 1e-12);
+});
+test('calibratedRangeFlow: 25% DP gives 50% flow (the square-root relationship)', () => {
+  const r = flow.calibratedRangeFlow({ dp: 625, dpMax: 2500, flowMax: 100 });
+  approx(r.massFlow, 50, 1e-12);
+});
+test('calibratedRangeFlow: density compensation scales as sqrt(rho_actual/rho_design)', () => {
+  const rhoD = steam.density(170, 540), rhoA = steam.density(130, 520);
+  const r = flow.calibratedRangeFlow({
+    dp: 1800, dpMax: 2500, flowMax: 100, designDensity: rhoD, actualDensity: rhoA });
+  approx(r.massFlow, 100 * Math.sqrt(1800 / 2500) * Math.sqrt(rhoA / rhoD), 1e-12);
+  assert.equal(r.compensated, true);
+  // Lower actual density than design must read LOW after correction.
+  assert.ok(r.massFlow < r.uncorrectedFlow);
+});
+test('calibratedRangeFlow: equal densities leave the reading unchanged', () => {
+  const r = flow.calibratedRangeFlow({
+    dp: 1000, dpMax: 2500, flowMax: 100, designDensity: 50, actualDensity: 50 });
+  approx(r.massFlow, r.uncorrectedFlow, 1e-12);
+  approx(r.densityCorrectionPct, 0, 1e-12);
+});
+test('calibratedRangeFlow: flags unreliable low-flow readings', () => {
+  const lo = flow.calibratedRangeFlow({ dp: 0.25, dpMax: 2500, flowMax: 100 });
+  assert.ok(lo.belowCutoff, 'a 1% reading should be flagged');
+  assert.ok(lo.errorAmplification > 10, 'error amplification should be large at low flow');
+  const hi = flow.calibratedRangeFlow({ dp: 2000, dpMax: 2500, flowMax: 100 });
+  assert.equal(hi.belowCutoff, false);
+});
+test('calibratedRangeFlow: rejects invalid inputs', () => {
+  assert.throws(() => flow.calibratedRangeFlow({ dp: -1, dpMax: 2500, flowMax: 100 }));
+  assert.throws(() => flow.calibratedRangeFlow({ dp: 100, dpMax: 0, flowMax: 100 }));
+  assert.throws(() => flow.calibratedRangeFlow({ dp: 100, dpMax: 2500, flowMax: 0 }));
+});
+test('calibrationConstant: K reproduces the calibrated maximum flow', () => {
+  const K = flow.calibrationConstant({ flowMax: 100, dpMax: 2500, designDensity: 51 });
+  approx(K * Math.sqrt(51 * 2500), 100, 1e-9);
+});
+test('calibrated-range and geometric models agree when both are given the same element', () => {
+  // Build a calibrated range FROM a geometric element, then check the
+  // calibrated model reproduces the geometric model at a different DP.
+  const d = 0.15, D = 0.25, rho = 51.095;
+  const dpMaxPa = 25000;
+  const wMax = orf.massFlow(d, D, dpMaxPa, rho, 0.61) * 3600;   // kg/h
+  const dpPa = 12000;
+  const wGeom = orf.massFlow(d, D, dpPa, rho, 0.61) * 3600;
+  const wCal = flow.calibratedRangeFlow({ dp: dpPa, dpMax: dpMaxPa, flowMax: wMax }).massFlow;
+  // Same element, same density: the two must agree closely. They are not
+  // bit-identical because the geometric model applies an expansibility /
+  // Reynolds-dependent Cd that the pure square-root law does not.
+  assert.ok(Math.abs(wCal - wGeom) / wGeom < 0.02,
+    `models disagree: calibrated ${wCal.toFixed(1)} vs geometric ${wGeom.toFixed(1)}`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

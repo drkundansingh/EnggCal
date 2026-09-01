@@ -400,3 +400,103 @@ export function referenceToActualFlow(refM3h, actualTempC, actualPressureKPa, re
   if (actualPressureKPa <= 0 || refPressureKPa <= 0) throw new Error('Pressures must be > 0');
   return refM3h * (refPressureKPa / actualPressureKPa) * (Tactual / Tref);
 }
+
+// ============================================================
+// CALIBRATED-RANGE DP FLOW (no geometry required)
+// ============================================================
+//
+// WHY THIS MODEL EXISTS
+// The geometric model (bore, pipe ID, Cd, beta) is what you use when SIZING
+// a flow element. But for an element already installed and commissioned you
+// normally do not have — and do not need — those dimensions. What you have
+// is the transmitter's calibrated range: "0-100 t/h at 0-2500 mmWC", taken
+// straight from the datasheet or the DCS range.
+//
+// For any differential-pressure element the mass flow follows
+//     W = K * sqrt(rho * dP)
+// and K absorbs all the geometry (bore, beta, Cd, units). Calibrating at a
+// known design point pins K down without ever measuring the element:
+//     K = W_max / sqrt(rho_design * dP_max)
+// Substituting back gives the working equation below, in which every
+// geometric term has cancelled out.
+//
+// DENSITY COMPENSATION
+// The flow element was calibrated at ONE design density. Operate it at a
+// different pressure or temperature and the indicated flow is wrong by
+// sqrt(rho_actual / rho_design). This is the single most common cause of a
+// steam flow reading that "looks about right but doesn't add up" — and on a
+// boiler it directly corrupts the heat balance. The correction is applied
+// explicitly here and reported, so you can see how big it is.
+
+/**
+ * Mass flow from a calibrated DP flow element — no geometry needed.
+ *
+ * @param {object} o
+ * @param {number} o.dp             - measured differential pressure
+ * @param {number} o.dpMax          - DP at maximum calibrated flow (same units as dp)
+ * @param {number} o.flowMax        - maximum calibrated flow (any mass-flow unit)
+ * @param {number} [o.designDensity]- density the element was calibrated at, kg/m³
+ * @param {number} [o.actualDensity]- density at the current operating point, kg/m³
+ * @param {number} [o.lowFlowCutoff=2] - % of range below which the reading is
+ *                                       treated as unreliable
+ */
+export function calibratedRangeFlow({
+  dp, dpMax, flowMax, designDensity, actualDensity, lowFlowCutoff = 2,
+}) {
+  if (!Number.isFinite(dp) || dp < 0) throw new Error('Measured DP must be zero or greater.');
+  if (!(dpMax > 0)) throw new Error('Maximum calibrated DP must be greater than zero.');
+  if (!(flowMax > 0)) throw new Error('Maximum calibrated flow must be greater than zero.');
+
+  // Square-root extraction — the core of every DP flow measurement.
+  const dpRatio = dp / dpMax;
+  const uncorrectedFlow = flowMax * Math.sqrt(dpRatio);
+
+  // Density compensation, only when both densities are known.
+  let densityRatio = 1, compensated = false;
+  if (Number.isFinite(designDensity) && Number.isFinite(actualDensity)) {
+    if (!(designDensity > 0) || !(actualDensity > 0)) {
+      throw new Error('Both densities must be greater than zero.');
+    }
+    densityRatio = actualDensity / designDensity;
+    compensated = true;
+  }
+  const massFlow = uncorrectedFlow * Math.sqrt(densityRatio);
+
+  const flowPct = (massFlow / flowMax) * 100;
+  const dpPct = dpRatio * 100;
+
+  // A DP element's accuracy collapses at low flow because the square root
+  // amplifies error: at 10% flow you are reading only 1% of the DP span.
+  const belowCutoff = flowPct < lowFlowCutoff;
+  // Fractional flow error for a 1% full-scale DP error at this reading.
+  const errorAmplification = dpRatio > 0 ? 0.5 / Math.sqrt(dpRatio) : Infinity;
+
+  return {
+    massFlow,
+    uncorrectedFlow,
+    flowPct,
+    dpPct,
+    densityRatio,
+    densityCorrectionPct: compensated ? (Math.sqrt(densityRatio) - 1) * 100 : 0,
+    compensated,
+    belowCutoff,
+    errorAmplification,
+    note: belowCutoff
+      ? `Reading is only ${flowPct.toFixed(1)}% of range, where DP flow measurement is unreliable — the square-root relationship means a 1% DP error becomes roughly a ${(errorAmplification * 100).toFixed(0)}% flow error here. Most schemes apply a low-flow cutoff for exactly this reason.`
+      : compensated
+        ? `Density compensation changed the reading by ${((Math.sqrt(densityRatio) - 1) * 100).toFixed(2)}%. Without it the indicated flow would be ${uncorrectedFlow.toFixed(2)} instead of ${massFlow.toFixed(2)}.`
+        : 'No density compensation applied — this assumes the element is operating at exactly its design density. Supply design and actual density to correct for the real operating point.',
+  };
+}
+
+/**
+ * Solve for the calibration constant K in W = K*sqrt(rho*dP).
+ * Useful for checking a datasheet against a known operating point, or for
+ * reconstructing a range when only one design point is documented.
+ */
+export function calibrationConstant({ flowMax, dpMax, designDensity }) {
+  if (!(flowMax > 0)) throw new Error('Maximum flow must be greater than zero.');
+  if (!(dpMax > 0)) throw new Error('Maximum DP must be greater than zero.');
+  if (!(designDensity > 0)) throw new Error('Design density must be greater than zero.');
+  return flowMax / Math.sqrt(designDensity * dpMax);
+}

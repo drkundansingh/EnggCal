@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Reset App Cache</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:system-ui,-apple-system,sans-serif;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;}
+  .box{max-width:520px;width:100%;background:#161b22;border:1px solid #30363d;
+       border-radius:10px;padding:26px;}
+  h1{margin:0 0 6px;font-size:1.25rem;color:#e8a33d;}
+  p{color:#8b949e;font-size:.9rem;line-height:1.6;}
+  #log{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;
+       font-family:ui-monospace,monospace;font-size:.8rem;white-space:pre-wrap;
+       margin-top:14px;min-height:90px;color:#7ee787;}
+  a.btn{display:inline-block;margin-top:16px;background:#e8a33d;color:#0d1117;
+        padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Resetting app cache</h1>
+  <p>This unregisters the offline worker and clears every cached copy, so the
+     next load comes straight from the server. Safe to run any time \u2014 it only
+     removes cached files, never your saved calculations.</p>
+  <div id="log">Working...</div>
+  <a class="btn" href="./index.html" id="go">Open the app</a>
+</div>
+<script>
+(async function () {
+  const log = document.getElementById('log');
+  const say = (m) => { log.textContent += '\n' + m; };
+  log.textContent = 'Build on server: 20260901162932';
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      say('Service workers found: ' + regs.length);
+      for (const r of regs) { await r.unregister(); say('  unregistered ' + (r.scope || '')); }
+    } else { say('Service workers not supported here.'); }
+
+    if (window.caches) {
+      const keys = await caches.keys();
+      say('Caches found: ' + (keys.length ? keys.join(', ') : 'none'));
+      for (const k of keys) { await caches.delete(k); say('  deleted ' + k); }
+    }
+    say('');
+    say('Done. Tap "Open the app" below.');
+    // Bust the HTTP cache too on the way back in.
+    document.getElementById('go').href = './index.html?fresh=' + Date.now();
+  } catch (e) {
+    say('Error: ' + e.message);
+    say('If this fails, clear site data manually in your browser settings.');
+  }
+})();
+</script>
+</body>
+</html>
