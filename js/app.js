@@ -3973,7 +3973,11 @@ function pageCoordination() {
 }
 
 // ---------- Power Plant Control Loops (visual) ----------
+let activeLoopTimers = [];
+function clearLoopTimers() { activeLoopTimers.forEach((t) => clearInterval(t)); activeLoopTimers = []; }
+
 function pageControlLoops() {
+  clearLoopTimers();
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Control Loops \u2014 Visual Reference</h1>
     <p class="lead">The major control loops of a thermal power plant, drawn as live block diagrams. Move the disturbance slider and watch the signals actually propagate \u2014 these loops are far easier to understand seeing them move than reading about them.</p></div>`));
 
@@ -4085,12 +4089,14 @@ function pageControlLoops() {
           </div>
           <div style="flex:0 0 auto;text-align:center;">
             <div style="font-family:var(--font-mono);font-size:1.4rem;color:var(--amber);" id="simVal">${simInput}</div>
-            <div style="font-size:.68rem;color:var(--text-faint);">drag to disturb</div>
+            <div style="font-size:.68rem;color:var(--text-faint);">drag to disturb \u00b7 <span id="simClock">0 s</span></div>
           </div>
+          <button class="btn secondary" id="simPause" style="flex:0 0 auto;">Pause</button>
           <button class="btn secondary" id="simReset" style="flex:0 0 auto;">Reset</button>
         </div>
 
         <div id="loopSvg" style="overflow-x:auto;margin-top:14px;padding:10px 0;"></div>
+        <div id="trendChart" style="margin-top:4px;"></div>
 
         <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-size:.72rem;color:var(--text-faint);">
           ${Object.entries(cl.EDGE_STYLES).map(([, st]) =>
@@ -4146,15 +4152,100 @@ function pageControlLoops() {
         });
       });
     }
-    slider.addEventListener('input', (e) => { prevInput = simInput; simInput = +e.target.value; refresh(); });
+    // ---- LIVE DYNAMIC SIMULATION ----------------------------------
+    // Rather than jumping to a new steady state, run the real process and
+    // controller dynamics at a fixed timestep so lag, inverse response,
+    // overshoot and integral windup are visible as they happen.
+    const DT = 0.1;        // simulation timestep, seconds
+    const SPEED = 4;       // simulated seconds per real second
+    const FRAME_MS = 50;
+    let dyn = cl.LOOP_DYNAMICS[loopId] ? cl.LOOP_DYNAMICS[loopId]() : null;
+    const trendEl = body.querySelector('#trendChart');
+    const clockEl = body.querySelector('#simClock');
+    let simTime = 0, hist = [], running = true;
+
+    function drawTrend() {
+      if (!trendEl || !dyn || hist.length < 2) return;
+      const W = 700, H = 132, pad = 30;
+      const vals = hist.map((p) => p.v);
+      let lo = Math.min(...vals), hi = Math.max(...vals);
+      if (dyn.setpoint !== null && dyn.setpoint !== undefined) { lo = Math.min(lo, dyn.setpoint); hi = Math.max(hi, dyn.setpoint); }
+      if (hi - lo < 1e-6) hi = lo + 1;
+      const m = (hi - lo) * 0.18; lo -= m; hi += m;
+      const x = (i) => pad + (i / (hist.length - 1)) * (W - pad - 10);
+      const y = (v) => H - pad - ((v - lo) / (hi - lo)) * (H - pad - 14);
+      const path = hist.map((p, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ');
+      const sp = (dyn.setpoint !== null && dyn.setpoint !== undefined)
+        ? `<line x1="${pad}" y1="${y(dyn.setpoint).toFixed(1)}" x2="${W - 10}" y2="${y(dyn.setpoint).toFixed(1)}" stroke="var(--amber)" stroke-width="1" stroke-dasharray="4 3" opacity="0.85"/>
+           <text x="${W - 12}" y="${(y(dyn.setpoint) - 4).toFixed(1)}" fill="var(--amber)" font-size="9" font-family="var(--font-mono)" text-anchor="end">SP ${dyn.setpoint}</text>` : '';
+      trendEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;">
+        <line x1="${pad}" y1="${H - pad}" x2="${W - 10}" y2="${H - pad}" stroke="var(--line)" stroke-width="1"/>
+        <line x1="${pad}" y1="14" x2="${pad}" y2="${H - pad}" stroke="var(--line)" stroke-width="1"/>
+        <text x="3" y="20" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">${hi.toFixed(1)}</text>
+        <text x="3" y="${H - pad}" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">${lo.toFixed(1)}</text>
+        ${sp}
+        <path d="${path}" fill="none" stroke="var(--cyan)" stroke-width="1.8"/>
+        <circle cx="${x(hist.length - 1).toFixed(1)}" cy="${y(hist[hist.length - 1].v).toFixed(1)}" r="3" fill="var(--cyan)"/>
+        <text x="${pad + 4}" y="${H - 9}" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">${dyn.trendLabel}</text>
+      </svg>`;
+    }
+
+    function tick() {
+      if (!dyn || !running) return;
+      let r = null;
+      const steps = Math.max(1, Math.round((FRAME_MS / 1000) * SPEED / DT));
+      for (let i = 0; i < steps; i++) { r = dyn.step(DT, simInput); simTime += DT; }
+      hist.push({ t: simTime, v: r.trend });
+      if (hist.length > 320) hist.shift();
+      svgWrap.innerHTML = drawLoop(loop, r.nodeValues);
+      insight.innerHTML = r.insight;
+      if (clockEl) clockEl.textContent = simTime.toFixed(0) + ' s';
+      drawTrend();
+      svgWrap.querySelectorAll('.loop-node').forEach((g) => {
+        g.addEventListener('click', () => {
+          const n = loop.nodes.find((x) => x.id === g.dataset.node);
+          const st = cl.NODE_STYLES[n.type];
+          insight.innerHTML = `<b style="color:${st.color};">${n.label.replace(/<br\/>/g, ' ')} \u2014 ${n.sub}</b><br>${st.hint}. Live value: <b>${r.nodeValues[n.id] || 'n/a'}</b>.`;
+        });
+      });
+    }
+
+    slider.addEventListener('input', (e) => {
+      prevInput = simInput; simInput = +e.target.value;
+      valEl.textContent = simInput;
+      if (!dyn) refresh();
+    });
+
+    const pauseBtn = body.querySelector('#simPause');
+    if (pauseBtn) pauseBtn.addEventListener('click', () => {
+      running = !running;
+      pauseBtn.textContent = running ? 'Pause' : 'Resume';
+    });
+
     body.querySelector('#simReset').addEventListener('click', () => {
       prevInput = loop.sim.inputDefault; simInput = loop.sim.inputDefault;
-      slider.value = simInput; refresh();
+      slider.value = simInput; valEl.textContent = simInput;
+      if (dyn) {
+        dyn = cl.LOOP_DYNAMICS[loopId]();
+        for (let i = 0; i < 1500; i++) dyn.step(DT, simInput);
+        simTime = 0; hist = [];
+      } else refresh();
     });
-    refresh();
+
+    if (dyn) {
+      // Settle the model at its starting point first, so the user sees a
+      // steady plant rather than an artificial start-up transient.
+      for (let i = 0; i < 1500; i++) dyn.step(DT, simInput);
+      simTime = 0;
+      activeLoopTimers.push(setInterval(tick, FRAME_MS));
+      tick();
+    } else {
+      refresh();
+    }
   }
 
   loopTabs.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+    clearLoopTimers();
     loopTabs.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
     t.classList.add('active');
     showLoop(t.dataset.l);
@@ -4503,6 +4594,56 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    navigator.serviceWorker.register('./service-worker.js').then((reg) => {
+      // Ask the browser to re-check for a new worker on every load, and
+      // again hourly for long-lived tabs. Without this a user who never
+      // fully closes the tab can sit on an old build indefinitely.
+      reg.update().catch(() => {});
+      setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+
+      // A new worker has installed while an old one is still controlling
+      // the page: tell the user rather than leaving them on a stale build.
+      reg.addEventListener('updatefound', () => {
+        const incoming = reg.installing;
+        if (!incoming) return;
+        incoming.addEventListener('statechange', () => {
+          if (incoming.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(reg);
+          }
+        });
+      });
+
+      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+    }).catch(() => {});
+
+    // When the new worker takes control, reload once so the fresh assets
+    // are actually used. The guard prevents a reload loop.
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
   });
+}
+
+/** Non-blocking "new version available" prompt. */
+function showUpdateBanner(reg) {
+  if (document.getElementById('swUpdateBanner')) return;
+  const bar = document.createElement('div');
+  bar.id = 'swUpdateBanner';
+  bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:18px;'
+    + 'background:var(--bg-panel);border:1px solid var(--amber);color:var(--text);'
+    + 'padding:10px 14px;border-radius:8px;display:flex;align-items:center;gap:12px;'
+    + 'font-size:.85rem;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,.45);';
+  bar.innerHTML = '<span>A new version of this app is available.</span>'
+    + '<button id="swUpdateBtn" class="btn" style="padding:6px 12px;">Update now</button>'
+    + '<span id="swUpdateDismiss" role="link" tabindex="0" '
+    + 'style="cursor:pointer;color:var(--text-faint);">Later</span>';
+  document.body.appendChild(bar);
+  document.getElementById('swUpdateBtn').addEventListener('click', () => {
+    if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+    else window.location.reload();
+  });
+  document.getElementById('swUpdateDismiss').addEventListener('click', () => bar.remove());
 }

@@ -226,6 +226,59 @@ than no test, because it manufactures confident-looking failures that send
 you hunting for bugs that were never there. Always verify the real export
 shape before asserting against it.
 
+## Live control-loop dynamics
+
+The Control Loops section runs a real time-stepped simulation rather than
+jumping between steady states. `js/calculators/loopDynamics.js` provides the
+standard process blocks (first-order lag with an exact discrete solution,
+dead time, integrator, rate limit) and a PI/PID controller with anti-windup
+and derivative-on-measurement. `LOOP_DYNAMICS` in `controlLoops.js` builds a
+model per loop; the UI advances it at a fixed 0.1 s timestep and draws a
+live trend.
+
+These are first-order-plus-dead-time approximations — the standard
+engineering models used for control design. **The time constants are
+typical published magnitudes, not values from any specific unit.** Treat the
+shape of the response as the accurate part and the exact seconds as
+illustrative.
+
+Five physics bugs were found and fixed by writing tests that asserted real
+plant behaviour rather than just "it runs":
+
+- **Steam temperature master had the wrong action.** It was reverse-acting,
+  so a hot outlet drove the slave setpoint the wrong way and the inner loop
+  was effectively dead. Direct-acting is correct.
+- **The air loop was too slow to hold the cross-limit.** The select logic
+  was right, but the controller and damper could not keep air above fuel on
+  a fast ramp. Tightened, plus the excess-air margin real schemes carry.
+- **Furnace draft PID sign was inverted** — positive furnace pressure drove
+  the ID fan *down*, making it worse until the trim saturated. It was
+  positive feedback pegged at +22 mmWC.
+- **Coordinated master and turbine bypass integrator gains** were orders of
+  magnitude too large, slamming into their clamps before the PI could act.
+- **Turbine bypass could never absorb full boiler flow** (capacity 0.85 vs
+  boiler 1.0), leaving a permanent surplus that integrated to the clamp.
+
+### Two bundler bugs worth recording
+
+The single-file build inlines ES modules as IIFEs and rewrites cross-module
+identifiers. Two failures came out of that:
+
+1. **Identifier rewriting corrupted display text.** `PID` appears 51 times
+   inside node labels and insight strings but only 16 times as real code, so
+   a blanket regex turned `'Voltage PID'` into `'Voltage dynlib.PID'` on
+   screen. Fixed by protecting literals before rewriting.
+2. **Apostrophes in comments broke the literal protector.** A comment
+   containing `the unit's own design` looked like the start of a string and
+   swallowed the code that followed, desynchronising everything after it —
+   which silently produced *both* corrupted labels and un-namespaced code.
+   Fixed by tokenizing comments and strings in a single pass instead of
+   treating strings alone.
+
+Also: `js/storage.js` has a top-level helper named `tx`, which collided with
+the `tx` namespace variable used for the transmitter module. Inline helpers
+are now wrapped in their own IIFE so their internals cannot clash.
+
 I also ran a full headless-browser pass (Playwright) clicking through every
 route and every calculator's Calculate button, checking for JS errors and
 verifying computed values match the engine tests. All 20 routes render, all
@@ -538,3 +591,50 @@ below; don't remove it.
 > against approved engineering standards, manufacturer data, plant design
 > documents, calibrated instruments, and qualified engineering personnel
 > before being used for operational, safety, or design decisions.
+
+## Deployment & caching (why an update didn't show up)
+
+If you push to GitHub, the host serves the new files, and the site *still*
+shows the old version, the cause is almost always the service worker rather
+than the browser cache. Two bugs were fixed here:
+
+1. **The service worker was cache-first for everything.** Once `index.html`
+   and `app.js` were cached they were served forever. A normal refresh does
+   not bypass a service worker, so users were pinned to whatever version
+   they first loaded.
+2. **`CACHE_NAME` was hardcoded**, so it never changed between deploys and
+   the cleanup code in `activate` never ran.
+
+Both were confirmed by simulating a real deploy in a headless browser: with
+the old worker the page stayed stale after a normal reload; with the new one
+it updates.
+
+### What the fix does
+
+- **Network-first** for HTML, JS, CSS and JSON, so a deploy is picked up on
+  the next load. Cache is used only as an offline fallback.
+- **Cache-first** kept for images and fonts, which rarely change.
+- **`BUILD_ID` stamped into the cache name** by `stamp-build.mjs`, so every
+  deploy gets a fresh cache and the previous one is deleted.
+- **Update prompt**: if a new version installs while the app is open, a
+  small banner offers "Update now" instead of leaving the user on old code.
+- **`.htaccess`** sets `no-cache, must-revalidate` on code and, critically,
+  on `service-worker.js` itself — if the host serves a stale service worker,
+  none of the above can take effect.
+
+### Deploy steps
+
+```bash
+node stamp-build.mjs      # new BUILD_ID -> new cache name
+git add . && git commit -m "..." && git push origin main
+```
+
+Then upload/redeploy on the host, including `.htaccess`.
+
+### One-time cleanup for existing visitors
+
+Anyone who already loaded the old site still has the old worker installed.
+The new worker calls `skipWaiting()` and `clients.claim()`, so it takes over
+on the next visit. If a specific device is still stuck, in DevTools use
+Application → Service Workers → Unregister, or Application → Storage →
+Clear site data.

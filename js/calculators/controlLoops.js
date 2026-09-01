@@ -16,6 +16,8 @@
 //   process     — the physical process being controlled
 //   demand      — an external demand/setpoint input
 
+import { Lag, DeadTime, Integrator, RateLimit, PID, InverseResponse, clamp } from './loopDynamics.js';
+
 export const LOOP_IDS = [
   'drum-level-3e',
   'combustion-cross-limit',
@@ -803,6 +805,475 @@ export const CONTROL_LOOPS = {
 };
 
 /** Node type -> display colour token and shape hint, used by the renderer. */
+/**
+ * DYNAMIC SIMULATION MODELS
+ * =========================
+ * Each factory returns a stateful simulator: call step(dt, input) at a
+ * fixed timestep and it advances the real process and controller dynamics,
+ * returning live node values plus a trended primary variable.
+ *
+ * These are first-order-plus-dead-time process approximations with real PI
+ * controllers, anti-windup and actuator rate limits. They reproduce the
+ * behaviour that actually matters on each loop: which way the level moves
+ * first, whether air genuinely leads fuel, and whether the cascade catches
+ * a disturbance before the outlet ever sees it.
+ *
+ * TIME CONSTANTS are typical published magnitudes, not values from any one
+ * unit. The SHAPE of the response is the accurate part; treat the exact
+ * seconds as illustrative.
+ */
+export const LOOP_DYNAMICS = {
+
+  // Drum level: an INTEGRATING process with inverse response (shrink/swell).
+  'drum-level-3e': () => {
+    const swell = new InverseResponse({ fastGain: 2.2, fastTau: 6, slowGain: -2.2, slowTau: 45 });
+    const fwValve = new Lag(3, 60);
+    const fwFlow = new Lag(2, 60);
+    const levelInt = new Integrator(0.55, 0, -400, 400);
+    const lic = new PID({ kp: 0.9, ki: 0.020, outMin: -40, outMax: 40, initialOutput: 0 });
+    const fic = new PID({ kp: 1.1, ki: 0.55, outMin: 0, outMax: 100, initialOutput: 60 });
+    let steamPrev = 60;
+    return {
+      trendLabel: 'Drum level (mm)', setpoint: 0,
+      step(dt, steamDemand) {
+        const dSteam = (steamDemand - steamPrev) / dt;
+        steamPrev = steamDemand;
+        // Shrink/swell is driven by the RATE of steam demand change.
+        const swellMm = swell.step(dSteam, dt);
+        const level = levelInt.y + swellMm;
+        const trim = lic.step(0, level, dt);
+        const fwSP = clamp(steamDemand + trim, 0, 100);
+        const fwCmd = fic.step(fwSP, fwFlow.y, dt);
+        const valve = fwValve.step(fwCmd, dt);
+        const fw = fwFlow.step(valve, dt);
+        levelInt.step((fw - steamDemand) / 100, dt);
+        return {
+          trend: level,
+          nodeValues: {
+            'lt': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
+            'ft-steam': `${steamDemand.toFixed(0)} %`,
+            'ft-fw': `${fw.toFixed(1)} %`,
+            'lic': `trim ${trim >= 0 ? '+' : ''}${trim.toFixed(1)}${lic.saturated ? ' SAT' : ''}`,
+            'sum': `${fwSP.toFixed(1)} %`,
+            'fic': `err ${(fwSP - fw).toFixed(2)}`,
+            'fcv': `${valve.toFixed(1)} % open`,
+            'drum': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
+          },
+          insight: Math.abs(swellMm) > 1.2
+            ? `SHRINK/SWELL ACTIVE \u2014 the level is reading ${swellMm > 0 ? 'HIGH (swell)' : 'LOW (shrink)'} by about ${Math.abs(swellMm).toFixed(1)} mm purely from the density change. The drum mass has not actually moved that way. A single-element controller would react to this false signal and drive feedwater the WRONG way; watch feedwater instead follow steam flow through the feedforward path.`
+            : Math.abs(level) > 12
+              ? `Level ${level > 0 ? 'above' : 'below'} setpoint by ${Math.abs(level).toFixed(0)} mm; the master is trimming feedwater. Level is an INTEGRATING process \u2014 it will not settle on its own, only the controller brings it back.`
+              : 'Level stable at setpoint. Feedwater is matching steam flow, with the master PI trimming only small residual errors.',
+        };
+      },
+    };
+  },
+
+  // Combustion: cross-limiting with genuinely different fuel and air dynamics.
+  'combustion-cross-limit': () => {
+    // Fuel is SLOW (mill grinding + transport); air is FAST (damper/fan).
+    // That asymmetry is precisely why cross-limiting is needed.
+    const fuelLag = new Lag(45, 70);
+    const airLag = new Lag(5, 70);
+    const fuelRate = new RateLimit(3, 70);
+    const airRate = new RateLimit(25, 70);
+    const aic = new PID({ kp: 3.0, ki: 1.4, outMin: 0, outMax: 100, initialOutput: 70 });
+    const fic = new PID({ kp: 1.0, ki: 0.22, outMin: 0, outMax: 100, initialOutput: 70 });
+    const o2Lag = new Lag(20, 3.2);
+    return {
+      trendLabel: 'Air minus fuel (%)', setpoint: 0,
+      step(dt, demand) {
+        const airFlow = airLag.y, fuelFlow = fuelLag.y;
+        // HIGH select on air, plus the excess-air margin real schemes carry
+        // so air flow stays strictly ABOVE fuel flow rather than merely equal.
+        const airDemand = Math.max(demand, fuelFlow) * 1.04;
+        const fuelDemand = Math.min(demand, airFlow);   // LOW select on fuel
+        const airCmd = airRate.step(aic.step(airDemand, airFlow, dt), dt);
+        const fuelCmd = fuelRate.step(fic.step(fuelDemand, fuelFlow, dt), dt);
+        const air = airLag.step(airCmd, dt);
+        const fuel = fuelLag.step(fuelCmd, dt);
+        const ratio = fuel > 0.1 ? air / fuel : 2;
+        const o2 = o2Lag.step(clamp((ratio - 1) * 21 + 1.2, 0.2, 12), dt);
+        return {
+          trend: air - fuel,
+          nodeValues: {
+            'master': `${demand.toFixed(0)} %`,
+            'hs': `${airDemand.toFixed(1)} %`,
+            'ls': `${fuelDemand.toFixed(1)} %`,
+            'ratio': `${(airDemand * 1.15).toFixed(1)} %`,
+            'o2': `${o2.toFixed(2)} % O\u2082`,
+            'aic': `SP ${airDemand.toFixed(1)}`,
+            'fic': `SP ${fuelDemand.toFixed(1)}`,
+            'damper': `${airCmd.toFixed(1)} %`,
+            'feeder': `${fuelCmd.toFixed(1)} %`,
+            'ft-air': `${air.toFixed(1)} %`,
+            'ft-fuel': `${fuel.toFixed(1)} %`,
+          },
+          insight: fuel > air
+            ? `WARNING \u2014 fuel (${fuel.toFixed(1)}%) has moved ahead of air (${air.toFixed(1)}%). With the selectors working correctly this should not occur.`
+            : air - fuel > 2
+              ? `Air is LEADING fuel by ${(air - fuel).toFixed(1)}% \u2014 exactly what the HIGH select on air is for. The fuel path is far slower (mill lag ~45 s) than the air path (~5 s), so fuel cannot overrun air on a load increase.`
+              : `Air ${air.toFixed(1)}%, fuel ${fuel.toFixed(1)}%, excess O\u2082 ${o2.toFixed(1)}%. Air remains on the safe side of fuel.`,
+        };
+      },
+    };
+  },
+
+  // Steam temperature: cascade beating a large lag plus dead time.
+  'steam-temp-cascade': () => {
+    const sprayValve = new Lag(4, 30);
+    const attempTemp = new Lag(12, 340);
+    const shDead = new DeadTime(25, 0.1, 540);
+    const shLag = new Lag(90, 540);
+    // Master is DIRECT acting: a hotter outlet must LOWER the slave target.
+    const master = new PID({ kp: 1.4, ki: 0.030, outMin: 280, outMax: 420, initialOutput: 340 });
+    // Slave is REVERSE acting: a hotter attemperator outlet needs MORE spray.
+    const slave = new PID({ kp: 1.6, ki: 0.09, outMin: 0, outMax: 100, initialOutput: 30, reverse: true });
+    return {
+      trendLabel: 'SH outlet temperature (\u00b0C)', setpoint: 540,
+      step(dt, sp) {
+        const outlet = shLag.y;
+        const masterMV = master.step(sp, outlet, dt);
+        const satTemp = 340;
+        const slaveSP = Math.max(satTemp, masterMV);
+        const limited = masterMV < satTemp;
+        const sprayCmd = slave.step(slaveSP, attempTemp.y, dt);
+        const spray = sprayValve.step(sprayCmd, dt);
+        const attemp = attempTemp.step(420 - spray * 1.0, dt);
+        shLag.step(shDead.step(attemp) + 200, dt);
+        return {
+          trend: outlet,
+          nodeValues: {
+            'tt-out': `${outlet.toFixed(1)} \u00b0C`,
+            'tic-master': `err ${(sp - outlet).toFixed(1)} \u00b0C${master.saturated ? ' SAT' : ''}`,
+            'satcalc': `${satTemp} \u00b0C`,
+            'maxsel': `${slaveSP.toFixed(0)} \u00b0C`,
+            'tic-slave': `SP ${slaveSP.toFixed(0)} \u00b0C`,
+            'tt-spray': `${attemp.toFixed(1)} \u00b0C`,
+            'spray': `${spray.toFixed(1)} % open`,
+            'sh': `${outlet.toFixed(1)} \u00b0C`,
+          },
+          insight: limited
+            ? `The MAX SELECT has clamped the slave setpoint at saturation temperature (${satTemp} \u00b0C) \u2014 the protection that stops the attemperator spraying water, rather than steam, into the superheater.`
+            : `Outlet ${outlet.toFixed(1)} \u00b0C against setpoint ${sp} \u00b0C. Watch the sequence: the spray valve moves, the attemperator outlet (${attemp.toFixed(0)} \u00b0C) responds within seconds, but the final outlet only follows after ~25 s of transport delay plus a 90 s thermal lag. That gap is exactly why the cascade exists.`,
+        };
+      },
+    };
+  },
+
+  // Mill: slow grinding dynamics with an outlet-temperature loop.
+  'mill-control': () => {
+    const feeder = new RateLimit(2, 70);
+    const millLag = new Lag(70, 70);
+    const paLag = new Lag(10, 77.5);
+    const tempLag = new Lag(45, 80);
+    const paPid = new PID({ kp: 1.1, ki: 0.30, outMin: 20, outMax: 100, initialOutput: 77.5 });
+    const tempPid = new PID({ kp: 2.0, ki: 0.06, outMin: 0, outMax: 100, initialOutput: 55 });
+    return {
+      trendLabel: 'Mill outlet temperature (\u00b0C)', setpoint: 80,
+      step(dt, loading) {
+        const coalCmd = feeder.step(loading, dt);
+        const coal = millLag.step(coalCmd, dt);
+        const paSP = clamp(25 + coal * 0.75, 25, 100);   // minimum PA floor
+        const paCmd = paPid.step(paSP, paLag.y, dt);
+        const pa = paLag.step(paCmd, dt);
+        const hotPct = tempPid.step(80, tempLag.y, dt);
+        const temp = tempLag.step(45 + hotPct * 0.55 - (coal - 70) * 0.12, dt);
+        const ratio = coal > 1 ? pa / coal : 2;
+        return {
+          trend: temp,
+          nodeValues: {
+            'fuel-dmd': `${loading.toFixed(0)} %`,
+            'feeder': `${coalCmd.toFixed(1)} %`,
+            'ratio': `${ratio.toFixed(2)} air/coal`,
+            'pa-fic': `SP ${paSP.toFixed(1)} %`,
+            'pa-damper': `${paCmd.toFixed(1)} %`,
+            'tt-out': `${temp.toFixed(1)} \u00b0C`,
+            'tic': `err ${(80 - temp).toFixed(2)} \u00b0C${tempPid.saturated ? ' SAT' : ''}`,
+            'split': `hot ${hotPct.toFixed(0)}%`,
+            'hot-damper': `${hotPct.toFixed(1)} % open`,
+            'cold-damper': `${(100 - hotPct).toFixed(1)} % open`,
+            'mill': `${temp.toFixed(1)} \u00b0C`,
+          },
+          insight: temp > 88
+            ? `Mill outlet at ${temp.toFixed(1)} \u00b0C, climbing toward the range where coal dust in the mill becomes a fire risk. The controller is closing hot air and opening tempering air.`
+            : paSP <= 26
+              ? `PA flow is on its MINIMUM floor (${paSP.toFixed(0)}%) even though coal flow is only ${coal.toFixed(0)}%. Below this floor pulverised coal settles out and blocks the burner pipes \u2014 PA does not scale down proportionally with load.`
+              : `Coal ${coal.toFixed(0)}%, PA ${pa.toFixed(0)}%, ratio ${ratio.toFixed(2)}. Note the mill lag (~70 s): the feeder has already moved, but coal actually reaching the burners is still catching up.`,
+        };
+      },
+    };
+  },
+
+  // Furnace draft: fast loop with strong FD-fan feedforward.
+  'furnace-draft': () => {
+    const idFan = new Lag(4, 65);
+    const furnace = new Lag(2.5, -5);
+    // REVERSE acting: pressure ABOVE setpoint (too positive) needs MORE ID fan.
+    const pic = new PID({ kp: 2.2, ki: 0.9, outMin: -30, outMax: 30, initialOutput: 0, reverse: true });
+    return {
+      trendLabel: 'Furnace pressure (mmWC)', setpoint: -5,
+      step(dt, airDemand) {
+        const trim = pic.step(-5, furnace.y, dt);
+        const idCmd = clamp(airDemand + trim, 0, 100);
+        const id = idFan.step(idCmd, dt);
+        const press = furnace.step(-5 + (airDemand - id) * 0.9, dt);
+        return {
+          trend: press,
+          nodeValues: {
+            'pt': `${press.toFixed(2)} mmWC`,
+            'pic': `trim ${trim >= 0 ? '+' : ''}${trim.toFixed(2)}${pic.saturated ? ' SAT' : ''}`,
+            'ff-air': `${airDemand.toFixed(0)} %`,
+            'sum': `${idCmd.toFixed(1)} %`,
+            'idfan': `${id.toFixed(1)} %`,
+            'furnace': `${press.toFixed(2)} mmWC`,
+          },
+          insight: press > 0
+            ? `FURNACE PRESSURE HAS GONE POSITIVE (${press.toFixed(1)} mmWC). Hot flue gas and flame can be pushed out through inspection doors and seals. The ID fan is being driven up to recover.`
+            : press < -18
+              ? `Draft strongly negative (${press.toFixed(1)} mmWC) \u2014 the implosion direction. Furnace casings are far weaker this way than most people expect.`
+              : `Draft ${press.toFixed(1)} mmWC, near the \u22125 mmWC setpoint. The ID fan is tracking the FD fan almost instantly through the feedforward path; the PI is trimming only ${trim.toFixed(1)}%.`,
+        };
+      },
+    };
+  },
+
+  // Coordinated master: fast turbine against a slow boiler.
+  'coordinated-master': () => {
+    const boiler = new Lag(180, 75);   // boiler energy release: minutes
+    const turbine = new Lag(4, 75);    // governor valves: seconds
+    const pressInt = new Integrator(0.055, 170, 120, 220);
+    const pic = new PID({ kp: 2.0, ki: 0.10, outMin: -25, outMax: 25, initialOutput: 0, reverse: true });
+    return {
+      trendLabel: 'Main steam pressure (bar)', setpoint: 170,
+      step(dt, loadDemand) {
+        const press = pressInt.y;
+        const pTrim = pic.step(170, press, dt);
+        // Low pressure (negative pTrim) must RAISE firing and EASE the
+        // governor valves; getting these two signs the wrong way round
+        // turns the loop into positive feedback and the pressure runs away.
+        const boilerDemand = clamp(loadDemand - pTrim, 0, 110);
+        const turbDemand = clamp(loadDemand + pTrim * 0.6, 0, 110);
+        const b = boiler.step(boilerDemand, dt);
+        const tb = turbine.step(turbDemand, dt);
+        pressInt.step((b - tb) / 100, dt);
+        return {
+          trend: press,
+          nodeValues: {
+            'demand': `${loadDemand.toFixed(0)} %`,
+            'pt-steam': `${press.toFixed(2)} bar`,
+            'master': `${loadDemand.toFixed(0)} %`,
+            'pic': `err ${(170 - press).toFixed(2)} bar${pic.saturated ? ' SAT' : ''}`,
+            'boiler-dmd': `${boilerDemand.toFixed(1)} %`,
+            'turb-dmd': `${turbDemand.toFixed(1)} %`,
+            'firing': `${b.toFixed(1)} %`,
+            'gv': `${tb.toFixed(1)} %`,
+          },
+          insight: Math.abs(press - 170) > 1.5
+            ? `Main steam pressure is ${Math.abs(press - 170).toFixed(1)} bar ${press > 170 ? 'ABOVE' : 'BELOW'} setpoint. The turbine (4 s) moves far faster than the boiler (180 s), so energy in and energy out are mismatched \u2014 and steam pressure is the integral of that mismatch. The pressure PI is trimming both demands to close the gap.`
+            : `Load ${loadDemand.toFixed(0)}%, firing ${b.toFixed(0)}%, valves ${tb.toFixed(0)}%, pressure ${press.toFixed(1)} bar. Boiler and turbine matched \u2014 coordinated control working as intended.`,
+        };
+      },
+    };
+  },
+
+  // Turbine bypass: fast-acting, with a genuine transient on trip.
+  'turbine-bypass': () => {
+    const hpValve = new Lag(2.5, 10);
+    const lpValve = new Lag(2.5, 9);
+    const pressInt = new Integrator(1.1, 170, 120, 240);
+    const pic = new PID({ kp: 2.6, ki: 0.5, outMin: 0, outMax: 100, initialOutput: 10, reverse: true });
+    return {
+      trendLabel: 'Main steam pressure (bar)', setpoint: 170,
+      step(dt, turbineLoad) {
+        const tripped = turbineLoad < 5;
+        const press = pressInt.y;
+        const pidOut = pic.step(170, press, dt);
+        // HIGH SELECT: fast-open overrides normal PID action on a trip.
+        const demand = tripped ? Math.max(pidOut, 100) : pidOut;
+        const hp = hpValve.step(demand, dt);
+        const lp = lpValve.step(demand * 0.9, dt);
+        // Bypass is sized for essentially full boiler flow — that is what
+        // lets the unit ride through a turbine trip without shutting down.
+        pressInt.step((100 - turbineLoad - hp * 1.02) / 100, dt);
+        return {
+          trend: press,
+          nodeValues: {
+            'pt-ms': `${press.toFixed(2)} bar`,
+            'trip': tripped ? 'TRIPPED' : 'healthy',
+            'pic-hp': `err ${(170 - press).toFixed(2)}${pic.saturated ? ' SAT' : ''}`,
+            'hs': `${demand.toFixed(1)} %`,
+            'hp-bp': `${hp.toFixed(1)} % open`,
+            'spray1': `${(hp * 0.6).toFixed(1)} % open`,
+            'pic-lp': tripped ? 'FAST OPEN' : `${(demand * 0.9).toFixed(1)} %`,
+            'lp-bp': `${lp.toFixed(1)} % open`,
+            'cond': tripped ? 'full dump' : `${lp.toFixed(0)} % dump`,
+          },
+          insight: tripped
+            ? `TURBINE TRIP. The fast-open signal has overridden the PID through the HIGH SELECT and both bypasses are driving wide open. Watch the trend: pressure rises as the governor valves slam shut, then the bypass catches it before the safety valves lift. Without the bypass this excursion would keep going.`
+            : press > 174
+              ? `Pressure rising \u2014 the turbine is not taking all the steam the boiler is making, and the bypass is opening to absorb the surplus.`
+              : `Turbine taking ${turbineLoad.toFixed(0)}%, bypass ${hp.toFixed(0)}% open, pressure ${press.toFixed(1)} bar. Normal modulating control.`,
+        };
+      },
+    };
+  },
+
+  // Deaerator: two interacting integrating loops.
+  'deaerator-level': () => {
+    const lvlInt = new Integrator(0.7, 0, -600, 600);
+    const makeupV = new Lag(4, 100);
+    const pressLag = new Lag(30, 5.0);
+    const peggingV = new Lag(6, 45);
+    const lic = new PID({ kp: 1.4, ki: 0.10, outMin: 0, outMax: 100, initialOutput: 100 });
+    const pic = new PID({ kp: 8, ki: 1.2, outMin: 0, outMax: 100, initialOutput: 45 });
+    return {
+      trendLabel: 'Deaerator level (mm)', setpoint: 0,
+      step(dt, drawOff) {
+        const level = lvlInt.y;
+        const mk = makeupV.step(lic.step(0, level, dt), dt);
+        lvlInt.step((mk - drawOff) / 100, dt);
+        const pg = peggingV.step(pic.step(5.0, pressLag.y, dt), dt);
+        const press = pressLag.step(3.2 + pg * 0.042 - (drawOff - 100) * 0.004, dt);
+        const npsh = 12 + (press - 5.0) * 8 + level * 0.006;
+        return {
+          trend: level,
+          nodeValues: {
+            'lt': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
+            'pt': `${press.toFixed(3)} bar`,
+            'lic': `err ${(-level).toFixed(1)}${lic.saturated ? ' SAT' : ''}`,
+            'pic': `err ${(5.0 - press).toFixed(3)}`,
+            'lcv': `${mk.toFixed(1)} % open`,
+            'pcv': `${pg.toFixed(1)} % open`,
+            'da': `${press.toFixed(3)} bar`,
+            'bfp': `NPSH ${npsh.toFixed(2)} m`,
+          },
+          insight: npsh < 8
+            ? `NPSH MARGIN DOWN TO ${npsh.toFixed(1)} m. The feed pumps are approaching cavitation. Deaerator level and pressure both feed BFP suction head \u2014 lose either and the pumps suffer within seconds.`
+            : Math.abs(level) > 120
+              ? `Level ${level > 0 ? 'high' : 'low'} at ${level.toFixed(0)} mm. This is an INTEGRATING process \u2014 makeup is ${mk.toFixed(0)}% against a draw-off of ${drawOff.toFixed(0)}%, and until those balance the level keeps moving.`
+              : `Level ${level.toFixed(0)} mm, pressure ${press.toFixed(2)} bar, NPSH margin ${npsh.toFixed(1)} m. Stable, with comfortable pump suction head.`,
+        };
+      },
+    };
+  },
+
+  // HP heater level: integrating, with an independent HH trip.
+  'hp-heater-level': () => {
+    const lvlInt = new Integrator(1.0, 0, -400, 400);
+    const drainV = new Lag(3, 45);
+    const lic = new PID({ kp: 1.1, ki: 0.16, outMin: 0, outMax: 100, initialOutput: 45 });
+    let tripped = false;
+    return {
+      trendLabel: 'Heater level (mm)', setpoint: 0,
+      step(dt, extractionFlow) {
+        const level = lvlInt.y;
+        if (level >= 150) tripped = true;
+        if (tripped && level < 60) tripped = false;   // reset with hysteresis
+        const cmd = lic.step(0, level, dt);
+        const drain = drainV.step(cmd, dt);
+        const condensing = tripped ? 0 : extractionFlow * 0.85;
+        lvlInt.step((condensing - drain * 0.85) / 30, dt);
+        return {
+          trend: level,
+          nodeValues: {
+            'lt': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
+            'ft-extr': `${extractionFlow.toFixed(0)} %`,
+            'lic': `err ${(-level).toFixed(1)}${lic.saturated ? ' SAT' : ''}`,
+            'sum': `${cmd.toFixed(1)} %`,
+            'lcv': `${drain.toFixed(1)} % open`,
+            'heater': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
+            'hh-trip': tripped ? 'TRIPPED' : 'armed (150 mm)',
+            'nrv': tripped ? 'CLOSED' : 'open',
+          },
+          insight: tripped
+            ? `HIGH-HIGH TRIP OPERATED. The extraction non-return valve has closed and the heater is isolated. This acted through the INDEPENDENT protection path, not the level controller \u2014 deliberately so, because if the control loop is what failed, protection must not depend on it.`
+            : level > 90
+              ? `Level ${level.toFixed(0)} mm and rising toward the 150 mm HH trip, drain valve at ${drain.toFixed(0)}%. If the drain cannot keep up, the trip isolates the heater before water can back up the extraction line into the turbine.`
+              : `Level ${level.toFixed(0)} mm, drain valve ${drain.toFixed(0)}%, extraction ${extractionFlow.toFixed(0)}%. Under control.`,
+        };
+      },
+    };
+  },
+
+  // Hotwell: split-range with a genuine deadband.
+  'condenser-hotwell': () => {
+    const lvlInt = new Integrator(0.5, 0, -500, 500);
+    const mkV = new Lag(4, 0);
+    const rjV = new Lag(4, 0);
+    const lic = new PID({ kp: 0.55, ki: 0.05, outMin: 0, outMax: 100, initialOutput: 50 });
+    return {
+      trendLabel: 'Hotwell level (mm)', setpoint: 0,
+      step(dt, imbalance) {
+        const level = lvlInt.y;
+        const mv = lic.step(0, level, dt);
+        const mkCmd = mv < 45 ? clamp((45 - mv) * 2.2, 0, 100) : 0;
+        const rjCmd = mv > 55 ? clamp((mv - 55) * 2.2, 0, 100) : 0;
+        const mk = mkV.step(mkCmd, dt);
+        const rj = rjV.step(rjCmd, dt);
+        lvlInt.step((mk - rj - imbalance) / 100, dt);
+        const npsh = 9 + level * 0.012;
+        const inDead = mkCmd === 0 && rjCmd === 0;
+        return {
+          trend: level,
+          nodeValues: {
+            'lt': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
+            'lic': `MV ${mv.toFixed(1)} %${lic.saturated ? ' SAT' : ''}`,
+            'split': inDead ? 'DEADBAND' : mk > rj ? 'makeup band' : 'reject band',
+            'makeup': `${mk.toFixed(1)} % open`,
+            'reject': `${rj.toFixed(1)} % open`,
+            'hotwell': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
+            'cep': `NPSH ${npsh.toFixed(2)} m`,
+          },
+          insight: npsh < 6
+            ? `CEP NPSH margin down to ${npsh.toFixed(1)} m. Makeup is at ${mk.toFixed(0)}% but level is still falling \u2014 the condensate pumps are heading toward cavitation.`
+            : inDead
+              ? `Level ${level.toFixed(0)} mm sits inside the DEADBAND, so BOTH valves are shut. That gap is deliberate: without it, makeup and reject would both sit part-open and cycle water back and forth continuously.`
+              : `Level ${level.toFixed(0)} mm, ${mk > rj ? 'makeup ' + mk.toFixed(0) + '%' : 'reject ' + rj.toFixed(0) + '%'}. Only one valve acts at a time \u2014 never both.`,
+        };
+      },
+    };
+  },
+
+  // AVR: fast electrical loop with hard limiters.
+  'avr-excitation': () => {
+    const exciter = new Lag(0.35, 85);
+    const genV = new Lag(1.2, 100);
+    const avr = new PID({ kp: 22, ki: 45, outMin: 40, outMax: 140, initialOutput: 85 });
+    return {
+      trendLabel: 'Terminal voltage (%)', setpoint: 100,
+      step(dt, reactiveDemand) {
+        const oel = 110, uel = 55;
+        const vTerm = genV.y;
+        const avrOut = avr.step(100, vTerm - (reactiveDemand - 85) * 0.10, dt);
+        const oelActive = avrOut >= oel, uelActive = avrOut <= uel;
+        const limited = clamp(avrOut, uel, oel);   // limiters override the AVR
+        const field = exciter.step(limited, dt);
+        genV.step(100 + (field - 85) * 0.12 - (reactiveDemand - 85) * 0.02, dt);
+        const mvar = (field - 80) * 4.5;
+        return {
+          trend: vTerm,
+          nodeValues: {
+            'vt': `${vTerm.toFixed(2)} %`,
+            'sp': '100.00 %',
+            'avr': `err ${(100 - vTerm).toFixed(3)} %${avr.saturated ? ' SAT' : ''}`,
+            'limiters': oelActive ? 'OEL ACTIVE' : uelActive ? 'UEL ACTIVE' : 'not limiting',
+            'pss': 'damping',
+            'exciter': `${field.toFixed(2)} % field`,
+            'gen': `${mvar >= 0 ? '+' : ''}${mvar.toFixed(1)} MVAr`,
+            'ct': `${field.toFixed(1)} %`,
+          },
+          insight: oelActive
+            ? `OVER-EXCITATION LIMITER ACTIVE \u2014 field current clamped at ${oel}%. The AVR is still calling for more, but the limiter overrides it; sustained over-excitation overheats the rotor winding. This is a LIMITER holding the machine at its boundary, not a trip \u2014 loss-of-field and over-excitation protections sit behind it separately.`
+            : uelActive
+              ? `UNDER-EXCITATION LIMITER ACTIVE at ${uel}%. Running too far under-excited heats the stator end-core and moves the machine toward its stability limit.`
+              : `Terminal voltage ${vTerm.toFixed(2)}%, field ${field.toFixed(0)}%, ${mvar >= 0 ? 'exporting' : 'absorbing'} ${Math.abs(mvar).toFixed(0)} MVAr. Notice how fast this loop is compared with every thermal loop \u2014 the exciter time constant is well under a second.`,
+        };
+      },
+    };
+  },
+};
+
 export const NODE_STYLES = {
   sensor: { color: 'var(--cyan)', shape: 'circle', hint: 'Measurement / transmitter' },
   controller: { color: 'var(--amber)', shape: 'rect', hint: 'PID controller' },
