@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /?page=admin
+Disallow: /?page=history
+
+Sitemap: https://engineeringhubcalc.com/sitemap.xml

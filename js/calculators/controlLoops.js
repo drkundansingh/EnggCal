@@ -30,6 +30,8 @@ export const LOOP_IDS = [
   'hp-heater-level',
   'condenser-hotwell',
   'avr-excitation',
+  'firewater-ratio',
+  'sliding-pressure',
 ];
 
 export const CONTROL_LOOPS = {
@@ -627,8 +629,8 @@ export const CONTROL_LOOPS = {
       { from: 'nrv', to: 'heater', label: 'isolate' },
     ],
     sim: {
-      inputLabel: 'Heater level (mm from normal)',
-      inputMin: -200, inputMax: 260, inputDefault: 0,
+      inputLabel: 'Extraction steam flow (%) — push above ~110% to trip the heater',
+      inputMin: 20, inputMax: 140, inputDefault: 70,
       run(level) {
         const hhTrip = 150;
         const tripped = level >= hhTrip;
@@ -694,8 +696,8 @@ export const CONTROL_LOOPS = {
       { from: 'hotwell', to: 'cep', label: 'suction head' },
     ],
     sim: {
-      inputLabel: 'Hotwell level (mm from normal)',
-      inputMin: -350, inputMax: 300, inputDefault: 0,
+      inputLabel: 'Cooling water / condensate flow imbalance',
+      inputMin: -80, inputMax: 80, inputDefault: 0,
       run(level) {
         const mv = 50 - level * 0.14;              // PID output, 50% = deadband centre
         const makeup = mv < 45 ? Math.min(100, (45 - mv) * 2.2) : 0;
@@ -802,6 +804,160 @@ export const CONTROL_LOOPS = {
     ],
   },
 
+  // ------------------------------------------------------------------
+  'firewater-ratio': {
+    name: 'Once-Through Boiler Fire/Water Ratio Control',
+    system: 'Boiler / USC-specific',
+    difficulty: 'Advanced',
+    why: 'A drum boiler has a large water reservoir that buffers any mismatch between firing and feedwater. An ultra-supercritical once-through (Benson-type) boiler has no drum at all \u2014 feedwater passes through the tubes exactly once, so there is no energy storage margin to hide an imbalance. The fire/water ratio is how these units hold steam temperature instead.',
+    problem: 'In a drum boiler, steam temperature is trimmed mainly by spray attemperation while the drum quietly absorbs any firing/feedwater mismatch. A once-through boiler cannot do that: if feedwater flow and firing rate drift out of the correct ratio, the mismatch shows up almost immediately as a steam temperature swing, because every kilogram of water that enters must pick up exactly enough heat to leave as steam at the right temperature \u2014 there is nothing in between to average it out.',
+    solution: 'Firing rate and feedwater flow are commanded together, in parallel, straight from load demand \u2014 not one cascaded from the other. Their RATIO becomes the primary handle for steam temperature: too hot, trim firing back (or add feedwater); too cool, do the opposite. Spray still exists, but only as a fast, small trim on top of a ratio that is already close to correct. Feedwater temperature (from the HP heaters) is fed forward into the ratio too, since colder feedwater consumes more of the available heat just reaching saturation, leaving less for the superheater.',
+    elements: [
+      'Firing rate demand \u2014 parallel feedforward from load, not cascaded from feedwater',
+      'Feedwater flow demand \u2014 parallel feedforward from load',
+      'Fire/water ratio \u2014 the primary steam temperature handle (unique to once-through boilers)',
+      'Feedwater temperature feedforward \u2014 compensates for colder/hotter feedwater',
+      'Spray \u2014 present only as a fast trim, not the primary mechanism',
+    ],
+    nodes: [
+      { id: 'load', type: 'demand', label: 'LOAD<br/>DEMAND', sub: 'Unit load demand', x: 55, y: 140 },
+      { id: 'firing-ff', type: 'compute', label: 'FIRING<br/>DEMAND', sub: 'Feedforward from load', x: 250, y: 60 },
+      { id: 'fw-ff', type: 'compute', label: 'FEEDWATER<br/>DEMAND', sub: 'Feedforward from load', x: 250, y: 230 },
+      { id: 'fwtemp', type: 'sensor', label: 'TT', sub: 'Feedwater temperature', x: 250, y: 340 },
+      { id: 'ratio', type: 'compute', label: '\u00f7', sub: 'Fire/water ratio', x: 440, y: 140 },
+      { id: 'tic', type: 'controller', label: 'TIC', sub: 'Steam temp PID (trims ratio)', x: 440, y: 260 },
+      { id: 'tt-out', type: 'sensor', label: 'TT', sub: 'Final steam temperature', x: 630, y: 260 },
+      { id: 'spray', type: 'actuator', label: 'SPRAY', sub: 'Fast trim only', x: 630, y: 60 },
+      { id: 'boiler', type: 'process', label: 'ONCE-<br/>THROUGH<br/>TUBES', sub: 'No drum \u2014 no buffer', x: 820, y: 160 },
+    ],
+    edges: [
+      { from: 'load', to: 'firing-ff', label: '' },
+      { from: 'load', to: 'fw-ff', label: '' },
+      { from: 'firing-ff', to: 'ratio', label: '' },
+      { from: 'fw-ff', to: 'ratio', label: '' },
+      { from: 'fwtemp', to: 'ratio', label: 'feedforward', style: 'ff' },
+      { from: 'tic', to: 'firing-ff', label: 'trims ratio', style: 'cascade' },
+      { from: 'tt-out', to: 'tic', label: 'PV', style: 'feedback' },
+      { from: 'ratio', to: 'spray', label: 'residual trim', style: 'ff' },
+      { from: 'firing-ff', to: 'boiler', label: 'firing' },
+      { from: 'fw-ff', to: 'boiler', label: 'feedwater' },
+      { from: 'spray', to: 'boiler', label: '' },
+      { from: 'boiler', to: 'tt-out', label: 'steam out' },
+    ],
+    sim: {
+      inputLabel: 'Feedwater temperature deviation (\u00b0C from normal)',
+      inputMin: -40, inputMax: 20, inputDefault: 0,
+      run(fwTempDev) {
+        const targetRatio = 1.0;
+        // Colder feedwater consumes more heat just reaching saturation,
+        // so the ratio needed to hold temperature rises as fwTempDev falls.
+        const ratioNeeded = targetRatio - fwTempDev * 0.006;
+        const firingTrim = (ratioNeeded - targetRatio) * 100;
+        const tempErr = -fwTempDev * 1.1;
+        const sprayPct = Math.min(100, Math.max(0, 20 - fwTempDev * 1.5));
+        const outletTemp = 600 + tempErr - sprayPct * 0.15;
+        return {
+          nodeValues: {
+            'load': '75 %',
+            'firing-ff': `${(75 + firingTrim).toFixed(1)} %`,
+            'fw-ff': '75.0 %',
+            'fwtemp': `${fwTempDev >= 0 ? '+' : ''}${fwTempDev.toFixed(0)} \u00b0C`,
+            'ratio': `${ratioNeeded.toFixed(3)}`,
+            'tic': `err ${tempErr >= 0 ? '+' : ''}${tempErr.toFixed(1)} \u00b0C`,
+            'tt-out': `${outletTemp.toFixed(0)} \u00b0C`,
+            'spray': `${sprayPct.toFixed(0)} % open`,
+            'boiler': `${outletTemp.toFixed(0)} \u00b0C`,
+          },
+          insight: Math.abs(fwTempDev) > 10
+            ? `Feedwater is ${Math.abs(fwTempDev).toFixed(0)} \u00b0C ${fwTempDev < 0 ? 'colder' : 'hotter'} than normal (an HP heater out of service is the classic cause). The fire/water ratio has moved to ${ratioNeeded.toFixed(3)} to compensate \u2014 in a drum boiler this would barely register; in a once-through boiler it shows up in steam temperature almost immediately, because there is no drum inventory to absorb it.`
+            : 'Feedwater temperature near normal. The fire/water ratio is holding close to its design value, with spray doing only a small trim on top \u2014 not the primary job.',
+        };
+      },
+    },
+    sources: [
+      'US Patent 4,068,475 \u2014 Flow control for once-through boiler having integral separators (pressure/water-fuel ratio relationship during startup and operation)',
+      'PowerMag \u2014 Design Features of Advanced Ultrasupercritical Plants, Part III: "steam temperature is controlled by the adjustment of the ratio of firing rate to feedwater flow"',
+      'Industrial Monitor Direct \u2014 Once-Through Boiler Low Feedwater Temperature Steam Temperature Effect (FR/FW ratio compensation for feedwater temperature)',
+      'Control Engineering \u2014 "Supercritical Control": once-through boilers have no drum energy reserve, so firing and feedwater must be matched continuously',
+    ],
+  },
+
+  // ------------------------------------------------------------------
+  'sliding-pressure': {
+    name: 'Sliding Pressure / Governor Valve Position',
+    system: 'Turbine / USC-specific',
+    difficulty: 'Advanced',
+    why: 'Every other pressure loop on this list holds a FIXED setpoint. Ultra-supercritical once-through units very often do the opposite through the middle of their load range: they let boiler pressure slide with load and hold the turbine governor valves wide open, specifically to avoid throttling losses.',
+    problem: 'Throttling steam through partly-closed governor valves destroys the availability of that steam \u2014 pressure is dropped at the valve for no thermodynamic benefit. At full valve opening there is no throttling loss at all, but a fixed high pressure setpoint forces the valves to throttle at every load below 100%.',
+    solution: 'Below roughly 70% load, pressure is held at a fixed minimum. Between about 70% and 90%, pressure SLIDES down roughly in proportion to load while the governor valves stay wide open \u2014 load is controlled by how much steam the boiler makes, not by how far the valves are throttled. Above about 90%, pressure is held fixed again as a deliberate reserve: a small throttling margin that lets the unit respond instantly to a load demand by simply opening the valves further, without waiting for the boiler to react.',
+    elements: [
+      'Load-to-pressure schedule \u2014 fixed / sliding / fixed, not a single setpoint',
+      'Below ~70% load: fixed minimum pressure',
+      '~70\u201390% load: pressure slides with load, valves wide open',
+      'Above ~90% load: fixed pressure again, valves throttle to hold a fast-response reserve',
+    ],
+    nodes: [
+      { id: 'load', type: 'demand', label: 'LOAD<br/>DEMAND', sub: '% MCR', x: 55, y: 140 },
+      { id: 'schedule', type: 'compute', label: 'f(x)', sub: 'Load \u2192 pressure schedule', x: 250, y: 140 },
+      { id: 'pic', type: 'controller', label: 'PIC', sub: 'Boiler pressure PID', x: 440, y: 60 },
+      { id: 'pt', type: 'sensor', label: 'PT', sub: 'Main steam pressure', x: 440, y: 200 },
+      { id: 'firing', type: 'actuator', label: 'FIRING', sub: 'To combustion control', x: 630, y: 60 },
+      { id: 'gv', type: 'actuator', label: 'GOV<br/>VALVES', sub: 'Position (open = less throttling)', x: 630, y: 260 },
+      { id: 'turbine', type: 'process', label: 'TURBINE', sub: 'Admission', x: 820, y: 200 },
+    ],
+    edges: [
+      { from: 'load', to: 'schedule', label: '' },
+      { from: 'schedule', to: 'pic', label: 'sliding SP', style: 'cascade' },
+      { from: 'pt', to: 'pic', label: 'PV', style: 'feedback' },
+      { from: 'pic', to: 'firing', label: 'MV' },
+      { from: 'load', to: 'gv', label: 'position demand', style: 'ff' },
+      { from: 'gv', to: 'turbine', label: '' },
+      { from: 'firing', to: 'pt', label: 'steam production' },
+      { from: 'turbine', to: 'pt', label: 'steam takeoff', style: 'feedback' },
+    ],
+    sim: {
+      inputLabel: 'Unit load demand (% MCR)',
+      inputMin: 40, inputMax: 100, inputDefault: 80,
+      run(load) {
+        const pMin = 120, pRated = 170;
+        let pSP, regime;
+        if (load <= 70) { pSP = pMin; regime = 'FIXED (below sliding band)'; }
+        else if (load >= 90) { pSP = pRated; regime = 'FIXED (reserve band)'; }
+        else { pSP = pMin + (pRated - pMin) * ((load - 70) / 20); regime = 'SLIDING'; }
+
+        let valvePos;
+        if (load <= 70) valvePos = 55 + (load - 40) * 0.5;
+        else if (load >= 90) valvePos = 100 - (load - 90) * 3;
+        else valvePos = 95;
+
+        const throttleLossPct = Math.max(0, (100 - valvePos) * 0.18);
+
+        return {
+          nodeValues: {
+            'load': `${load.toFixed(0)} %`,
+            'schedule': `${pSP.toFixed(0)} bar`,
+            'pic': `SP ${pSP.toFixed(0)} bar`,
+            'pt': `${pSP.toFixed(1)} bar`,
+            'firing': `${load.toFixed(0)} %`,
+            'gv': `${valvePos.toFixed(0)} % open`,
+            'turbine': `${load.toFixed(0)} % load`,
+          },
+          strategy: regime,
+          insight: regime === 'SLIDING'
+            ? `Sliding pressure band. Governor valves are held almost wide open (${valvePos.toFixed(0)}%) and pressure itself is doing the work of matching steam supply to turbine demand \u2014 throttling loss is only about ${throttleLossPct.toFixed(1)}%, versus what a fixed-pressure unit would waste at this same load.`
+            : load < 70
+              ? `Below the sliding band. Pressure is held at its fixed minimum (${pMin} bar), and the valves modulate more to control load at this end of the range.`
+              : `Above the sliding band \u2014 pressure is deliberately held fixed at ${pRated} bar again. This is NOT wasted throttling: it is a reserve. If load demand jumps right now, the valves can simply open further and deliver more steam instantly, without waiting for the boiler to raise pressure first.`,
+        };
+      },
+    },
+    sources: [
+      'ScienceDirect Topics \u2014 Sliding Pressure: sliding set point typically effective between ~70% and 90% load, fixed below and fixed above as a reserve for once-through boilers',
+      'PowerMag \u2014 Constant and sliding-pressure options for new supercritical plants (throttling loss vs load-response trade-off)',
+      'PowerMag \u2014 Design Features of Advanced Ultrasupercritical Plants, Part III (modified sliding pressure keeps a throttling reserve near full load)',
+    ],
+  },
+
 };
 
 /** Node type -> display colour token and shape hint, used by the renderer. */
@@ -822,6 +978,27 @@ export const CONTROL_LOOPS = {
  * unit. The SHAPE of the response is the accurate part; treat the exact
  * seconds as illustrative.
  */
+
+/**
+ * Packs a PID's live state for display: what it compares, what it outputs,
+ * and how far through its output range that sits. The UI draws this as a
+ * labelled SP / PV / OUT block with a bar, which is far easier to read than
+ * a bare "trim -0.6".
+ */
+function ctrl(pid, { unit = '', outUnit = '%', role = '' } = {}) {
+  return {
+    sp: pid.sp, pv: pid.pv, out: pid.out, unit, outUnit, role,
+    outMin: pid.outMin, outMax: pid.outMax,
+    outPct: ((pid.out - pid.outMin) / (pid.outMax - pid.outMin)) * 100,
+    saturated: pid.saturated,
+  };
+}
+
+/** Packs a final element position for display as a fill bar. */
+function elem(value, { unit = '%', min = 0, max = 100, label = '' } = {}) {
+  return { value, unit, min, max, label, pct: ((value - min) / (max - min)) * 100 };
+}
+
 export const LOOP_DYNAMICS = {
 
   // Drum level: an INTEGRATING process with inverse response (shrink/swell).
@@ -859,6 +1036,23 @@ export const LOOP_DYNAMICS = {
             'fcv': `${valve.toFixed(1)} % open`,
             'drum': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
           },
+          strategy: 'CASCADE + FEEDFORWARD',
+          controllers: {
+            'lic': ctrl(lic, { unit: 'mm', outUnit: '% trim', role: 'MASTER \u2014 holds level' }),
+            'fic': ctrl(fic, { unit: '%', outUnit: '% valve', role: 'SLAVE \u2014 holds feedwater flow' }),
+          },
+          elements: { 'fcv': elem(valve, { label: 'Feedwater valve' }) },
+          chain: [
+            { step: 'Steam flow (feedforward)', value: steamDemand.toFixed(1) + ' %',
+              why: 'The bulk demand. Feeding this FORWARD means feedwater tracks steam immediately instead of waiting for a level error.' },
+            { step: 'Level master trim', value: (trim >= 0 ? '+' : '') + trim.toFixed(2) + ' %',
+              why: 'The master only corrects the small leftover error \u2014 it does not set flow by itself.' },
+            { step: 'Sum \u2192 slave setpoint', value: fwSP.toFixed(1) + ' %',
+              why: 'feedforward ' + steamDemand.toFixed(1) + ' + trim ' + (trim >= 0 ? '+' : '') + trim.toFixed(2) + ' = ' + fwSP.toFixed(1) + '. This is the CASCADE handover: the master output becomes the slave SETPOINT.' },
+            { step: 'Slave flow controller', value: fwSP.toFixed(1) + ' \u2192 ' + fw.toFixed(1) + ' %',
+              why: 'The slave drives the valve until measured feedwater flow equals that setpoint.' },
+            { step: 'Valve position', value: valve.toFixed(1) + ' % open', why: 'Final element.' },
+          ],
           insight: Math.abs(swellMm) > 1.2
             ? `SHRINK/SWELL ACTIVE \u2014 the level is reading ${swellMm > 0 ? 'HIGH (swell)' : 'LOW (shrink)'} by about ${Math.abs(swellMm).toFixed(1)} mm purely from the density change. The drum mass has not actually moved that way. A single-element controller would react to this false signal and drive feedwater the WRONG way; watch feedwater instead follow steam flow through the feedforward path.`
             : Math.abs(level) > 12
@@ -909,6 +1103,23 @@ export const LOOP_DYNAMICS = {
             'ft-air': `${air.toFixed(1)} %`,
             'ft-fuel': `${fuel.toFixed(1)} %`,
           },
+          strategy: 'RATIO + CROSS-LIMIT SELECT',
+          controllers: {
+            'aic': ctrl(aic, { unit: '%', outUnit: '% damper', role: 'Air flow' }),
+            'fic': ctrl(fic, { unit: '%', outUnit: '% feeder', role: 'Fuel flow' }),
+          },
+          elements: { 'damper': elem(airCmd, { label: 'FD damper' }), 'feeder': elem(fuelCmd, { label: 'Feeder' }) },
+          chain: [
+            { step: 'Boiler master demand', value: demand.toFixed(1) + ' %', why: 'What the unit is asking for.' },
+            { step: 'HIGH select \u2192 air SP', value: airDemand.toFixed(1) + ' %',
+              why: 'max(demand ' + demand.toFixed(1) + ', fuel flow ' + fuelFlow.toFixed(1) + ') \u00d7 1.04 margin. Air is never allowed below actual fuel.' },
+            { step: 'LOW select \u2192 fuel SP', value: fuelDemand.toFixed(1) + ' %',
+              why: 'min(demand ' + demand.toFixed(1) + ', air flow ' + airFlow.toFixed(1) + '). Fuel is never allowed above actual air.' },
+            { step: 'RATIO check (air \u00f7 fuel)', value: ratio.toFixed(3),
+              why: 'Above 1.0 means air-rich, which is the safe side. O\u2082 trim fine-tunes this for efficiency.' },
+            { step: 'Result', value: 'air ' + air.toFixed(1) + ' vs fuel ' + fuel.toFixed(1) + ' %',
+              why: (air - fuel >= 0 ? 'Air leads by ' + (air - fuel).toFixed(1) + '% \u2014 correct.' : 'FUEL-RICH \u2014 should not happen with the selectors working.') },
+          ],
           insight: fuel > air
             ? `WARNING \u2014 fuel (${fuel.toFixed(1)}%) has moved ahead of air (${air.toFixed(1)}%). With the selectors working correctly this should not occur.`
             : air - fuel > 2
@@ -953,6 +1164,19 @@ export const LOOP_DYNAMICS = {
             'spray': `${spray.toFixed(1)} % open`,
             'sh': `${outlet.toFixed(1)} \u00b0C`,
           },
+          strategy: 'CASCADE (two temperature loops)',
+          controllers: {
+            'tic-master': ctrl(master, { unit: '\u00b0C', outUnit: '\u00b0C SP', role: 'MASTER \u2014 final outlet temp' }),
+            'tic-slave': ctrl(slave, { unit: '\u00b0C', outUnit: '% spray', role: 'SLAVE \u2014 after-spray temp' }),
+          },
+          elements: { 'spray': elem(spray, { label: 'Spray valve' }) },
+          chain: [
+            { step: 'Master sees outlet', value: outlet.toFixed(1) + ' \u00b0C vs SP ' + sp + ' \u00b0C', why: 'The slow, accurate loop. It never touches the valve directly.' },
+            { step: 'Master output', value: masterMV.toFixed(0) + ' \u00b0C', why: 'This is a TEMPERATURE, not a valve position \u2014 it is the target the slave must hold.' },
+            { step: 'MAX select vs saturation', value: slaveSP.toFixed(0) + ' \u00b0C', why: limited ? 'CLAMPED at saturation ' + satTemp + ' \u00b0C \u2014 protection against spraying water into the superheater.' : 'Above saturation (' + satTemp + ' \u00b0C), so the master value passes through.' },
+            { step: 'Slave sees after-spray temp', value: attemp.toFixed(1) + ' \u00b0C vs SP ' + slaveSP.toFixed(0) + ' \u00b0C', why: 'The fast loop \u2014 responds in seconds, long before the outlet moves.' },
+            { step: 'Spray valve', value: spray.toFixed(1) + ' % open', why: 'Only the slave moves the valve.' },
+          ],
           insight: limited
             ? `The MAX SELECT has clamped the slave setpoint at saturation temperature (${satTemp} \u00b0C) \u2014 the protection that stops the attemperator spraying water, rather than steam, into the superheater.`
             : `Outlet ${outlet.toFixed(1)} \u00b0C against setpoint ${sp} \u00b0C. Watch the sequence: the spray valve moves, the attemperator outlet (${attemp.toFixed(0)} \u00b0C) responds within seconds, but the final outlet only follows after ~25 s of transport delay plus a 90 s thermal lag. That gap is exactly why the cascade exists.`,
@@ -995,6 +1219,26 @@ export const LOOP_DYNAMICS = {
             'cold-damper': `${(100 - hotPct).toFixed(1)} % open`,
             'mill': `${temp.toFixed(1)} \u00b0C`,
           },
+          strategy: 'RATIO (PA/coal) + SPLIT-RANGE (hot/cold air)',
+          controllers: {
+            'pa-fic': ctrl(paPid, { unit: '%', outUnit: '% damper', role: 'PA flow' }),
+            'tic': ctrl(tempPid, { unit: '\u00b0C', outUnit: '% hot air', role: 'Mill outlet temp' }),
+          },
+          elements: {
+            'hot-damper': elem(hotPct, { label: 'Hot PA' }),
+            'cold-damper': elem(100 - hotPct, { label: 'Cold PA' }),
+            'feeder': elem(coalCmd, { label: 'Feeder' }),
+          },
+          chain: [
+            { step: 'Fuel demand \u2192 feeder', value: coalCmd.toFixed(1) + ' %', why: 'Sets coal flow into the mill.' },
+            { step: 'RATIO \u2192 PA setpoint', value: paSP.toFixed(1) + ' %',
+              why: paSP <= 26 ? 'On the MINIMUM floor \u2014 PA cannot fall with coal or the pipes block.' : 'PA is scheduled from coal flow to hold the transport ratio (' + ratio.toFixed(2) + ' air/coal).' },
+            { step: 'Temp controller output', value: hotPct.toFixed(0) + ' % hot',
+              why: 'SPLIT RANGE: one output drives two dampers in opposite directions.' },
+            { step: 'Hot / cold blend', value: hotPct.toFixed(0) + ' % hot, ' + (100 - hotPct).toFixed(0) + ' % cold',
+              why: 'Blending sets the drying temperature without changing total PA flow.' },
+            { step: 'Mill outlet', value: temp.toFixed(1) + ' \u00b0C vs SP 80 \u00b0C', why: 'The controlled variable.' },
+          ],
           insight: temp > 88
             ? `Mill outlet at ${temp.toFixed(1)} \u00b0C, climbing toward the range where coal dust in the mill becomes a fire risk. The controller is closing hot air and opening tempering air.`
             : paSP <= 26
@@ -1028,6 +1272,18 @@ export const LOOP_DYNAMICS = {
             'idfan': `${id.toFixed(1)} %`,
             'furnace': `${press.toFixed(2)} mmWC`,
           },
+          strategy: 'FEEDFORWARD + trim',
+          controllers: { 'pic': ctrl(pic, { unit: 'mmWC', outUnit: '% trim', role: 'Furnace draft' }) },
+          elements: { 'idfan': elem(id, { label: 'ID fan' }) },
+          chain: [
+            { step: 'FD fan demand (feedforward)', value: airDemand.toFixed(1) + ' %',
+              why: 'The bulk of the ID fan demand comes straight from the FD fan, not from a pressure error.' },
+            { step: 'Draft controller trim', value: (trim >= 0 ? '+' : '') + trim.toFixed(2) + ' %',
+              why: 'Only corrects the small residual. A large trim means the feedforward is mis-scaled.' },
+            { step: 'Sum \u2192 ID fan demand', value: idCmd.toFixed(1) + ' %',
+              why: 'feedforward ' + airDemand.toFixed(1) + ' + trim ' + (trim >= 0 ? '+' : '') + trim.toFixed(2) + ' = ' + idCmd.toFixed(1) + '.' },
+            { step: 'Furnace pressure', value: press.toFixed(2) + ' mmWC vs SP \u22125 mmWC', why: 'Held slightly negative by design.' },
+          ],
           insight: press > 0
             ? `FURNACE PRESSURE HAS GONE POSITIVE (${press.toFixed(1)} mmWC). Hot flue gas and flame can be pushed out through inspection doors and seals. The ID fan is being driven up to recover.`
             : press < -18
@@ -1069,6 +1325,20 @@ export const LOOP_DYNAMICS = {
             'firing': `${b.toFixed(1)} %`,
             'gv': `${tb.toFixed(1)} %`,
           },
+          strategy: 'COORDINATED (pressure trims both demands)',
+          controllers: { 'pic': ctrl(pic, { unit: 'bar', outUnit: '% trim', role: 'Main steam pressure' }) },
+          elements: { 'firing': elem(b, { label: 'Firing rate' }), 'gv': elem(tb, { label: 'Governor valves' }) },
+          chain: [
+            { step: 'Unit load demand', value: loadDemand.toFixed(1) + ' %', why: 'Goes to BOTH boiler and turbine.' },
+            { step: 'Pressure error', value: (press - 170).toFixed(2) + ' bar',
+              why: 'Steam pressure is the integral of the mismatch between energy in and energy out.' },
+            { step: 'Pressure trim', value: (pTrim >= 0 ? '+' : '') + pTrim.toFixed(2),
+              why: 'One controller output, applied to both sides in OPPOSITE directions.' },
+            { step: 'Boiler demand', value: boilerDemand.toFixed(1) + ' %',
+              why: 'load ' + loadDemand.toFixed(1) + ' \u2212 trim = ' + boilerDemand.toFixed(1) + '. Low pressure raises firing.' },
+            { step: 'Turbine demand', value: turbDemand.toFixed(1) + ' %',
+              why: 'load ' + loadDemand.toFixed(1) + ' + trim\u00d70.6 = ' + turbDemand.toFixed(1) + '. Low pressure eases the valves.' },
+          ],
           insight: Math.abs(press - 170) > 1.5
             ? `Main steam pressure is ${Math.abs(press - 170).toFixed(1)} bar ${press > 170 ? 'ABOVE' : 'BELOW'} setpoint. The turbine (4 s) moves far faster than the boiler (180 s), so energy in and energy out are mismatched \u2014 and steam pressure is the integral of that mismatch. The pressure PI is trimming both demands to close the gap.`
             : `Load ${loadDemand.toFixed(0)}%, firing ${b.toFixed(0)}%, valves ${tb.toFixed(0)}%, pressure ${press.toFixed(1)} bar. Boiler and turbine matched \u2014 coordinated control working as intended.`,
@@ -1109,6 +1379,16 @@ export const LOOP_DYNAMICS = {
             'lp-bp': `${lp.toFixed(1)} % open`,
             'cond': tripped ? 'full dump' : `${lp.toFixed(0)} % dump`,
           },
+          strategy: 'PRESSURE CONTROL + HIGH-SELECT OVERRIDE',
+          controllers: { 'pic-hp': ctrl(pic, { unit: 'bar', outUnit: '% bypass', role: 'Main steam pressure' }) },
+          elements: { 'hp-bp': elem(hp, { label: 'HP bypass' }), 'lp-bp': elem(lp, { label: 'LP bypass' }) },
+          chain: [
+            { step: 'Pressure controller output', value: pidOut.toFixed(1) + ' %', why: 'Normal modulating control.' },
+            { step: 'Trip fast-open signal', value: tripped ? '100 % (ACTIVE)' : 'not active', why: 'On a trip this bypasses normal PID action entirely.' },
+            { step: 'HIGH select', value: demand.toFixed(1) + ' %', why: 'max(PID ' + pidOut.toFixed(1) + ', fast-open ' + (tripped ? '100' : '0') + '). Whichever demands MORE bypass wins.' },
+            { step: 'Bypass valves', value: 'HP ' + hp.toFixed(0) + ' %, LP ' + lp.toFixed(0) + ' %', why: 'Route steam around the turbine.' },
+            { step: 'Main steam pressure', value: press.toFixed(2) + ' bar vs SP 170 bar', why: 'Held off the safety valves.' },
+          ],
           insight: tripped
             ? `TURBINE TRIP. The fast-open signal has overridden the PID through the HIGH SELECT and both bypasses are driving wide open. Watch the trend: pressure rises as the governor valves slam shut, then the bypass catches it before the safety valves lift. Without the bypass this excursion would keep going.`
             : press > 174
@@ -1132,7 +1412,11 @@ export const LOOP_DYNAMICS = {
       step(dt, drawOff) {
         const level = lvlInt.y;
         const mk = makeupV.step(lic.step(0, level, dt), dt);
-        lvlInt.step((mk - drawOff) / 100, dt);
+        // Valve sized with ~30% margin above normal flow at fully open --
+        // standard practice, and what actually lets the loop absorb an
+        // increased draw-off instead of running out of valve travel.
+        const mkFlow = mk * 1.3;
+        lvlInt.step((mkFlow - drawOff) / 100, dt);
         const pg = peggingV.step(pic.step(5.0, pressLag.y, dt), dt);
         const press = pressLag.step(3.2 + pg * 0.042 - (drawOff - 100) * 0.004, dt);
         const npsh = 12 + (press - 5.0) * 8 + level * 0.006;
@@ -1148,6 +1432,19 @@ export const LOOP_DYNAMICS = {
             'da': `${press.toFixed(3)} bar`,
             'bfp': `NPSH ${npsh.toFixed(2)} m`,
           },
+          strategy: 'TWO INDEPENDENT LOOPS (level + pressure)',
+          controllers: {
+            'lic': ctrl(lic, { unit: 'mm', outUnit: '% makeup', role: 'Storage level' }),
+            'pic': ctrl(pic, { unit: 'bar', outUnit: '% pegging', role: 'Deaerator pressure' }),
+          },
+          elements: { 'lcv': elem(mk, { label: 'Makeup valve' }), 'pcv': elem(pg, { label: 'Pegging steam' }) },
+          chain: [
+            { step: 'Level controller', value: level.toFixed(0) + ' mm vs SP 0 mm', why: 'Integrating \u2014 only the controller brings it back.' },
+            { step: 'Makeup valve', value: mk.toFixed(1) + ' % open', why: 'Against a draw-off of ' + drawOff.toFixed(0) + ' %.' },
+            { step: 'Pressure controller', value: press.toFixed(3) + ' bar vs SP 5.000 bar', why: 'Separate loop, same vessel.' },
+            { step: 'Pegging steam valve', value: pg.toFixed(1) + ' % open', why: 'Defends the pressure that provides pump suction head.' },
+            { step: 'BFP NPSH margin', value: npsh.toFixed(2) + ' m', why: 'The number that actually matters \u2014 both loops protect it.' },
+          ],
           insight: npsh < 8
             ? `NPSH MARGIN DOWN TO ${npsh.toFixed(1)} m. The feed pumps are approaching cavitation. Deaerator level and pressure both feed BFP suction head \u2014 lose either and the pumps suffer within seconds.`
             : Math.abs(level) > 120
@@ -1162,7 +1459,7 @@ export const LOOP_DYNAMICS = {
   'hp-heater-level': () => {
     const lvlInt = new Integrator(1.0, 0, -400, 400);
     const drainV = new Lag(3, 45);
-    const lic = new PID({ kp: 1.1, ki: 0.16, outMin: 0, outMax: 100, initialOutput: 45 });
+    const lic = new PID({ kp: 1.1, ki: 0.16, outMin: 0, outMax: 100, initialOutput: 45, reverse: true });
     let tripped = false;
     return {
       trendLabel: 'Heater level (mm)', setpoint: 0,
@@ -1186,6 +1483,16 @@ export const LOOP_DYNAMICS = {
             'hh-trip': tripped ? 'TRIPPED' : 'armed (150 mm)',
             'nrv': tripped ? 'CLOSED' : 'open',
           },
+          strategy: '3-ELEMENT + INDEPENDENT TRIP',
+          controllers: { 'lic': ctrl(lic, { unit: 'mm', outUnit: '% drain', role: 'Heater level' }) },
+          elements: { 'lcv': elem(drain, { label: 'Drain valve' }) },
+          chain: [
+            { step: 'Extraction flow (feedforward)', value: extractionFlow.toFixed(0) + ' %', why: 'Predicts the condensing rate before level moves.' },
+            { step: 'Level controller', value: level.toFixed(0) + ' mm vs SP 0 mm', why: 'Trims for the residual error.' },
+            { step: 'Drain valve', value: drain.toFixed(1) + ' % open', why: 'Removes condensate to hold level.' },
+            { step: 'HH trip (independent)', value: tripped ? 'TRIPPED' : 'armed at 150 mm', why: 'Deliberately NOT part of the control loop \u2014 if the loop is what failed, protection must not depend on it.' },
+            { step: 'Extraction NRV', value: tripped ? 'CLOSED' : 'open', why: 'Isolates the heater to stop water reaching the turbine.' },
+          ],
           insight: tripped
             ? `HIGH-HIGH TRIP OPERATED. The extraction non-return valve has closed and the heater is isolated. This acted through the INDEPENDENT protection path, not the level controller \u2014 deliberately so, because if the control loop is what failed, protection must not depend on it.`
             : level > 90
@@ -1201,7 +1508,7 @@ export const LOOP_DYNAMICS = {
     const lvlInt = new Integrator(0.5, 0, -500, 500);
     const mkV = new Lag(4, 0);
     const rjV = new Lag(4, 0);
-    const lic = new PID({ kp: 0.55, ki: 0.05, outMin: 0, outMax: 100, initialOutput: 50 });
+    const lic = new PID({ kp: 0.55, ki: 0.05, outMin: 0, outMax: 100, initialOutput: 50, reverse: true });
     return {
       trendLabel: 'Hotwell level (mm)', setpoint: 0,
       step(dt, imbalance) {
@@ -1225,6 +1532,16 @@ export const LOOP_DYNAMICS = {
             'hotwell': `${level >= 0 ? '+' : ''}${level.toFixed(0)} mm`,
             'cep': `NPSH ${npsh.toFixed(2)} m`,
           },
+          strategy: 'SPLIT-RANGE with DEADBAND',
+          controllers: { 'lic': ctrl(lic, { unit: 'mm', outUnit: '% MV', role: 'Hotwell level' }) },
+          elements: { 'makeup': elem(mk, { label: 'Makeup' }), 'reject': elem(rj, { label: 'Reject' }) },
+          chain: [
+            { step: 'Level controller output', value: mv.toFixed(1) + ' %', why: 'ONE output drives TWO valves across different parts of its range.' },
+            { step: 'Below 45 % \u2192 makeup', value: mk.toFixed(1) + ' % open', why: 'Falling level opens makeup from storage.' },
+            { step: '45\u201355 % \u2192 deadband', value: inDead ? 'IN DEADBAND \u2014 both shut' : 'outside deadband', why: 'The gap is deliberate: without it both valves sit part-open and cycle water back and forth.' },
+            { step: 'Above 55 % \u2192 reject', value: rj.toFixed(1) + ' % open', why: 'Rising level dumps back to storage.' },
+            { step: 'CEP NPSH margin', value: npsh.toFixed(2) + ' m', why: 'Low level starves the condensate pumps.' },
+          ],
           insight: npsh < 6
             ? `CEP NPSH margin down to ${npsh.toFixed(1)} m. Makeup is at ${mk.toFixed(0)}% but level is still falling \u2014 the condensate pumps are heading toward cavitation.`
             : inDead
@@ -1263,11 +1580,139 @@ export const LOOP_DYNAMICS = {
             'gen': `${mvar >= 0 ? '+' : ''}${mvar.toFixed(1)} MVAr`,
             'ct': `${field.toFixed(1)} %`,
           },
+          strategy: 'VOLTAGE PID + OVERRIDE LIMITERS',
+          controllers: { 'avr': ctrl(avr, { unit: '%', outUnit: '% field', role: 'Terminal voltage' }) },
+          elements: { 'exciter': elem(field, { label: 'Field current', min: 40, max: 140 }) },
+          chain: [
+            { step: 'AVR compares voltage', value: vTerm.toFixed(2) + ' % vs SP 100.00 %', why: 'The main regulating loop.' },
+            { step: 'AVR asks for field', value: avrOut.toFixed(1) + ' %', why: 'What the voltage loop wants, before limiting.' },
+            { step: 'Limiters', value: oelActive ? 'OEL clamping at ' + oel + ' %' : uelActive ? 'UEL clamping at ' + uel + ' %' : 'not limiting', why: 'Limiters OVERRIDE the AVR. They hold the machine at its capability boundary \u2014 they are not trips.' },
+            { step: 'Field current delivered', value: field.toFixed(1) + ' %', why: 'What the exciter actually supplies.' },
+            { step: 'Reactive output', value: (mvar >= 0 ? '+' : '') + mvar.toFixed(0) + ' MVAr', why: 'Once synchronised, field current sets MVAr rather than voltage.' },
+          ],
           insight: oelActive
             ? `OVER-EXCITATION LIMITER ACTIVE \u2014 field current clamped at ${oel}%. The AVR is still calling for more, but the limiter overrides it; sustained over-excitation overheats the rotor winding. This is a LIMITER holding the machine at its boundary, not a trip \u2014 loss-of-field and over-excitation protections sit behind it separately.`
             : uelActive
               ? `UNDER-EXCITATION LIMITER ACTIVE at ${uel}%. Running too far under-excited heats the stator end-core and moves the machine toward its stability limit.`
               : `Terminal voltage ${vTerm.toFixed(2)}%, field ${field.toFixed(0)}%, ${mvar >= 0 ? 'exporting' : 'absorbing'} ${Math.abs(mvar).toFixed(0)} MVAr. Notice how fast this loop is compared with every thermal loop \u2014 the exciter time constant is well under a second.`,
+        };
+      },
+    };
+  },
+
+  // Fire/water ratio: parallel feedforward, no drum buffer, so a feedwater
+  // temperature upset shows up in steam temperature almost immediately.
+  'firewater-ratio': () => {
+    const firingLag = new Lag(20, 75);
+    const fwLag = new Lag(15, 75);
+    const fwTempLag = new Lag(60, 0);
+    const tic = new PID({ kp: 1.1, ki: 0.045, outMin: -15, outMax: 15, initialOutput: 0 });
+    const outletLag = new Lag(25, 597);
+    const sprayValve = new Lag(3, 20);
+    return {
+      trendLabel: 'Final steam temperature (\u00b0C)', setpoint: 597,
+      step(dt, fwTempDevInput) {
+        const fwTempDev = fwTempLag.step(fwTempDevInput, dt);
+        const outlet = outletLag.y;
+        const trim = tic.step(597, outlet, dt);
+        const firingCmd = 75 + trim - fwTempDev * 0.05;
+        const fwCmd = 75;
+        const firing = firingLag.step(firingCmd, dt);
+        const fw = fwLag.step(fwCmd, dt);
+        const ratio = fw > 1 ? firing / fw : 1;
+        const sprayCmd = Math.min(100, Math.max(0, 20 - trim * 3));
+        const spray = sprayValve.step(sprayCmd, dt);
+        // No drum buffer: outlet responds with only a modest lag, unlike the
+        // 90 s thermal mass in the drum-boiler cascade loop.
+        // Cold feedwater consumes more heat just reaching saturation, which
+        // LOWERS outlet temperature -- fwTempDev negative must subtract here.
+        outletLag.step(597 + (ratio - 1) * 400 + fwTempDev * 1.1 - spray * 0.15, dt);
+        return {
+          trend: outlet,
+          nodeValues: {
+            'load': '75 %',
+            'firing-ff': `${firingCmd.toFixed(1)} %`,
+            'fw-ff': `${fwCmd.toFixed(1)} %`,
+            'fwtemp': `${fwTempDev >= 0 ? '+' : ''}${fwTempDev.toFixed(1)} \u00b0C`,
+            'ratio': `${ratio.toFixed(3)}`,
+            'tic': `trim ${trim >= 0 ? '+' : ''}${trim.toFixed(2)}${tic.saturated ? ' SAT' : ''}`,
+            'tt-out': `${outlet.toFixed(1)} \u00b0C`,
+            'spray': `${spray.toFixed(0)} % open`,
+            'boiler': `${outlet.toFixed(1)} \u00b0C`,
+          },
+          strategy: 'PARALLEL FEEDFORWARD + RATIO TRIM (no drum buffer)',
+          controllers: {
+            'tic': ctrl(tic, { unit: '\u00b0C', outUnit: '% ratio trim', role: 'Steam temperature' }),
+          },
+          elements: { 'firing-ff': elem(firing, { min: 40, max: 110, label: 'Firing rate' }), 'spray': elem(spray, { label: 'Spray valve' }) },
+          chain: [
+            { step: 'Feedwater temperature deviation', value: `${fwTempDev >= 0 ? '+' : ''}${fwTempDev.toFixed(1)} \u00b0C`, why: 'Colder feedwater consumes more of the available heat just reaching saturation.' },
+            { step: 'Firing & feedwater demand', value: 'both from load, in PARALLEL', why: 'Neither is cascaded from the other \u2014 unlike a drum boiler, there is no level loop to hide a mismatch.' },
+            { step: 'Fire/water ratio', value: ratio.toFixed(3), why: 'The PRIMARY handle for steam temperature on a once-through boiler.' },
+            { step: 'Spray (fast trim only)', value: spray.toFixed(0) + '% open', why: 'A small polish on top of a ratio that is already close \u2014 not the main mechanism.' },
+            { step: 'Final steam temperature', value: outlet.toFixed(1) + ' \u00b0C', why: 'Responds within tens of seconds, not the ~90 s seen in a drum boiler with real thermal storage.' },
+          ],
+          insight: Math.abs(fwTempDev) > 8
+            ? `Feedwater is ${Math.abs(fwTempDev).toFixed(1)} \u00b0C ${fwTempDev < 0 ? 'colder' : 'hotter'} than normal. Watch how directly this shows up in outlet temperature (${outlet.toFixed(0)} \u00b0C) \u2014 there is no drum to average it out. The ratio has moved to ${ratio.toFixed(3)} to compensate.`
+            : `Outlet ${outlet.toFixed(1)} \u00b0C against setpoint 597 \u00b0C. Ratio holding near 1.000, spray only doing a small trim \u2014 this is the fire/water ratio doing its job as the primary temperature handle.`,
+        };
+      },
+    };
+  },
+
+  // Sliding pressure: the pressure SETPOINT itself moves with load through
+  // the middle of the range, with governor valves held near wide open.
+  'sliding-pressure': () => {
+    const pMin = 120, pRated = 170;
+    const pressLag = new Lag(60, pMin);
+    const valveLag = new Lag(6, 55);
+    const pic = new PID({ kp: 1.6, ki: 0.03, outMin: -20, outMax: 20, initialOutput: 0 });
+    return {
+      trendLabel: 'Main steam pressure (bar)', setpoint: null,
+      step(dt, load) {
+        let pSP, regime;
+        if (load <= 70) { pSP = pMin; regime = 'FIXED (below sliding band)'; }
+        else if (load >= 90) { pSP = pRated; regime = 'FIXED (reserve band)'; }
+        else { pSP = pMin + (pRated - pMin) * ((load - 70) / 20); regime = 'SLIDING'; }
+
+        const press = pressLag.y;
+        const trim = pic.step(pSP, press, dt);
+        const firingCmd = load + trim;
+        pressLag.step(pSP + (firingCmd - load) * 0.3, dt);
+
+        let valveTarget;
+        if (regime === 'SLIDING') valveTarget = 95;
+        else if (load < 70) valveTarget = 55 + (load - 40) * 0.5;
+        else valveTarget = Math.max(60, 100 - (load - 90) * 3);
+        const valve = valveLag.step(valveTarget, dt);
+        const throttleLossPct = Math.max(0, (100 - valve) * 0.18);
+
+        return {
+          trend: press,
+          nodeValues: {
+            'load': `${load.toFixed(0)} %`,
+            'schedule': `${pSP.toFixed(1)} bar`,
+            'pic': `SP ${pSP.toFixed(1)}${pic.saturated ? ' SAT' : ''}`,
+            'pt': `${press.toFixed(1)} bar`,
+            'firing': `${firingCmd.toFixed(1)} %`,
+            'gv': `${valve.toFixed(0)} % open`,
+            'turbine': `${load.toFixed(0)} % load`,
+          },
+          strategy: regime,
+          controllers: { 'pic': ctrl(pic, { unit: 'bar', outUnit: '% firing trim', role: 'Boiler pressure' }) },
+          elements: { 'firing': elem(firingCmd, { min: 30, max: 110, label: 'Firing rate' }), 'gv': elem(valve, { label: 'Governor valves' }) },
+          chain: [
+            { step: 'Load demand', value: load.toFixed(0) + ' %', why: 'Drives the pressure schedule directly.' },
+            { step: 'Load \u2192 pressure schedule', value: pSP.toFixed(1) + ' bar (' + regime + ')', why: 'Fixed below 70%, sliding 70\u201390%, fixed again above 90% as a reserve.' },
+            { step: 'Boiler pressure PID', value: 'trim ' + (trim >= 0 ? '+' : '') + trim.toFixed(2) + '%', why: 'Trims firing to track the CURRENT schedule point, which itself moves with load.' },
+            { step: 'Governor valve position', value: valve.toFixed(0) + '% open', why: regime === 'SLIDING' ? 'Held near wide open \u2014 minimal throttling loss.' : 'Modulating to control load precisely at this end of the range.' },
+            { step: 'Throttling loss', value: throttleLossPct.toFixed(1) + ' %', why: 'What a fixed-pressure design would waste here that this strategy avoids.' },
+          ],
+          insight: regime === 'SLIDING'
+            ? `Sliding pressure band. Governor valves held near wide open (${valve.toFixed(0)}%), pressure itself matching steam supply to turbine demand. Throttling loss only about ${throttleLossPct.toFixed(1)}% \u2014 a fixed-pressure unit would waste more at this same load.`
+            : load < 70
+              ? `Below the sliding band. Pressure held at its fixed minimum (${pMin} bar); valves modulate more to control load here.`
+              : `Above the sliding band \u2014 pressure deliberately fixed at ${pRated} bar again. This is a genuine reserve: if load jumps right now, the valves can open further and deliver more steam instantly, without waiting for the boiler to raise pressure.`,
         };
       },
     };
@@ -1284,8 +1729,19 @@ export const NODE_STYLES = {
 };
 
 /** Edge style -> colour and dash pattern. */
+// PV (measurement into a controller) and MV (command out to an actuator)
+// are the two most structurally important signal types in any loop -- yet
+// most edges carrying them were left on the generic 'normal' style, the
+// dimmest colour in the whole palette. That inverted the visual hierarchy:
+// the wires most worth reading were the hardest to see. 'pv' and 'mv' give
+// them their own clear, consistent treatment; drawLoop() in app.js applies
+// these automatically to any edge labelled 'PV' or 'MV' that doesn't
+// already have an explicit style, so all 13 loops benefit without needing
+// every edge definition hand-edited.
 export const EDGE_STYLES = {
   normal: { color: 'var(--line)', dash: '', label: 'Signal' },
+  pv: { color: 'var(--cyan)', dash: '4 3', label: 'Measurement (PV)' },
+  mv: { color: 'var(--green)', dash: '', label: 'Command (MV)' },
   feedback: { color: 'var(--cyan)', dash: '4 3', label: 'Measurement feedback' },
   cascade: { color: 'var(--amber)', dash: '', label: 'Cascade setpoint' },
   ff: { color: 'var(--blue)', dash: '6 3', label: 'Feedforward' },

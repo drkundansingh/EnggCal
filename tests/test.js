@@ -22,6 +22,10 @@ import * as lu from '../js/calculators/loopUncertainty.js';
 import * as ed from '../js/calculators/electricalDesign.js';
 import * as steam from '../js/calculators/steamTable.js';
 import * as idmt from '../js/calculators/idmt.js';
+import * as rs from '../js/calculators/relaySettings.js';
+import * as hx from '../js/calculators/heatExchanger.js';
+import * as pipe from '../js/calculators/piping.js';
+import * as rot from '../js/calculators/rotatingEquipment.js';
 import * as ctEngine from '../js/calculators/ctEngine.js';
 import * as tfProt from '../js/calculators/transformerProtection.js';
 import * as motProt from '../js/calculators/motorProtection.js';
@@ -1235,6 +1239,348 @@ test('calibrated-range and geometric models agree when both are given the same e
   // Reynolds-dependent Cd that the pure square-root law does not.
   assert.ok(Math.abs(wCal - wGeom) / wGeom < 0.02,
     `models disagree: calibrated ${wCal.toFixed(1)} vs geometric ${wGeom.toFixed(1)}`);
+});
+
+console.log('\n--- electricalDesign.js (grounding, NGR, generator, unbalance, inrush) ---');
+test('gridResistance: matches Sverak\'s simplified equation by hand', () => {
+  const rho=100, Lt=800, A=400, h=0.5;
+  const rg = ed.gridResistance(rho, Lt, A, h);
+  const manual = rho * (1/Lt + (1/Math.sqrt(20*A))*(1+1/(1+h*Math.sqrt(20/A))));
+  approx(rg, manual, 1e-9);
+});
+test('gridResistance: larger grid area reduces resistance', () => {
+  const small = ed.gridResistance(100, 800, 400, 0.5);
+  const large = ed.gridResistance(100, 3200, 3600, 0.5);
+  assert.ok(large < small);
+});
+test('tolerableVoltages: matches the IEEE 80 equations for 50kg and 70kg', () => {
+  const t70 = ed.tolerableVoltages({ bodyWeightKg: 70, cs: 1, surfaceResistivityOhmM: 100, faultDurationS: 0.5 });
+  approx(t70.touchVoltageV, (1000 + 1.5*100) * (0.157/Math.sqrt(0.5)), 1e-9);
+  approx(t70.stepVoltageV, (1000 + 6*100) * (0.157/Math.sqrt(0.5)), 1e-9);
+  const t50 = ed.tolerableVoltages({ bodyWeightKg: 50, cs: 1, surfaceResistivityOhmM: 100, faultDurationS: 0.5 });
+  // 70kg body tolerates a higher voltage than 50kg at the same conditions.
+  assert.ok(t70.touchVoltageV > t50.touchVoltageV);
+});
+test('groundingGridCheck: flags a real unsafe design and passes a real safe one', () => {
+  const bad = ed.groundingGridCheck({ soilResistivityOhmM: 100, totalConductorLengthM: 800, gridAreaM2: 400, burialDepthM: 0.5, groundFaultCurrentA: 1000, faultDurationS: 0.5 });
+  assert.ok(bad.check.includes('EXCEEDS'));
+  const good = ed.groundingGridCheck({ soilResistivityOhmM: 30, totalConductorLengthM: 2400, gridAreaM2: 3600, burialDepthM: 0.6, groundFaultCurrentA: 2000, faultDurationS: 0.5, surfaceMaterial: 'crushed rock (dry)' });
+  assert.equal(good.check, 'SCREENING PASS');
+});
+test('surfaceDeratingFactor: a crushed-rock layer raises the tolerable voltage', () => {
+  const noLayer = ed.tolerableVoltages({ bodyWeightKg: 70, cs: 1, surfaceResistivityOhmM: 30, faultDurationS: 0.5 });
+  const cs = ed.surfaceDeratingFactor(30, 3000, 0.1);
+  const withLayer = ed.tolerableVoltages({ bodyWeightKg: 70, cs, surfaceResistivityOhmM: 3000, faultDurationS: 0.5 });
+  assert.ok(withLayer.touchVoltageV > noLayer.touchVoltageV);
+});
+
+test('ngrSizing: R = V_LN / I_target, and the short-time rating follows I\u00b2R', () => {
+  const r = ed.ngrSizing({ systemVoltageV: 11000, targetFaultCurrentA: 10, faultDurationS: 10 });
+  approx(r.resistanceOhm, (11000/Math.sqrt(3))/10, 1e-6);
+  approx(r.shortTimeRatingKW, (10*10*r.resistanceOhm)/1000, 1e-9);
+});
+test('ngrSizing: a lower target fault current requires a larger resistor', () => {
+  const tight = ed.ngrSizing({ systemVoltageV: 11000, targetFaultCurrentA: 5, faultDurationS: 10 });
+  const loose = ed.ngrSizing({ systemVoltageV: 11000, targetFaultCurrentA: 20, faultDurationS: 10 });
+  assert.ok(tight.resistanceOhm > loose.resistanceOhm);
+});
+
+test('generatorSizing: correctly identifies when motor starting governs over running load', () => {
+  const r = ed.generatorSizing({
+    loads: [{ kW: 100, pf: 0.85 }, { kW: 50, pf: 0.9 }, { kW: 30, pf: 0.85 }],
+    largestMotorKW: 75, largestMotorPF: 0.85, largestMotorStartingMultiple: 6, designMarginPct: 20,
+  });
+  const motorRunKVA = 75/0.85;
+  const expectedStarting = (r.totalRunningKVA - motorRunKVA) + motorRunKVA*6;
+  approx(r.startingKVA, expectedStarting, 1e-6);
+  assert.ok(r.governing.startsWith('STARTING'));
+  approx(r.requiredKVA, Math.max(r.totalRunningKVA, r.startingKVA) * 1.2, 1e-6);
+});
+test('generatorSizing: starting always governs when the multiple exceeds 1 (a real structural result)', () => {
+  // startingKVA = runningKVA + motorRunKVA*(multiple-1). Since every real
+  // motor draws MORE current starting than running (multiple > 1), that
+  // extra term is always positive -- starting KVA structurally can never
+  // be less than running KVA. This is exactly why sizing guides insist on
+  // checking the starting case, even for a motor that is tiny relative to
+  // the rest of the load.
+  const r = ed.generatorSizing({
+    loads: [{ kW: 500, pf: 0.9 }],
+    largestMotorKW: 5, largestMotorPF: 0.85, largestMotorStartingMultiple: 1.2, designMarginPct: 15,
+  });
+  assert.ok(r.startingKVA >= r.totalRunningKVA);
+  assert.ok(r.governing.startsWith('STARTING'));
+});
+test('generatorSizing: rejects an empty load list', () => {
+  assert.throws(() => ed.generatorSizing({ loads: [], largestMotorKW: 10 }));
+});
+
+test('voltageUnbalance: matches the NEMA max-deviation-from-average definition', () => {
+  const v = ed.voltageUnbalance(460, 467, 450);
+  const avg = (460+467+450)/3;
+  const maxDev = Math.max(Math.abs(460-avg), Math.abs(467-avg), Math.abs(450-avg));
+  approx(v.unbalancePct, (maxDev/avg)*100, 1e-9);
+});
+test('voltageUnbalance: balanced voltages give zero unbalance and full derating factor', () => {
+  const v = ed.voltageUnbalance(415, 415, 415);
+  approx(v.unbalancePct, 0, 1e-9);
+  approx(v.deratingFactor, 1.0, 1e-9);
+});
+test('voltageUnbalance: flags exceeding the NEMA 5% operating limit', () => {
+  const v = ed.voltageUnbalance(380, 440, 420);
+  assert.ok(v.unbalancePct > 5);
+  assert.equal(v.exceedsNemaLimit, true);
+});
+
+test('transformerInrush: peak equals rated \u00d7 multiple, and decays exponentially', () => {
+  const r = ed.transformerInrush({ ratedCurrentA: 100, inrushMultiple: 10, timeConstantS: 0.1, evaluateAtS: 0.05 });
+  approx(r.peakInrushA, 1000, 1e-9);
+  approx(r.atTimeA, 1000 * Math.exp(-0.05/0.1), 1e-9);
+});
+test('transformerInrush: rejects a multiple that is not actually a multiple', () => {
+  assert.throws(() => ed.transformerInrush({ ratedCurrentA: 100, inrushMultiple: 1, timeConstantS: 0.1 }));
+});
+
+console.log('\n--- idmt.js (IEEE C37.112 curve family) ---');
+test('idmt: IEEE curves match the published C37.112-2018 Table 1 formula', () => {
+  const t = idmt.operatingTime(500, 100, 1, 'MI_IEEE');
+  approx(t, 1*(0.0515/(Math.pow(5,0.02)-1)+0.1140), 1e-9);
+  const tVI = idmt.operatingTime(500, 100, 1, 'VI_IEEE');
+  approx(tVI, 1*(19.61/(Math.pow(5,2)-1)+0.4910), 1e-9);
+  const tEI = idmt.operatingTime(500, 100, 1, 'EI_IEEE');
+  approx(tEI, 1*(28.2/(Math.pow(5,2)-1)+0.1217), 1e-9);
+});
+test('idmt: tmsForDesiredTime round-trips through operatingTime for IEEE curves', () => {
+  const t = idmt.operatingTime(800, 100, 2.5, 'VI_IEEE');
+  const td = idmt.tmsForDesiredTime(800, 100, t, 'VI_IEEE');
+  approx(td, 2.5, 1e-9);
+});
+test('idmt: both IEC and IEEE curves give strictly decreasing time as fault current rises', () => {
+  for (const key of ['SI', 'VI', 'EI', 'LTI', 'MI_IEEE', 'VI_IEEE', 'EI_IEEE']) {
+    const tLow = idmt.operatingTime(300, 100, 1, key);
+    const tHigh = idmt.operatingTime(1000, 100, 1, key);
+    assert.ok(tHigh < tLow, `${key}: time did not decrease with higher fault current`);
+  }
+});
+
+console.log('\n--- relaySettings.js (multi-stage overcurrent relay, ABB/Siemens-style) ---');
+test('primaryToPu / puToPrimary: round-trip through a CT ratio', () => {
+  const pu = rs.primaryToPu(384, 400, 1, 1);
+  approx(pu, 0.96, 1e-9);
+  const back = rs.puToPrimary(pu, 400, 1, 1);
+  approx(back, 384, 1e-6);
+});
+test('relaySettings: matches hand calculation for a realistic 11kV feeder', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    pickupMarginPct: 20, stage2MarginPct: 25, stage3MarginPct: 20,
+    curveKey: 'SI', desiredStage1TimeS: 0.3, stage2DelayS: 0.15,
+  });
+  approx(r.stage1.pickupA, 320 * 1.2, 1e-9);
+  approx(r.stage1.pickupPu, (320 * 1.2) / 400, 1e-6);
+  approx(r.stage1.operatingTimeS, 0.3, 1e-6);
+  approx(r.stage2.pickupA, 1200 * 1.25, 1e-9);
+  approx(r.stage3.pickupA, 6000 * 1.20, 1e-9);
+  assert.equal(r.warnings.length, 0);
+});
+test('relaySettings: stage ordering makes sense (I> < I>> < I>>>)', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    curveKey: 'SI',
+  });
+  assert.ok(r.stage1.pickupA < r.stage2.pickupA);
+  assert.ok(r.stage2.pickupA < r.stage3.pickupA);
+});
+test('relaySettings: Stage 3 has zero intentional delay (instantaneous)', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+  });
+  assert.equal(r.stage3.delayS, 0);
+});
+test('relaySettings: warns when Stage 2 pickup cannot clear below max fault', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 5000, maxFaultCurrentA: 6000,
+    stage2MarginPct: 25,
+  });
+  assert.ok(r.warnings.length > 0);
+  assert.equal(r.stage2.clearsMaxFault, false);
+});
+test('relaySettings: rejects a fault current lower than the through-fault current', () => {
+  assert.throws(() => rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 6000, maxFaultCurrentA: 1200,
+  }));
+});
+test('relaySettings: works with an IEEE C37.112 curve as well as IEC', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    curveKey: 'VI_IEEE', desiredStage1TimeS: 0.4,
+  });
+  approx(r.stage1.operatingTimeS, 0.4, 1e-6);
+  assert.equal(r.stage1.curve, 'IEEE Very Inverse');
+});
+test('relaySettings: a 5A CT with a larger primary produces a sensible per-unit range', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 2000, ctSecondaryA: 5, relayInA: 5,
+    fullLoadCurrentA: 1600, maxThroughFaultA: 8000, maxFaultCurrentA: 30000,
+  });
+  assert.ok(r.stage1.pickupPu > 0.5 && r.stage1.pickupPu < 5);
+});
+
+console.log('\n--- piping.js (pressure drop, wall thickness, PSV sizing) ---');
+test('pipePressureDrop: velocity matches Q/A, and Reynolds/friction are self-consistent', () => {
+  const r = pipe.pipePressureDrop({ flowM3S: 0.02, diameterM: 0.1, lengthM: 100, densityKgM3: 998, viscosityPaS: 0.001 });
+  const area = Math.PI / 4 * 0.1 * 0.1;
+  approx(r.velocityMs, 0.02 / area, 1e-9);
+  assert.equal(r.flowRegime, 'turbulent');
+  assert.ok(r.frictionFactor > 0.01 && r.frictionFactor < 0.05, 'friction factor outside plausible Moody-chart range');
+});
+test('pipePressureDrop: laminar flow uses the exact f = 64/Re', () => {
+  // Very viscous fluid, low flow -> laminar (Re < 2300).
+  const r = pipe.pipePressureDrop({ flowM3S: 0.0001, diameterM: 0.05, lengthM: 50, densityKgM3: 900, viscosityPaS: 0.5 });
+  assert.equal(r.flowRegime, 'laminar');
+  const area = Math.PI / 4 * 0.05 * 0.05;
+  const v = 0.0001 / area;
+  const re = (900 * v * 0.05) / 0.5;
+  approx(r.frictionFactor, 64 / re, 1e-9);
+});
+test('pipePressureDrop: doubling length doubles friction drop (linear in L)', () => {
+  const a = pipe.pipePressureDrop({ flowM3S: 0.02, diameterM: 0.1, lengthM: 100, densityKgM3: 998, viscosityPaS: 0.001 });
+  const b = pipe.pipePressureDrop({ flowM3S: 0.02, diameterM: 0.1, lengthM: 200, densityKgM3: 998, viscosityPaS: 0.001 });
+  approx(b.frictionDropPa, a.frictionDropPa * 2, 1e-6);
+});
+test('pipeWallThickness: matches ASME B31.3 t = PD/(2(SE+PY)) by hand', () => {
+  const r = pipe.pipeWallThickness({ designPressureMPa: 2.0, outsideDiameterMm: 114.3, allowableStressMPa: 137.9, jointEfficiencyE: 1.0 });
+  approx(r.pressureDesignThicknessMm, (2.0 * 114.3) / (2 * (137.9 * 1.0 * 1.0 + 2.0 * 0.4)), 1e-9);
+  assert.equal(r.thinWallValid, true);
+});
+test('pipeWallThickness: flags when P/(SE) exceeds the 0.385 thin-wall limit', () => {
+  const r = pipe.pipeWallThickness({ designPressureMPa: 60, outsideDiameterMm: 114.3, allowableStressMPa: 137.9, jointEfficiencyE: 1.0 });
+  assert.equal(r.thinWallValid, false);
+});
+test('pipeWallThickness: mill tolerance and corrosion allowance both increase the nominal thickness ordered', () => {
+  const base = pipe.pipeWallThickness({ designPressureMPa: 2.0, outsideDiameterMm: 114.3, allowableStressMPa: 137.9 });
+  const withCA = pipe.pipeWallThickness({ designPressureMPa: 2.0, outsideDiameterMm: 114.3, allowableStressMPa: 137.9, corrosionAllowanceMm: 3 });
+  assert.ok(withCA.nominalThicknessMm > base.nominalThicknessMm);
+});
+test('reliefValveGas: matches the published API 520 worked example (~2.40 in2)', () => {
+  const r = pipe.reliefValveGas({
+    reliefRateLbHr: 50000, molecularWeight: 18, specificHeatRatioK: 1.26, temperatureF: 150,
+    compressibilityZ: 0.90, setPressurePsig: 300, overpressurePct: 10,
+  });
+  assert.ok(Math.abs(r.requiredAreaIn2 - 2.40) < 0.02, `expected ~2.40 in2, got ${r.requiredAreaIn2}`);
+});
+test('reliefValveGas: higher relief rate requires proportionally more area', () => {
+  const a = pipe.reliefValveGas({ reliefRateLbHr: 50000, molecularWeight: 18, specificHeatRatioK: 1.26, temperatureF: 150, setPressurePsig: 300 });
+  const b = pipe.reliefValveGas({ reliefRateLbHr: 100000, molecularWeight: 18, specificHeatRatioK: 1.26, temperatureF: 150, setPressurePsig: 300 });
+  approx(b.requiredAreaIn2, a.requiredAreaIn2 * 2, 1e-9);
+});
+test('reliefValveLiquid: matches the core API 520 liquid equation by hand', () => {
+  const r = pipe.reliefValveLiquid({ flowRateGpm: 500, specificGravity: 0.9, setPressurePsig: 150, overpressurePct: 10 });
+  const relP = 150 * 1.10;
+  const dP = relP - 0;
+  const manual = (500 / (38 * 0.65 * 1 * 1 * 1)) * Math.sqrt(0.9 / dP);
+  approx(r.requiredAreaIn2, manual, 1e-9);
+});
+test('reliefValveLiquid: rejects backpressure at or above relieving pressure', () => {
+  assert.throws(() => pipe.reliefValveLiquid({ flowRateGpm: 500, specificGravity: 0.9, setPressurePsig: 100, overpressurePct: 10, backpressurePsig: 200 }));
+});
+
+console.log('\n--- rotatingEquipment.js (pump, fan, bearing) ---');
+test('npshAvailable: matches hand calculation, and flags NPSHa <= 0', () => {
+  const r = rot.npshAvailable({ sourcePressureBarA: 1.013, vaporPressureBarA: 0.0234, specificGravity: 1.0, staticHeadM: 2, frictionLossM: 0.5 });
+  const manualHead = (1.013 - 0.0234) * 10.197 / 1.0;
+  approx(r.npshaM, manualHead + 2 - 0.5, 1e-6);
+  const bad = rot.npshAvailable({ sourcePressureBarA: 1.0, vaporPressureBarA: 0.9, specificGravity: 1.0, staticHeadM: -5, frictionLossM: 2 });
+  assert.ok(bad.npshaM <= 0);
+});
+test('npshMarginCheck: flags cavitation risk and adequate margin correctly', () => {
+  const bad = rot.npshMarginCheck(3, 5, 0.6);
+  assert.equal(bad.adequate, false);
+  const good = rot.npshMarginCheck(8, 5, 0.6);
+  assert.equal(good.adequate, true);
+});
+test('pumpAffinityLaws: Q~N, H~N^2, P~N^3 exactly', () => {
+  const r = rot.pumpAffinityLaws({ flowM3H: 100, headM: 50, powerKw: 20, speedRpm1: 1450, speedRpm2: 1160 });
+  const ratio = 1160 / 1450;
+  approx(r.flowM3H2, 100 * ratio, 1e-9);
+  approx(r.headM2, 50 * ratio * ratio, 1e-9);
+  approx(r.powerKw2, 20 * ratio * ratio * ratio, 1e-9);
+});
+test('fanAffinityLaws: same cube-law structure as pump affinity laws', () => {
+  const r = rot.fanAffinityLaws({ flowM3S: 2, pressurePa: 1000, powerKw: 5, speedRpm1: 1000, speedRpm2: 1500 });
+  const ratio = 1.5;
+  approx(r.pressurePa2, 1000 * ratio * ratio, 1e-9);
+  approx(r.powerKw2, 5 * ratio * ratio * ratio, 1e-9);
+});
+test('fanShaftPower: aerodynamic power is flow times pressure rise, shaft power scales by efficiency', () => {
+  const r = rot.fanShaftPower({ flowM3S: 2, pressureRisePa: 1000, totalEfficiencyPct: 70 });
+  approx(r.aeroPowerKw, (2 * 1000) / 1000, 1e-9);
+  approx(r.shaftPowerKw, r.aeroPowerKw / 0.7, 1e-9);
+});
+test('bearingL10Life: matches ISO 281 (C/P)^p by hand for both ball and roller', () => {
+  const ball = rot.bearingL10Life({ dynamicLoadRatingKn: 35, equivalentLoadKn: 5, bearingType: 'ball', speedRpm: 1450 });
+  approx(ball.l10MillionRev, Math.pow(35 / 5, 3), 1e-6);
+  approx(ball.l10Hours, (ball.l10MillionRev * 1e6) / (60 * 1450), 1e-6);
+  const roller = rot.bearingL10Life({ dynamicLoadRatingKn: 35, equivalentLoadKn: 5, bearingType: 'roller', speedRpm: 1450 });
+  approx(roller.l10MillionRev, Math.pow(35 / 5, 10 / 3), 1e-6);
+});
+test('bearingL10Life: higher load gives shorter life (inverse relationship)', () => {
+  const light = rot.bearingL10Life({ dynamicLoadRatingKn: 35, equivalentLoadKn: 5, speedRpm: 1450 });
+  const heavy = rot.bearingL10Life({ dynamicLoadRatingKn: 35, equivalentLoadKn: 10, speedRpm: 1450 });
+  assert.ok(heavy.l10Hours < light.l10Hours);
+});
+
+
+console.log('\n--- heatExchanger.js (LMTD & required area) ---');
+test('lmtd: matches hand calculation for a counter-current exchanger', () => {
+  const r = hx.lmtd({ hotInC: 150, hotOutC: 90, coldInC: 30, coldOutC: 80 });
+  approx(r.dT1, 70, 1e-9);
+  approx(r.dT2, 60, 1e-9);
+  approx(r.lmtdC, (70-60)/Math.log(70/60), 1e-9);
+});
+test('lmtd: rejects a genuine temperature cross (hot outlet colder than cold inlet)', () => {
+  assert.throws(() => hx.lmtd({ hotInC: 100, hotOutC: 25, coldInC: 30, coldOutC: 90 }));
+});
+test('lmtd: handles the equal-dT special case (LMTD reduces to dT itself)', () => {
+  const r = hx.lmtd({ hotInC: 100, hotOutC: 70, coldInC: 40, coldOutC: 70 });
+  approx(r.dT1, 30, 1e-9);
+  approx(r.dT2, 30, 1e-9);
+  approx(r.lmtdC, 30, 1e-9);
+});
+test('heatExchangerArea: A = Q/(U*F*LMTD), and F<1 increases required area', () => {
+  const l = hx.lmtd({ hotInC: 150, hotOutC: 90, coldInC: 30, coldOutC: 80 });
+  const withF1 = hx.heatExchangerArea({ dutyKW: 500, uValueWm2K: 800, lmtdC: l.lmtdC, correctionFactorF: 1.0 });
+  const withF09 = hx.heatExchangerArea({ dutyKW: 500, uValueWm2K: 800, lmtdC: l.lmtdC, correctionFactorF: 0.9 });
+  approx(withF1.areaM2, (500*1000)/(800*1.0*l.lmtdC), 1e-9);
+  assert.ok(withF09.areaM2 > withF1.areaM2);
+});
+
+console.log('\n--- rotatingEquipment.js pumpPower (absolute power, not affinity scaling) ---');
+test('pumpPower: hydraulic power matches rho*g*Q*H by hand', () => {
+  const r = rot.pumpPower({ flowM3H: 180, headM: 30, specificGravity: 1.0, pumpEfficiencyPct: 75, motorEfficiencyPct: 93 });
+  const manualHydKw = (1000 * 9.80665 * (180/3600) * 30) / 1000;
+  approx(r.hydraulicPowerKw, manualHydKw, 1e-6);
+  approx(r.brakePowerKw, manualHydKw / 0.75, 1e-6);
+  approx(r.motorInputKw, manualHydKw / 0.75 / 0.93, 1e-6);
+});
+test('pumpPower: motor input is null when motor efficiency is not supplied', () => {
+  const r = rot.pumpPower({ flowM3H: 180, headM: 30, specificGravity: 1.0, pumpEfficiencyPct: 75 });
+  assert.equal(r.motorInputKw, null);
+});
+test('pumpPower: a denser fluid requires proportionally more power at the same duty', () => {
+  const water = rot.pumpPower({ flowM3H: 100, headM: 20, specificGravity: 1.0, pumpEfficiencyPct: 70 });
+  const brine = rot.pumpPower({ flowM3H: 100, headM: 20, specificGravity: 1.2, pumpEfficiencyPct: 70 });
+  approx(brine.brakePowerKw, water.brakePowerKw * 1.2, 1e-9);
+});
+test('pumpPower: rejects zero or negative flow, head, and efficiency', () => {
+  assert.throws(() => rot.pumpPower({ flowM3H: 0, headM: 30, specificGravity: 1, pumpEfficiencyPct: 75 }));
+  assert.throws(() => rot.pumpPower({ flowM3H: 100, headM: 0, specificGravity: 1, pumpEfficiencyPct: 75 }));
+  assert.throws(() => rot.pumpPower({ flowM3H: 100, headM: 30, specificGravity: 1, pumpEfficiencyPct: 0 }));
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

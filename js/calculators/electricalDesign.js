@@ -364,3 +364,249 @@ export function transformerLoading({
     annualLossKWh: (totalLossW / 1000) * 8760,
   };
 }
+
+// ============================================================
+// 8. GROUNDING GRID DESIGN (IEEE 80, SIMPLIFIED / SINGLE-LAYER SOIL)
+// ============================================================
+//
+// Follows the IEEE Std 80 Sverak simplified grid resistance equation and
+// the standard tolerable touch/step voltage equations for a UNIFORM
+// (single-layer) soil model. This is the same level of rigor as a
+// preliminary/screening study \u2014 real substation and plant earthing
+// designs with non-uniform soil, complex grid geometry, or GIS equipment
+// need the full IEEE 80 mesh-voltage procedure (Annex B) or software such
+// as CDEGS, which this does not attempt to replace.
+//
+// GPR (ground potential rise) is compared against the tolerable touch
+// voltage as a conservative screening check: actual touch voltage at the
+// grid centre is normally lower than GPR because of grid meshing, but can
+// approach GPR near the perimeter, so this comparison errs safe rather
+// than claiming the precision of a full mesh-voltage calculation.
+
+export const SURFACE_MATERIALS = {
+  'none (native soil)': { resistivity: null, thicknessM: 0 },
+  'crushed rock (dry)': { resistivity: 3000, thicknessM: 0.10 },
+  'crushed rock (wet)': { resistivity: 1000, thicknessM: 0.10 },
+  'asphalt': { resistivity: 10000, thicknessM: 0.08 },
+  'concrete': { resistivity: 21, thicknessM: 0.10 },
+};
+
+/**
+ * Grid resistance to remote earth, Sverak's simplified equation
+ * (IEEE Std 80, single uniform soil layer).
+ *
+ *   Rg = \u03c1 \u00b7 [ 1/Lt + (1/\u221a(20\u00b7A)) \u00b7 (1 + 1/(1 + h\u00b7\u221a(20/A))) ]
+ *
+ * @param {number} soilResistivityOhmM - \u03c1, soil resistivity, \u03a9\u00b7m
+ * @param {number} totalConductorLengthM - Lt, total buried conductor length (grid + rods), m
+ * @param {number} gridAreaM2 - A, area enclosed by the grid, m\u00b2
+ * @param {number} burialDepthM - h, grid burial depth, m
+ */
+export function gridResistance(soilResistivityOhmM, totalConductorLengthM, gridAreaM2, burialDepthM) {
+  if (!(soilResistivityOhmM > 0)) throw new Error('Soil resistivity must be greater than zero.');
+  if (!(totalConductorLengthM > 0)) throw new Error('Total conductor length must be greater than zero.');
+  if (!(gridAreaM2 > 0)) throw new Error('Grid area must be greater than zero.');
+  if (!(burialDepthM >= 0)) throw new Error('Burial depth cannot be negative.');
+  const term1 = 1 / totalConductorLengthM;
+  const term2 = (1 / Math.sqrt(20 * gridAreaM2)) * (1 + 1 / (1 + burialDepthM * Math.sqrt(20 / gridAreaM2)));
+  return soilResistivityOhmM * (term1 + term2);
+}
+
+/**
+ * Surface derating factor Cs for a thin high-resistivity surface layer
+ * (crushed rock, asphalt) over native soil \u2014 reduces the current through
+ * a person's feet and so raises the tolerable touch/step voltage.
+ * Cs = 1 if no surface layer is used (bare soil under the person's feet).
+ */
+export function surfaceDeratingFactor(nativeSoilResistivityOhmM, surfaceResistivityOhmM, surfaceThicknessM) {
+  if (!surfaceResistivityOhmM || surfaceThicknessM <= 0) return 1;
+  if (!(nativeSoilResistivityOhmM > 0)) throw new Error('Native soil resistivity must be greater than zero.');
+  const ratio = nativeSoilResistivityOhmM / surfaceResistivityOhmM;
+  return 1 - (0.09 * (1 - ratio)) / (2 * surfaceThicknessM + 0.09);
+}
+
+/**
+ * Tolerable touch and step voltages, IEEE Std 80 equations, for a 50 kg or
+ * 70 kg body weight.
+ */
+export function tolerableVoltages({ bodyWeightKg = 70, cs = 1, surfaceResistivityOhmM = 0, faultDurationS }) {
+  if (![50, 70].includes(bodyWeightKg)) throw new Error('Body weight must be 50 or 70 kg (the two cases IEEE 80 tabulates).');
+  if (!(faultDurationS > 0)) throw new Error('Fault duration must be greater than zero.');
+  const k = bodyWeightKg === 50 ? 0.116 : 0.157;
+  const term = cs * surfaceResistivityOhmM;
+  const touch = (1000 + 1.5 * term) * (k / Math.sqrt(faultDurationS));
+  const step = (1000 + 6 * term) * (k / Math.sqrt(faultDurationS));
+  return { touchVoltageV: touch, stepVoltageV: step };
+}
+
+/**
+ * Full grounding grid screening check: resistance, GPR, tolerable limits,
+ * and a conservative pass/fail comparison.
+ */
+export function groundingGridCheck({
+  soilResistivityOhmM, totalConductorLengthM, gridAreaM2, burialDepthM,
+  groundFaultCurrentA, faultDurationS, bodyWeightKg = 70,
+  surfaceMaterial = 'none (native soil)',
+}) {
+  const rg = gridResistance(soilResistivityOhmM, totalConductorLengthM, gridAreaM2, burialDepthM);
+  const gprV = groundFaultCurrentA * rg;
+  const surf = SURFACE_MATERIALS[surfaceMaterial] || SURFACE_MATERIALS['none (native soil)'];
+  const cs = surfaceMaterial === 'none (native soil)' ? 1
+    : surfaceDeratingFactor(soilResistivityOhmM, surf.resistivity, surf.thicknessM);
+  const tol = tolerableVoltages({
+    bodyWeightKg, cs,
+    surfaceResistivityOhmM: surfaceMaterial === 'none (native soil)' ? soilResistivityOhmM : surf.resistivity,
+    faultDurationS,
+  });
+  const marginPct = ((tol.touchVoltageV - gprV) / tol.touchVoltageV) * 100;
+  return {
+    gridResistanceOhm: rg,
+    gprV,
+    tolerableTouchV: tol.touchVoltageV,
+    tolerableStepV: tol.stepVoltageV,
+    cs,
+    marginPct,
+    check: gprV <= tol.touchVoltageV ? 'SCREENING PASS' : 'EXCEEDS TOLERABLE \u2014 REDESIGN NEEDED',
+    note: 'GPR vs tolerable touch voltage is a CONSERVATIVE screening check, not the full IEEE 80 mesh-voltage calculation \u2014 actual touch voltage at the grid centre is normally lower than GPR. Uniform (single-layer) soil model. A full design needs two-layer soil data and the complete Annex B mesh/step voltage procedure, or dedicated software.',
+  };
+}
+
+// ============================================================
+// 9. NEUTRAL GROUNDING RESISTOR (NGR) SIZING
+// ============================================================
+//
+// For a resistance-grounded MV system, the NGR dominates the ground-fault
+// loop impedance by design, so fault current is set almost entirely by the
+// resistor value: Ig \u2248 V_LN / R_NGR. Sizing works backward from a target
+// fault current, chosen to be high enough for sensitive protection to see
+// reliably, and low enough to limit equipment damage and touch voltage.
+
+export function ngrSizing({ systemVoltageV, targetFaultCurrentA, faultDurationS = 10 }) {
+  if (!(systemVoltageV > 0)) throw new Error('System voltage must be greater than zero.');
+  if (!(targetFaultCurrentA > 0)) throw new Error('Target ground fault current must be greater than zero.');
+  if (!(faultDurationS > 0)) throw new Error('Rated fault duration must be greater than zero.');
+  const vLN = systemVoltageV / sqrt3();
+  const resistanceOhm = vLN / targetFaultCurrentA;
+  // Short-time (e.g. 10 s) thermal rating \u2014 standard practice for MV NGRs,
+  // which are not designed for continuous fault current.
+  const shortTimeRatingKW = (targetFaultCurrentA * targetFaultCurrentA * resistanceOhm) / 1000;
+  return {
+    resistanceOhm,
+    vLN,
+    shortTimeRatingKW,
+    faultDurationS,
+    note: `Sized for ${faultDurationS} s short-time rating \u2014 standard for MV neutral grounding resistors, which are not intended to carry fault current continuously. Confirm the resistor manufacturer's actual duty-cycle rating covers your protection clearing time with margin.`,
+  };
+}
+
+// ============================================================
+// 10. STANDBY / EMERGENCY GENERATOR SIZING
+// ============================================================
+//
+// Two checks matter, and the larger one governs: the RUNNING kVA of every
+// load together, and the STARTING kVA when the largest motor starts DOL
+// while everything else is already running \u2014 which is usually the bigger
+// number, and the one that is easy to overlook.
+
+export function generatorSizing({ loads, largestMotorKW, largestMotorPF = 0.85, largestMotorStartingMultiple = 6, designMarginPct = 20 }) {
+  if (!Array.isArray(loads) || loads.length === 0) throw new Error('At least one load is required (each with kW and power factor).');
+  for (const l of loads) {
+    if (!(l.kW > 0)) throw new Error('Every load needs a kW greater than zero.');
+    if (!(l.pf > 0 && l.pf <= 1)) throw new Error('Every load needs a power factor greater than 0 and no more than 1.');
+  }
+  if (!(largestMotorKW > 0)) throw new Error('Largest motor kW must be greater than zero.');
+  if (!(designMarginPct >= 0)) throw new Error('Design margin cannot be negative.');
+
+  const totalRunningKW = loads.reduce((a, l) => a + l.kW, 0);
+  const totalRunningKVA = loads.reduce((a, l) => a + l.kW / l.pf, 0);
+
+  // Largest motor's own running kVA, to subtract before adding its starting kVA.
+  const motorRunningKVA = largestMotorKW / largestMotorPF;
+  const motorStartingKVA = motorRunningKVA * largestMotorStartingMultiple;
+  const startingKVA = (totalRunningKVA - motorRunningKVA) + motorStartingKVA;
+
+  const governing = startingKVA >= totalRunningKVA ? 'STARTING (largest motor DOL start)' : 'RUNNING (steady-state load)';
+  const requiredKVA = Math.max(totalRunningKVA, startingKVA) * (1 + designMarginPct / 100);
+
+  return {
+    totalRunningKW, totalRunningKVA, motorStartingKVA, startingKVA,
+    governing, requiredKVA,
+    note: governing.startsWith('STARTING')
+      ? `The starting surge (${startingKVA.toFixed(0)} kVA) exceeds steady running load (${totalRunningKVA.toFixed(0)} kVA) \u2014 this is the case that is easy to miss if a generator is sized only for running load. Recommended generator size includes a ${designMarginPct}% margin: ${requiredKVA.toFixed(0)} kVA.`
+      : `Steady running load (${totalRunningKVA.toFixed(0)} kVA) governs over the motor starting surge (${startingKVA.toFixed(0)} kVA) here. Recommended generator size includes a ${designMarginPct}% margin: ${requiredKVA.toFixed(0)} kVA.`,
+  };
+}
+
+// ============================================================
+// 11. VOLTAGE UNBALANCE & MOTOR DERATING (NEMA MG-1)
+// ============================================================
+//
+// %unbalance = 100 \u00d7 (max deviation from average) / average, using the
+// NEMA/IEEE definition (max deviation, not the more conservative IEC
+// definition using sequence components). Derating follows the SHAPE of the
+// widely published NEMA MG-1 Figure 20 curve \u2014 NEMA publishes this as a
+// CHART, not a closed-form equation, so this is an interpolated
+// approximation of that published curve, not a substitute for it.
+
+const NEMA_DERATING_POINTS = [
+  [0, 1.00], [1, 0.98], [2, 0.95], [3, 0.88], [4, 0.82], [5, 0.75],
+];
+
+export function voltageUnbalance(v1, v2, v3) {
+  for (const v of [v1, v2, v3]) if (!(v > 0)) throw new Error('All three line voltages must be greater than zero.');
+  const avg = (v1 + v2 + v3) / 3;
+  const maxDev = Math.max(Math.abs(v1 - avg), Math.abs(v2 - avg), Math.abs(v3 - avg));
+  const unbalancePct = (maxDev / avg) * 100;
+
+  let deratingFactor;
+  if (unbalancePct >= 5) {
+    deratingFactor = NEMA_DERATING_POINTS[NEMA_DERATING_POINTS.length - 1][1];
+  } else {
+    let lo = NEMA_DERATING_POINTS[0], hi = NEMA_DERATING_POINTS[NEMA_DERATING_POINTS.length - 1];
+    for (let i = 0; i < NEMA_DERATING_POINTS.length - 1; i++) {
+      if (unbalancePct >= NEMA_DERATING_POINTS[i][0] && unbalancePct <= NEMA_DERATING_POINTS[i + 1][0]) {
+        lo = NEMA_DERATING_POINTS[i]; hi = NEMA_DERATING_POINTS[i + 1]; break;
+      }
+    }
+    const frac = hi[0] === lo[0] ? 0 : (unbalancePct - lo[0]) / (hi[0] - lo[0]);
+    deratingFactor = lo[1] + frac * (hi[1] - lo[1]);
+  }
+
+  return {
+    averageV: avg, maxDeviationV: maxDev, unbalancePct, deratingFactor,
+    exceedsNemaLimit: unbalancePct > 5,
+    note: unbalancePct > 5
+      ? `${unbalancePct.toFixed(2)}% exceeds the 5% limit NEMA MG-1 recommends never operating above \u2014 this is not just a derating case, it is outside the range NEMA characterizes at all.`
+      : `Approximates the published NEMA MG-1 Figure 20 curve by interpolation \u2014 for a specific motor, check the manufacturer's own derating curve where precision matters.`,
+  };
+}
+
+// ============================================================
+// 12. TRANSFORMER INRUSH CURRENT ESTIMATE
+// ============================================================
+//
+// Inrush depends on core saturation characteristics, residual flux and
+// switching angle \u2014 not something derivable from nameplate data alone.
+// This applies a PUBLISHED TYPICAL multiple of rated current with
+// exponential decay, so protection settings (particularly instantaneous
+// elements) can be checked against it without risk of nuisance tripping
+// on energization. The multiple and time constant are standard guideline
+// RANGES from transformer protection references, supplied as inputs
+// rather than invented \u2014 a real inrush study uses the manufacturer's own
+// data where precision matters.
+
+export function transformerInrush({ ratedCurrentA, inrushMultiple = 10, timeConstantS = 0.1, evaluateAtS = 0.01 }) {
+  if (!(ratedCurrentA > 0)) throw new Error('Rated current must be greater than zero.');
+  if (!(inrushMultiple > 1)) throw new Error('Inrush multiple must be greater than 1 (it is a multiple of rated current).');
+  if (!(timeConstantS > 0)) throw new Error('Decay time constant must be greater than zero.');
+  if (!(evaluateAtS >= 0)) throw new Error('Evaluation time cannot be negative.');
+  const peakInrushA = ratedCurrentA * inrushMultiple;
+  const atTimeA = peakInrushA * Math.exp(-evaluateAtS / timeConstantS);
+  // Time for inrush to decay to within 10% of rated current \u2014 a practical
+  // marker for how long an instantaneous element needs to ride through.
+  const decayTo110PctS = timeConstantS * Math.log(inrushMultiple / 1.1);
+  return {
+    peakInrushA, atTimeA, decayTo110PctS,
+    note: 'Multiple and decay time constant are typical GUIDELINE values, not calculated from this transformer\u2019s actual core design \u2014 confirm against manufacturer data or a real inrush study before setting protection close to this estimate.',
+  };
+}

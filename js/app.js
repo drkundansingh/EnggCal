@@ -18,6 +18,10 @@ import * as steam from './calculators/steamTable.js';
 import * as ec from './calculators/electricalCommon.js';
 import * as sc from './calculators/shortCircuit.js';
 import * as idmt from './calculators/idmt.js';
+import * as rs from './calculators/relaySettings.js';
+import * as pipe from './calculators/piping.js';
+import * as rot from './calculators/rotatingEquipment.js';
+import * as hx from './calculators/heatExchanger.js';
 import * as ctEng from './calculators/ctEngine.js';
 import * as tfProt from './calculators/transformerProtection.js';
 import * as motProt from './calculators/motorProtection.js';
@@ -107,6 +111,7 @@ const NAV = [
     group: 'Electrical', items: [
       { id: 'short-circuit', label: 'Short Circuit / Fault', icon: '⚡' },
       { id: 'idmt', label: 'IDMT Relay Curves', icon: '⌒' },
+      { id: 'relay-settings', label: 'Relay Settings (ABB/Siemens-style)', icon: '⚙' },
       { id: 'ct-sizing', label: 'CT Sizing & Burden', icon: '⧖' },
       { id: 'transformer-prot', label: 'Transformer Protection', icon: '⧉' },
       { id: 'motor-prot', label: 'Motor Protection', icon: '⟳' },
@@ -118,6 +123,22 @@ const NAV = [
       { id: 'pf-correction', label: 'Power Factor Correction', icon: '≅' },
       { id: 'battery-sizing', label: 'Battery / DC Sizing', icon: '▤' },
       { id: 'tx-loading', label: 'Transformer Loading', icon: '◱' },
+      { id: 'grounding-grid', label: 'Grounding Grid Design', icon: '⚓' },
+      { id: 'ngr-sizing', label: 'NGR Sizing', icon: '⊙' },
+      { id: 'generator-sizing', label: 'Generator Sizing', icon: '⚡' },
+      { id: 'voltage-unbalance', label: 'Voltage Unbalance & Derating', icon: '≈' },
+      { id: 'tx-inrush', label: 'Transformer Inrush', icon: '⤴' },
+    ],
+  },
+  {
+    group: 'Process & Mechanical', items: [
+      { id: 'pipe-pressure-drop', label: 'Pipe Pressure Drop', icon: '→' },
+      { id: 'pipe-wall-thickness', label: 'Pipe Wall Thickness (ASME B31.3)', icon: '◯' },
+      { id: 'relief-valve', label: 'Relief Valve Sizing (API 520)', icon: '⚠' },
+      { id: 'pump-npsh', label: 'Pump NPSH & Affinity Laws', icon: '↻' },
+      { id: 'fan-laws', label: 'Fan / Blower Laws & Power', icon: '≈' },
+      { id: 'bearing-life', label: 'Bearing L10 Life (ISO 281)', icon: '●' },
+      { id: 'heat-exchanger', label: 'Heat Exchanger LMTD & Area', icon: '⇌' },
     ],
   },
   {
@@ -203,6 +224,314 @@ async function attemptAdminLogin() {
   }
 }
 
+// ---------- SEO metadata (per route) ----------
+// Every route gets its own title, meta description, and canonical URL,
+// applied on navigation via history.pushState (see navigate()/applySeo()
+// below). Without this the whole site is one URL and no individual
+// calculator can ever be found or ranked for its own search query.
+const SITE_URL = 'https://engineeringhubcalc.com';
+const SITE_NAME = 'Engineering Calculator Hub';
+const DEFAULT_DESCRIPTION = 'Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers \u2014 real formulas, verified against standards, no signup required.';
+const SEO_META = {
+  '': { title: 'Engineering Calculator Hub \u2014 Free Power Plant & Electrical Calculators', description: DEFAULT_DESCRIPTION },
+  'thermal-plant': { title: 'Thermal Power Plant Heat Rate & Efficiency Estimator', description: 'Estimate thermal power plant heat rate, efficiency, fuel consumption and coal/gas cost from unit MW rating \u2014 free online calculator.' },
+  'protection': { title: 'Turbine & Boiler Protection Parameter Registry (98 Trips)', description: 'Reference registry of 98 turbine and boiler protection trip parameters \u2014 ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.' },
+  'control-loops': { title: 'Power Plant Control Loops \u2014 Live Interactive Simulation', description: 'Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.' },
+  'short-circuit': { title: 'Short Circuit / Fault Current Calculator (IEC 60909)', description: 'Calculate three-phase and single-phase-to-ground short circuit fault current per IEC 60909 \u2014 free online electrical fault calculator.' },
+  'idmt': { title: 'IDMT Relay Curve Calculator (IEC 60255 & IEEE C37.112)', description: 'Calculate IDMT relay operating time for Standard/Very/Extremely Inverse curves per IEC 60255 and IEEE C37.112 \u2014 free relay curve calculator.' },
+  'relay-settings': { title: 'Multi-Stage Overcurrent Relay Setting Calculator', description: 'Calculate I>, I>>, I>>> overcurrent relay pickup settings in primary amps and per-unit \u2014 for ABB, Siemens and equivalent numerical relays.' },
+  'ct-sizing': { title: 'CT Sizing & Burden Calculator', description: 'Size current transformers for protection and metering \u2014 knee-point voltage, burden, and accuracy class calculations.' },
+  'transformer-prot': { title: 'Transformer Protection Setting Calculator', description: 'Auto-generate transformer overcurrent, earth fault, differential and REF protection settings from nameplate data.' },
+  'motor-prot': { title: 'Motor Protection Relay Setting Calculator', description: 'Calculate motor thermal overload, overcurrent and earth fault protection settings from motor nameplate FLC and locked-rotor data.' },
+  'lsig': { title: 'LSIG Circuit Breaker Setting Calculator', description: 'Calculate Long-time, Short-time, Instantaneous and Ground fault (LSIG) circuit breaker trip unit settings.' },
+  'coordination': { title: 'Relay Coordination & Discrimination Check', description: 'Check time-current coordination and discrimination margin between upstream and downstream protection relays.' },
+  'cable-sizing': { title: 'Cable Sizing & Voltage Drop Calculator', description: 'Size power cables for current-carrying capacity and voltage drop, with derating for grouping, temperature and installation method.' },
+  'cable-withstand': { title: 'Cable Short-Circuit Withstand (Adiabatic) Calculator', description: 'Calculate minimum cable cross-sectional area to withstand short-circuit fault current using the adiabatic equation.' },
+  'motor-start': { title: 'Motor Starting Voltage Dip Calculator', description: 'Estimate voltage dip during DOL motor starting and its impact on the supply network and other connected loads.' },
+  'pf-correction': { title: 'Power Factor Correction Capacitor Calculator', description: 'Calculate the capacitor bank kVAR needed to correct power factor from an existing value to a target value.' },
+  'battery-sizing': { title: 'Battery / DC System Sizing Calculator', description: 'Size a substation DC battery bank for control, protection and emergency load duty cycles.' },
+  'tx-loading': { title: 'Transformer Loading & Loss Calculator', description: 'Calculate transformer iron loss, copper loss, efficiency and loading at any load point from nameplate data.' },
+  'grounding-grid': { title: 'Grounding Grid Design Calculator (IEEE 80)', description: 'Calculate substation grounding grid resistance and screen ground potential rise against IEEE 80 tolerable touch voltage.' },
+  'ngr-sizing': { title: 'Neutral Grounding Resistor (NGR) Sizing Calculator', description: 'Size a neutral grounding resistor for a resistance-grounded MV system from system voltage and target fault current.' },
+  'generator-sizing': { title: 'Standby Generator Sizing Calculator', description: 'Size a standby generator for connected running load and the DOL starting surge of the largest motor.' },
+  'voltage-unbalance': { title: 'Voltage Unbalance & Motor Derating Calculator (NEMA MG-1)', description: 'Calculate three-phase voltage unbalance and the resulting motor derating factor per NEMA MG-1.' },
+  'tx-inrush': { title: 'Transformer Inrush Current Calculator', description: 'Estimate transformer energization inrush current and decay time to check protection relay settings.' },
+  'dp-flow-wizard': { title: 'DP to Flow Calculator \u2014 Orifice, Venturi & Nozzle', description: 'Convert differential pressure to mass or volumetric flow for orifice plates, venturis and flow nozzles \u2014 step-by-step wizard.' },
+  'dp-flow-cal': { title: 'DP to Flow Calculator \u2014 No Pipe or Orifice Diameter Needed', description: 'Calculate flow from a DP transmitter\u2019s calibrated range alone, with real IAPWS-IF97 steam density compensation \u2014 no geometry required.' },
+  'steam-props': { title: 'Steam Properties Calculator (IAPWS-IF97)', description: 'Calculate real steam density and specific volume from pressure and temperature using IAPWS-IF97 \u2014 not an ideal-gas approximation.' },
+  'converter': { title: 'Engineering Unit Converter', description: 'Convert between engineering units for pressure, flow, temperature, length, and more.' },
+  'transmitter': { title: '4\u201320 mA Transmitter Calculator', description: 'Convert between 4\u201320 mA signal, percentage of range, and engineering units for any transmitter.' },
+  'dp-level': { title: 'DP Level Transmitter Calculator', description: 'Calculate differential pressure level transmitter range for open and closed (wet-leg/dry-leg) tank applications.' },
+  'orifice': { title: 'Orifice Plate Flow Calculator', description: 'Size an orifice plate flow element and calculate discharge coefficient, beta ratio and differential pressure.' },
+  'control-valve': { title: 'Control Valve Sizing Calculator (Cv)', description: 'Calculate control valve flow coefficient (Cv) for liquid and gas service.' },
+  'ip-converter': { title: 'I/P Converter Calculator', description: 'Convert between 4\u201320 mA current signal and 3\u201315 psi pneumatic output for I/P converters.' },
+  'rtd': { title: 'RTD Temperature Calculator (Pt100)', description: 'Convert between RTD resistance and temperature for Pt100 and other platinum resistance thermometers.' },
+  'thermocouple': { title: 'Thermocouple Temperature Calculator', description: 'Convert between thermocouple millivolt output and temperature for Type J, K, T, R, S and other types.' },
+  'pid': { title: 'PID Controller Tuning Calculator', description: 'Calculate PID controller gains and simulate step response for process control loop tuning.' },
+  'loop-uncertainty': { title: 'Instrument Loop Uncertainty Calculator', description: 'Calculate total measurement loop uncertainty by combining individual instrument accuracy contributions.' },
+  'cavitation': { title: 'Control Valve Cavitation Check Calculator', description: 'Check a control valve for cavitation and flashing risk from upstream/downstream pressure and vapor pressure.' },
+  'formula-library': { title: 'Engineering Formula Library', description: 'Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.' },
+  'history': { title: 'Calculation History', description: 'Your saved calculation history for this device.', noindex: true },
+  'support': { title: 'Support the Project \u2014 Engineering Calculator Hub', description: 'Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.' },
+  'reviews': { title: 'Reviews & Ratings \u2014 Engineering Calculator Hub', description: 'Read reviews and ratings from engineers using Engineering Calculator Hub.' },
+  'admin': { title: 'Admin', description: 'Site administration.', noindex: true },
+  'pipe-pressure-drop': { title: 'Pipe Pressure Drop Calculator (Darcy-Weisbach)', description: 'Calculate pipe friction pressure drop, velocity and flow regime using the Darcy-Weisbach equation with Swamee-Jain friction factor.' },
+  'pipe-wall-thickness': { title: 'Pipe Wall Thickness Calculator (ASME B31.3)', description: 'Calculate minimum required process piping wall thickness per ASME B31.3, with corrosion allowance and mill tolerance.' },
+  'relief-valve': { title: 'Relief Valve (PSV) Sizing Calculator (API 520)', description: 'Preliminary relief valve orifice area sizing for gas/vapor and liquid service per API 520 Part I core equations.' },
+  'pump-npsh': { title: 'Pump NPSH & Affinity Laws Calculator', description: 'Calculate NPSH available, check margin against NPSH required, and apply pump affinity laws for a speed change.' },
+  'fan-laws': { title: 'Fan / Blower Affinity Laws & Power Calculator', description: 'Apply fan affinity laws for a speed change and calculate fan shaft power from flow, pressure rise and efficiency.' },
+  'bearing-life': { title: 'Bearing L10 Life Calculator (ISO 281)', description: 'Calculate rolling element bearing L10 life in revolutions and hours from dynamic load rating and equivalent load.' },
+  'heat-exchanger': { title: 'Heat Exchanger LMTD & Area Calculator', description: 'Calculate log mean temperature difference (LMTD) and required heat transfer area for a heat exchanger from its four terminal temperatures.' },
+};
+
+// ---------- On-page educational content (SEO + genuine user value) ----------
+// A calculator with no surrounding explanation is "thin content" by search
+// engine standards -- it doesn't help anyone who lands on it from a search
+// for "how does X work", and it gives Google nothing substantive to index.
+// This adds real, technically accurate explanatory text and FAQs to the
+// pages most likely to receive organic search traffic, with FAQPage
+// structured data so eligible answers can also surface directly in search
+// results. Deliberately not applied to all 48 routes -- a handful of pages
+// with genuine depth outranks many pages with token filler text, and every
+// answer here says something a reader couldn't already get from the
+// calculator's own output.
+const PAGE_CONTENT = {
+  'orifice': {
+    about: 'An orifice plate is a thin plate with a precisely machined bore, clamped between two pipe flanges. Forcing flow through the smaller bore accelerates it and drops its pressure; measuring that pressure drop with a DP transmitter gives a reading proportional to the square of the flow rate. It remains the most common flow element in industry because it has no moving parts, is cheap to replace, and its behaviour is described by a published international standard (ISO 5167) rather than a manufacturer\u2019s proprietary curve. The trade-off is a real, permanent pressure loss and lower turndown than a venturi or flow nozzle.',
+    faq: [
+      { q: 'What beta ratio (bore/pipe diameter) should I use?', a: 'Most general process applications use a beta ratio between 0.4 and 0.7. Lower beta gives a larger, easier-to-measure differential pressure but a bigger permanent pressure loss; higher beta reduces both. Beta above about 0.75 starts to lose accuracy under ISO 5167.' },
+      { q: 'How accurate is an orifice plate compared to a venturi?', a: 'A well-installed, well-maintained orifice plate is typically accurate to around \u00b10.5\u20131% of reading under ISO 5167. A venturi meter is usually similar or slightly better and has a much lower permanent pressure loss, but costs several times more and needs more installation length.' },
+      { q: 'Why does this calculator ask for pipe diameter AND bore separately, not just the ratio?', a: 'The discharge coefficient and expansibility factor in ISO 5167 depend on the actual Reynolds number and beta ratio together, not the ratio alone \u2014 the same beta at a different pipe size behaves slightly differently.' },
+      { q: 'Does the orifice plate need straight upstream pipe?', a: 'Yes \u2014 ISO 5167 specifies minimum straight-run lengths (often 10\u201344 pipe diameters upstream depending on the upstream fitting) to let the velocity profile settle before the plate. Skipping this is one of the most common real-world sources of orifice-flow error.' },
+    ],
+  },
+  'short-circuit': {
+    about: 'Short circuit (fault) current calculations size every piece of protective equipment in an electrical system \u2014 breaker interrupting ratings, busbar bracing, cable withstand, and relay pickup settings. IEC 60909 is the international standard method: it uses an equivalent voltage source at the fault point rather than trying to track the actual pre-fault voltage and load state, which makes the calculation repeatable and conservative. Getting this number right matters directly for safety: a breaker rated below the actual available fault current can fail catastrophically instead of clearing the fault.',
+    faq: [
+      { q: 'What is the difference between symmetrical and asymmetrical fault current?', a: 'Symmetrical current is the steady-state RMS value after the initial DC offset decays. Asymmetrical current includes that DC offset and is higher in the first few cycles \u2014 breakers are rated for both a symmetrical interrupting capability and often an asymmetrical (or "close and latch") rating.' },
+      { q: 'Why does the X/R ratio matter?', a: 'X/R ratio sets how large the DC offset is and how long it takes to decay. A high X/R (common near large transformers and generators) means a bigger asymmetrical peak in the first cycle, even at the same symmetrical fault current \u2014 this is what breaker asymmetrical/close-and-latch ratings are checking against.' },
+      { q: 'Is three-phase or single-phase-to-ground fault current usually higher?', a: 'It depends entirely on the system\u2019s grounding. On a solidly grounded system, single-phase-to-ground fault current is often close to or above the three-phase value. On a resistance-grounded or ungrounded system, it is normally far lower \u2014 sometimes deliberately limited to tens of amps by a neutral grounding resistor.' },
+      { q: 'Do I need the full IEC 60909 correction factors for a quick check?', a: 'For final equipment specification, yes \u2014 IEC 60909 includes voltage factor c, impedance correction factors, and near/far-from-generator distinctions that this calculator does not fully replace. For an early sizing estimate it is normally the right order of magnitude.' },
+    ],
+  },
+  'cable-sizing': {
+    about: 'Sizing a power cable is really two independent checks, and the cable must pass both: current-carrying capacity (ampacity), so the conductor doesn\u2019t overheat, and voltage drop, so equipment at the far end still sees an acceptable supply voltage. A cable sized only for ampacity can still fail on voltage drop over a long run \u2014 and vice versa on a short, heavily loaded run. Ampacity itself isn\u2019t a single number: it\u2019s derated for ambient temperature, grouping with other loaded cables, and installation method (buried, in conduit, in free air), all of which reduce how well the cable can shed heat.',
+    faq: [
+      { q: 'Which usually governs: ampacity or voltage drop?', a: 'Short, heavily loaded runs are usually governed by ampacity. Long runs, even at modest current, are often governed by voltage drop \u2014 the drop accumulates with distance regardless of how much thermal margin the cable has.' },
+      { q: 'What voltage drop limit should I design to?', a: 'There is no single universal number, but 3% for a branch circuit and 5% total from source to the furthest load are common general guidelines (matching typical national wiring code recommendations) \u2014 always confirm against the actual governing code and any site-specific standard.' },
+      { q: 'How much does grouping really derate a cable?', a: 'It can be substantial \u2014 a cable grouped tightly with several other loaded cables in the same tray or conduit can lose 30-50%+ of its free-air ampacity, because it can no longer shed heat to the surrounding air as effectively.' },
+      { q: 'Does a bigger cable always fix a voltage drop problem?', a: 'Usually yes for resistive drop, since resistance falls as cross-sectional area rises \u2014 but at some point a larger conductor becomes impractical to terminate and the fix shifts toward reducing run length, raising system voltage, or splitting the load closer to source.' },
+    ],
+  },
+  'control-valve': {
+    about: 'A control valve\u2019s flow coefficient (Cv, or Kv in metric units) describes how much flow it passes for a given pressure drop \u2014 it\u2019s the valve equivalent of a pipe\u2019s diameter, but empirically measured rather than geometric, since actual flow path shape varies by valve type and trim. Sizing a valve means finding the Cv the process needs at its worst-case (usually minimum-pressure-drop, maximum-flow) condition, then picking a valve whose Cv range comfortably covers it \u2014 oversized and the valve operates too close to shut where control is poor and unstable (\u201cvalve hunting\u201d); undersized and it can\u2019t pass the flow the process needs at all.',
+    faq: [
+      { q: 'What is the difference between Cv and Kv?', a: 'They measure the same thing in different unit systems. Cv is US units (gpm of water at 60\u00b0F per psi\u00bd differential); Kv is metric (m\u00b3/h of water per bar\u00bd differential). Kv \u2248 0.865 \u00d7 Cv.' },
+      { q: 'What is valve authority and why does it matter?', a: 'Valve authority is the fraction of total system pressure drop that occurs across the valve itself at full-open. Low authority (valve is a small part of total drop) gives poor, non-linear control near the closed position \u2014 a valve sized purely for Cv at one operating point can still control badly if authority is too low.' },
+      { q: 'What is choked (critical) flow in a control valve?', a: 'Past a certain pressure ratio, flow through the valve stops increasing even if downstream pressure keeps dropping \u2014 the fluid reaches sonic velocity at the vena contracta. Sizing calculations for gas/steam service must check for choked flow, since the simple square-root Cv equation over-predicts flow once choking occurs.' },
+      { q: 'Should I size for maximum flow or normal flow?', a: 'Neither alone \u2014 the valve needs enough Cv to pass maximum required flow, but sized so NORMAL operating flow doesn\u2019t leave the valve running too close to fully open (poor control margin) or too close to closed (poor rangeability). A common target is normal flow around 60\u201380% of valve travel.' },
+    ],
+  },
+  'pid': {
+    about: 'A PID controller drives a process toward its setpoint using three terms acting on the error (setpoint minus measured value): Proportional response reacts to the size of the current error, Integral response accumulates error over time to eliminate the steady-state offset that proportional-only control leaves behind, and Derivative response reacts to how fast the error is changing, damping overshoot. Most industrial loops actually run PI (no derivative) \u2014 derivative amplifies measurement noise, which is a problem on noisy signals like flow, and is only worth the trade-off on slower, cleaner loops like temperature.',
+    faq: [
+      { q: 'Why do most flow and level loops skip the derivative term?', a: 'Flow and level measurements are often noisy (turbulence, splashing). Derivative action amplifies that noise into large, erratic controller output swings \u2014 for these loops the added noise usually costs more than the derivative term\u2019s stability benefit.' },
+      { q: 'What is integral windup?', a: 'When the controller output saturates (valve fully open, for example) but error is still present, a naive integral term keeps accumulating anyway \u2014 then overshoots badly once the process finally responds, because the integral has to unwind first. Real controllers use anti-windup logic to stop the integral term accumulating while saturated.' },
+      { q: 'What are common PID tuning methods?', a: 'Ziegler-Nichols (open-loop reaction curve or closed-loop ultimate-gain methods) is the classic starting point; many modern loops are tuned by trial adjustment against the process\u2019s known dynamics, or by auto-tuning features built into the DCS/PLC.' },
+      { q: 'Why does my loop oscillate even though it eventually settles?', a: 'That is usually too much proportional or integral gain for the process\u2019s actual dynamics \u2014 the controller is reacting faster than the process can physically respond, overshooting the correction each time. Reducing gain (or increasing TMS/reset time) usually settles it, at the cost of slower response.' },
+    ],
+  },
+  'rtd': {
+    about: 'An RTD (Resistance Temperature Detector) measures temperature from the predictable way a pure metal\u2019s electrical resistance rises with temperature. Platinum is the standard choice (Pt100 = 100\u03a9 at 0\u00b0C) because its resistance-temperature relationship is extremely stable and repeatable, and it doesn\u2019t drift or oxidize the way cheaper metals do. The relationship isn\u2019t perfectly linear, so accurate conversion uses the Callendar-Van Dusen equation rather than a straight-line approximation \u2014 the error from assuming linearity grows the further you are from 0\u00b0C.',
+    faq: [
+      { q: 'What is the difference between 2-wire, 3-wire, and 4-wire RTD wiring?', a: '2-wire includes the lead-wire resistance as measurement error and should only be used for short runs where that error is acceptable. 3-wire (the most common industrial choice) compensates for lead resistance assuming both leads match. 4-wire eliminates lead resistance error entirely and is used where the highest accuracy is needed.' },
+      { q: 'Why use an RTD instead of a thermocouple?', a: 'RTDs are generally more accurate and stable over time, and don\u2019t need cold-junction compensation. Thermocouples respond faster, tolerate much higher temperatures, and are cheaper \u2014 the choice usually comes down to required accuracy and temperature range.' },
+      { q: 'What does the accuracy class (Class A, Class B) mean?', a: 'These are tolerance bands defined in IEC 60751: Class B (\u00b10.30\u00b0C at 0\u00b0C, widening with temperature) is the common industrial grade; Class A (\u00b10.15\u00b0C at 0\u00b0C) is tighter and used where accuracy matters more.' },
+      { q: 'Can an RTD be used at very high temperatures?', a: 'Standard Pt100 elements are typically rated to around 600\u2013850\u00b0C depending on construction, well below what thermocouples can reach (some types exceed 1700\u00b0C) \u2014 for very high-temperature service a thermocouple is usually the better fit.' },
+    ],
+  },
+  'thermocouple': {
+    about: 'A thermocouple generates a small voltage from the temperature difference between two junctions of dissimilar metals \u2014 the Seebeck effect. That voltage is only meaningful relative to a known reference (cold junction) temperature, which is why every thermocouple measurement needs cold junction compensation, either from an ice bath (historically) or an electronic reference built into the transmitter. Different metal-pair combinations (Type K, J, T, R, S, and others) trade off temperature range, accuracy, atmosphere compatibility, and cost \u2014 there\u2019s no single best type for every application.',
+    faq: [
+      { q: 'Which thermocouple type should I use?', a: 'Type K (chromel-alumel) is the general-purpose industrial default, good to about 1260\u00b0C in oxidizing atmospheres. Type J is common for older equipment and lower temperatures. Type T suits low/cryogenic temperatures. Type R and S (platinum-rhodium) are used for high-temperature, high-accuracy applications like furnaces.' },
+      { q: 'Why does cold junction compensation matter so much?', a: 'The thermocouple only measures a temperature DIFFERENCE. Without knowing the reference junction\u2019s actual temperature, the millivolt reading alone can\u2019t be converted to an absolute temperature \u2014 a CJC error shows up as a constant offset error across the whole reading.' },
+      { q: 'Why is the millivolt-to-temperature relationship non-linear?', a: 'The Seebeck coefficient itself varies with temperature for any real metal pair, so the standard reference tables (and the polynomial curve-fits used in transmitters) are inherently non-linear \u2014 a simple linear mV/\u00b0C conversion introduces real error, growing at the extremes of the type\u2019s range.' },
+      { q: 'How accurate is a thermocouple compared to an RTD?', a: 'Standard thermocouples are typically \u00b11.5\u00b0C or \u00b10.4% of reading (whichever is greater) for common types \u2014 noticeably wider tolerance than a Class B RTD\u2019s \u00b10.3\u00b0C. Special limits-of-error grades narrow this, at extra cost.' },
+    ],
+  },
+  'idmt': {
+    about: 'An IDMT (Inverse Definite Minimum Time) relay trips faster as fault current rises further above its pickup setting \u2014 a large fault clears in a fraction of a second, while a marginal overload gives equipment (and downstream protection) time to react first. This inverse-time shape is what makes coordinating multiple relays in series possible: each relay downstream of another is set with just enough time margin to let the closer relay clear the fault first, so an outage stays as small as possible. Two standard curve families exist \u2014 IEC 60255 and IEEE C37.112 \u2014 both implemented on this page, since real numerical relays (ABB, Siemens, SEL, GE, and others) support both.',
+    faq: [
+      { q: 'What does TMS (Time Multiplier Setting) actually control?', a: 'TMS scales the whole curve up or down without changing its shape \u2014 it\u2019s the main tool for coordinating relays in series: a downstream relay gets a lower TMS (faster) and an upstream relay a higher TMS (slower), so they clear a fault in the correct order.' },
+      { q: 'What is PSM (Plug Setting Multiplier)?', a: 'PSM is simply the fault current expressed as a multiple of the relay\u2019s pickup setting (fault current \u00f7 pickup current). It\u2019s the x-axis of every IDMT time-current curve \u2014 the relay operates faster at higher PSM.' },
+      { q: 'Which curve should I use: IEC or IEEE?', a: 'This is usually dictated by regional practice and what the rest of the protection scheme already uses \u2014 IEC curves (Standard/Very/Extremely Inverse) are common outside North America; IEEE/ANSI curves (Moderately/Very/Extremely Inverse) are common in North America. Mixing families on relays that must coordinate with each other needs careful checking.' },
+      { q: 'Why does the relay never operate below its pickup setting?', a: 'Below pickup (PSM \u2264 1) there is, by definition, no meaningful overcurrent to trip on \u2014 the IDMT equations are mathematically undefined at PSM = 1 and give negative/nonsensical results below it, which is why real relays simply don\u2019t operate there.' },
+    ],
+  },
+  'pump-npsh': {
+    about: 'NPSH (Net Positive Suction Head) governs whether a pump cavitates \u2014 whether the liquid at the impeller eye stays above its vapor pressure or flashes to vapor bubbles that then collapse violently downstream, eroding the impeller and destroying performance. NPSH available (NPSHa) is what the actual installation provides, from source pressure, elevation, and suction-line friction loss; NPSH required (NPSHr) is what the specific pump needs at that flow, from its manufacturer\u2019s curve. The pump only runs safely if NPSHa comfortably exceeds NPSHr \u2014 and because both terms depend on temperature and flow, a pump that\u2019s fine at design conditions can still cavitate at a different operating point.',
+    faq: [
+      { q: 'How much NPSH margin is actually enough?', a: 'A commonly used minimum is 0.6 m (2 ft) or 10% of NPSHr, whichever is larger \u2014 but critical services (boiler feed pumps, for example) often specify more, since the Hydraulic Institute\u2019s figures are a general minimum, not a guarantee against all cavitation risk.' },
+      { q: 'What is the most common real-world cause of inadequate NPSH?', a: 'A suction strainer or filter that\u2019s partially clogged, adding friction loss that wasn\u2019t accounted for in the original design \u2014 NPSHa silently degrades over time as the strainer fouls, until the pump starts cavitating at a flow it previously handled fine.' },
+      { q: 'Does raising liquid temperature affect NPSH?', a: 'Yes, significantly \u2014 vapor pressure rises sharply with temperature, which directly reduces NPSHa. This is why boiler feedwater and other hot, near-saturation services are especially sensitive to NPSH margin.' },
+      { q: 'Can a pump be damaged by cavitation even if it still pumps fluid?', a: 'Yes \u2014 cavitation can be happening (with real impeller erosion accumulating) well before it\u2019s severe enough to visibly affect flow or head. Audible \u201cgravel in the pump\u201d noise is a late symptom, not an early-warning sign.' },
+    ],
+  },
+  'heat-exchanger': {
+    about: 'LMTD (Log Mean Temperature Difference) is the correct way to average the temperature difference driving heat transfer along a heat exchanger, because that difference changes continuously from one end to the other \u2014 a simple arithmetic average overstates the true driving force whenever the temperature profiles aren\u2019t parallel. Required heat transfer area then follows directly from duty, the exchanger\u2019s overall heat transfer coefficient U, and LMTD. The equation shown here assumes true counter-current (or co-current) flow; a real shell-and-tube exchanger with multiple passes needs a correction factor F (from TEMA or manufacturer charts) applied on top, since its actual flow pattern is more complex.',
+    faq: [
+      { q: 'Why use log-mean instead of a simple average of the two end temperature differences?', a: 'Because the temperature difference between hot and cold streams doesn\u2019t fall linearly along the exchanger \u2014 it decays exponentially. The log-mean form is the mathematically correct average of that curve; a simple arithmetic mean of the two end values overstates the true average driving force.' },
+      { q: 'What does the correction factor F actually correct for?', a: 'F accounts for a real exchanger not being true counter-current \u2014 multi-pass shell-and-tube units mix some co-current flow into an overall counter-current arrangement, which reduces the effective driving force below the ideal LMTD. F < 1 means the exchanger needs more area than the ideal counter-current case for the same duty.' },
+      { q: 'What happens to LMTD when one side is a pure phase change (condensing steam, boiling fluid)?', a: 'That side\u2019s temperature stays constant while it changes phase, which the standard LMTD equation still handles correctly \u2014 it\u2019s a special case of the same formula, not a different one, as long as the constant-temperature side is entered correctly as both its own inlet and outlet value.' },
+      { q: 'Why does the calculator reject some temperature combinations?', a: 'If the terminal temperatures imply the hot and cold streams\u2019 profiles cross inside the exchanger (impossible for that flow arrangement), LMTD is mathematically undefined \u2014 that usually means the flow arrangement was entered wrong (counter-current vs co-current) or the duty isn\u2019t physically achievable with those terminal temperatures.' },
+    ],
+  },
+  'steam-props': {
+    about: 'Steam behaves nothing like an ideal gas at the pressures used in real power plants \u2014 real molecular interactions and the proximity to the saturation curve mean an ideal-gas approximation can be off by 10% or more on density at typical main-steam conditions. IAPWS-IF97 is the industry-standard steam property formulation used by real plant heat balance software and steam tables; this calculator implements it directly (Regions 1, 2 and 4 \u2014 compressed liquid, superheated steam, and the saturation line) rather than approximating, because for flow measurement in particular, density error carries straight through into flow error.',
+    faq: [
+      { q: 'Why does ideal-gas density matter for flow measurement specifically?', a: 'DP flow measurement scales with the square root of density, so a density error of X% becomes roughly an X/2% flow error \u2014 at typical main-steam pressures (100\u2013170 bar), ideal-gas density can be off by 8\u201311%, which is a genuinely significant flow error, not a rounding difference.' },
+      { q: 'What steam conditions does this calculator NOT cover?', a: 'IAPWS-IF97 Region 3 (near-critical, above roughly 350\u00b0C at pressures approaching the critical point) is not implemented here \u2014 the calculator explicitly refuses those inputs rather than silently returning an inaccurate number.' },
+      { q: 'Do I need gauge or absolute pressure?', a: 'Absolute pressure \u2014 gauge pressure plus roughly 1.013 bar (atmospheric) at sea level. Using gauge pressure directly into a steam property calculation is a common source of error, especially at lower pressures where the difference is proportionally larger.' },
+      { q: 'How is steam density related to saturation temperature?', a: 'At a given pressure, there is exactly one saturation temperature; above it the steam is superheated (this calculator\u2019s Region 2), below it you have subcooled water (Region 1). Right at saturation, density is extremely sensitive to small temperature changes \u2014 which is also why steam quality becomes uncertain and DP flow measurement gets unreliable near the saturation line.' },
+    ],
+  },
+  'relief-valve': {
+    about: 'A pressure relief valve (PSV) is a plant\u2019s last line of defense against overpressure \u2014 sized wrong, either direction is dangerous: too small and the vessel can still overpressure even with the valve open; too large and the valve can chatter (rapid open/close cycling) hard enough to damage itself and the piping. API 520 Part I gives the standard sizing equations, and they genuinely differ by fluid phase: gas/vapor sizing uses compressible, often choked-flow equations; liquid sizing uses an incompressible Bernoulli-based form. Using the wrong one \u2014 a real documented failure mode \u2014 can undersize a valve by a large margin.',
+    faq: [
+      { q: 'Why does this calculator call itself "preliminary" rather than a full API 520 sizing tool?', a: 'Full relief valve sizing per the current API 520/521 editions covers subcritical (non-choked) gas flow, the two-phase Omega method, iterative viscosity correction for liquids, and backpressure correction charts specific to the valve type \u2014 none of which this implements. This covers the core critical-flow gas and non-viscous liquid equations only, as a screening-level estimate.' },
+      { q: 'What is overpressure allowance and why does it matter?', a: 'Overpressure allowance (commonly 10% above set pressure, sometimes more for specific scenarios) is how much the vessel is allowed to rise above set pressure while the valve is relieving \u2014 it directly sets the relieving pressure used in the sizing equation, so getting this percentage right matters as much as any other input.' },
+      { q: 'Why do gas and liquid relief valves use such different discharge coefficients (0.975 vs 0.65)?', a: 'These are standard, published API 520 values reflecting how differently a valve\u2019s orifice geometry performs with a compressible fluid at choked flow versus an incompressible liquid \u2014 they are not interchangeable, and using the gas coefficient for a liquid case (or vice versa) meaningfully mis-sizes the valve.' },
+      { q: 'Does this replace manufacturer certified capacity data?', a: 'No \u2014 real relief device selection uses the specific manufacturer\u2019s certified capacity for the chosen valve model, not a generic theoretical orifice area. This calculator estimates the required area as a starting point for that selection, and as a check, not a substitute for it.' },
+    ],
+  },
+};
+
+function faqJsonLd(route) {
+  const content = PAGE_CONTENT[route];
+  if (!content || !content.faq || !content.faq.length) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: content.faq.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  };
+}
+
+/** Renders the About + FAQ block for a page, or an empty string if the
+ * route has no authored content. Call at the end of a page function, after
+ * the calc-layout has been appended. */
+function renderLearnMore(route) {
+  const content = PAGE_CONTENT[route];
+  if (!content) return;
+  const faqHtml = (content.faq || []).map((f) => `
+    <div style="margin-top:14px;">
+      <div style="font-weight:600;color:var(--text);">${f.q}</div>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;">${f.a}</div>
+    </div>`).join('');
+  const block = h(`<div class="card" style="margin-top:16px;">
+    <div class="panel-title">About This Calculation</div>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;">${content.about}</p>
+    ${faqHtml ? `<div class="panel-title" style="margin-top:20px;">Frequently Asked Questions</div>${faqHtml}` : ''}
+  </div>`);
+  app.appendChild(block);
+}
+
+// ---------- Confidence tiers (how much to trust a given calculator) ----------
+// The honest answer to "can I trust this" differs genuinely by calculator --
+// a direct implementation of IEC 60909 deserves different confidence than a
+// heat-rate estimator that necessarily simplifies a real plant. Rather than
+// leave that distinction implicit (or, worse, imply uniform confidence
+// everywhere), every calculator route is tagged here and the tag is shown
+// on the page itself. Routes not listed are plain deterministic conversions
+// (unit conversion, mA scaling) with no approximation to disclose.
+const CONFIDENCE_TIERS = {
+  verified: {
+    label: 'Verified against published standard',
+    color: 'var(--green)',
+    detail: 'Checked against the named standard\u2019s own equations and, where one exists, a published reference/worked example \u2014 not just internal self-consistency.',
+  },
+  scoped: {
+    label: 'Standard method \u2014 stated scope limits apply',
+    color: 'var(--amber)',
+    detail: 'Uses a real, correct engineering method, but deliberately does not cover every case the full standard does. Read the note in the result before relying on it for a final decision.',
+  },
+  estimator: {
+    label: 'Estimation / reference tool',
+    color: 'var(--blue)',
+    detail: 'Gives an order-of-magnitude or typical-value result by design \u2014 not a substitute for a full study, OEM documentation, or site-specific data.',
+  },
+};
+const ROUTE_TIER = {
+  'short-circuit': 'verified', 'idmt': 'verified', 'relay-settings': 'verified',
+  'grounding-grid': 'verified', 'steam-props': 'verified', 'dp-flow-cal': 'verified',
+  'control-loops': 'verified', 'relief-valve': 'verified',
+
+  'orifice': 'scoped', 'heat-exchanger': 'scoped', 'cable-sizing': 'scoped',
+  'cable-withstand': 'scoped', 'pump-npsh': 'scoped', 'fan-laws': 'scoped',
+  'bearing-life': 'scoped', 'pipe-pressure-drop': 'scoped', 'pipe-wall-thickness': 'scoped',
+  'ngr-sizing': 'scoped', 'generator-sizing': 'scoped', 'voltage-unbalance': 'scoped',
+  'tx-inrush': 'scoped', 'ct-sizing': 'scoped', 'transformer-prot': 'scoped',
+  'motor-prot': 'scoped', 'lsig': 'scoped', 'coordination': 'scoped',
+  'motor-start': 'scoped', 'pf-correction': 'scoped', 'battery-sizing': 'scoped',
+  'tx-loading': 'scoped', 'dp-flow-wizard': 'scoped', 'dp-level': 'scoped',
+  'control-valve': 'scoped', 'cavitation': 'scoped', 'rtd': 'scoped',
+  'thermocouple': 'scoped', 'pid': 'scoped', 'loop-uncertainty': 'scoped',
+
+  'thermal-plant': 'estimator', 'protection': 'estimator',
+};
+
+function renderConfidenceTier(route) {
+  const tierKey = ROUTE_TIER[route];
+  if (!tierKey) return;
+  const tier = CONFIDENCE_TIERS[tierKey];
+  const head = document.querySelector('.page-head');
+  if (!head) return;
+  const badge = h(`<div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;
+    border:1px solid ${tier.color};border-radius:20px;font-size:.72rem;color:${tier.color};cursor:help;"
+    title="${tier.detail.replace(/"/g, '&quot;')}">
+    <span style="width:6px;height:6px;border-radius:50%;background:${tier.color};display:inline-block;"></span>
+    ${tier.label}
+  </div>`);
+  head.appendChild(badge);
+}
+
+function applySeo(route) {
+  const meta = SEO_META[route] || SEO_META[''];
+  const fullTitle = route === '' ? meta.title : `${meta.title} | ${SITE_NAME}`;
+  document.title = fullTitle;
+  const url = route === '' ? `${SITE_URL}/` : `${SITE_URL}/?page=${encodeURIComponent(route)}`;
+
+  const setMeta = (selector, attr, value) => {
+    const el = document.querySelector(selector);
+    if (el) el.setAttribute(attr, value);
+  };
+  setMeta('meta[name="description"]', 'content', meta.description);
+  setMeta('meta[name="robots"]', 'content', meta.noindex ? 'noindex, nofollow' : 'index, follow');
+  setMeta('link[rel="canonical"]', 'href', url);
+  setMeta('meta[property="og:title"]', 'content', fullTitle);
+  setMeta('meta[property="og:description"]', 'content', meta.description);
+  setMeta('meta[property="og:url"]', 'content', url);
+  setMeta('meta[name="twitter:title"]', 'content', fullTitle);
+  setMeta('meta[name="twitter:description"]', 'content', meta.description);
+
+  // FAQ structured data: inject when this route has authored FAQ content,
+  // remove any previous page's schema otherwise so it never lingers on a
+  // route it doesn't belong to.
+  const existing = document.getElementById('faqSchema');
+  if (existing) existing.remove();
+  const faq = faqJsonLd(route);
+  if (faq) {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'faqSchema';
+    script.textContent = JSON.stringify(faq);
+    document.head.appendChild(script);
+  }
+}
+
 const ROUTES = {
   '': pageDashboard,
   'thermal-plant': pageThermalPlant,
@@ -210,6 +539,7 @@ const ROUTES = {
   'control-loops': pageControlLoops,
   'short-circuit': pageShortCircuit,
   'idmt': pageIdmt,
+  'relay-settings': pageRelaySettings,
   'ct-sizing': pageCtSizing,
   'transformer-prot': pageTransformerProt,
   'motor-prot': pageMotorProt,
@@ -221,6 +551,11 @@ const ROUTES = {
   'pf-correction': pagePfCorrection,
   'battery-sizing': pageBatterySizing,
   'tx-loading': pageTxLoading,
+  'grounding-grid': pageGroundingGrid,
+  'ngr-sizing': pageNgrSizing,
+  'generator-sizing': pageGeneratorSizing,
+  'voltage-unbalance': pageVoltageUnbalance,
+  'tx-inrush': pageTxInrush,
   'dp-flow-wizard': pageDPFlowWizard,
   'dp-flow-cal': pageDPFlowCalibrated,
   'steam-props': pageSteamProps,
@@ -240,6 +575,13 @@ const ROUTES = {
   'support': pageSupport,
   'reviews': pageReviews,
   'admin': pageAdmin,
+  'pipe-pressure-drop': pagePipePressureDrop,
+  'pipe-wall-thickness': pagePipeWallThickness,
+  'relief-valve': pageReliefValve,
+  'pump-npsh': pagePumpNpsh,
+  'fan-laws': pageFanLaws,
+  'bearing-life': pageBearingLife,
+  'heat-exchanger': pageHeatExchanger,
 };
 
 // NOTE: navigation is driven entirely by JS state (`currentRoute`), not by
@@ -248,17 +590,44 @@ const ROUTES = {
 // as if they were external links; plain click handlers avoid that entirely
 // and work identically when this app is served on its own domain.
 let currentRoute = '';
-function navigate(route) {
+function navigate(route, opts = {}) {
   currentRoute = ROUTES[route] ? route : '';
   render();
   closeMobileMenu();
+  if (!opts.skipHistory) {
+    // pushState is a pure History API call -- unlike <a href> or setting
+    // location.hash, it never asks the browser to follow/load anything, so
+    // it can't be intercepted as external navigation the way those can.
+    // Still guarded: some sandboxed preview contexts restrict the History
+    // API entirely, and a throw here must never break in-app navigation.
+    try {
+      const url = currentRoute === '' ? location.pathname : `${location.pathname}?page=${encodeURIComponent(currentRoute)}`;
+      history.pushState({ route: currentRoute }, '', url);
+    } catch (e) { /* history API unavailable in this context -- navigation still works */ }
+  }
 }
 function render() {
   renderNav(currentRoute);
   app.innerHTML = '';
   (ROUTES[currentRoute] || pageDashboard)();
+  renderConfidenceTier(currentRoute);
+  renderLearnMore(currentRoute);
   app.scrollTop = 0;
+  applySeo(currentRoute);
 }
+
+// Restore the correct page on load (deep link) and support browser
+// back/forward. Both are wrapped defensively for the same reason as above.
+try {
+  const initialParams = new URLSearchParams(location.search);
+  const initialPage = initialParams.get('page');
+  if (initialPage && ROUTES[initialPage]) currentRoute = initialPage;
+  window.addEventListener('popstate', (e) => {
+    const route = (e.state && e.state.route) || '';
+    navigate(ROUTES[route] ? route : '', { skipHistory: true });
+  });
+} catch (e) { /* history/URL API unavailable in this context */ }
+
 
 // ---------- Mobile sidebar drawer ----------
 const sidebarEl = document.getElementById('sidebar');
@@ -3017,6 +3386,14 @@ function pageSupport() {
   // which was confusing donors, while a QR scan is the path they already
   // trust and use every day.
   const QR_IMAGE_SRC = './assets/support-qr.png';
+  // SITE OWNER: this ID is not something code can generate — it comes from
+  // creating a Payment Button in the Razorpay Dashboard (Payment Button >
+  // Create Payment Button). For a donation page, choose the "Donation" /
+  // flexible-amount button type so the donor picks the amount on Razorpay's
+  // own checkout page. Paste that button's ID (starts "pl_") here.
+  // NOTE: a button created in TEST mode only works in test mode. Create a
+  // LIVE mode button, with a LIVE key pair, before this can take real money.
+  const RAZORPAY_PAYMENT_BUTTON_ID = 'REPLACE_WITH_YOUR_PAYMENT_BUTTON_ID';
 
   app.appendChild(h(`
     <div>
@@ -3095,8 +3472,56 @@ function pageSupport() {
       const amt = input.value ? +input.value : null;
       if (!amt || amt <= 0) { toast('Please enter a donation amount first'); return; }
       selectedAmount = amt;
-      renderPayStep();
+      renderMethodStep();
     });
+  }
+
+  function renderMethodStep() {
+    modalBody.innerHTML = `
+      <h3>How would you like to pay? — \u20b9${fmt(selectedAmount, 0)}</h3>
+      <div class="donate-amounts" style="grid-template-columns:1fr;">
+        <div class="donate-amt" id="methodUpi" style="text-align:left;padding:14px;">
+          <div style="font-weight:600;">\ud83d\udcf1 UPI QR Code</div>
+          <div style="font-size:.8rem;color:var(--text-faint);margin-top:2px;">Scan with Google Pay, PhonePe, Paytm or any UPI app</div>
+        </div>
+        <div class="donate-amt" id="methodRazorpay" style="text-align:left;padding:14px;">
+          <div style="font-weight:600;">\ud83d\udcb3 Card / Netbanking / Wallet</div>
+          <div style="font-size:.8rem;color:var(--text-faint);margin-top:2px;">Secure checkout via Razorpay</div>
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn secondary" id="backToAmountBtn" style="width:100%;justify-content:center;">Back</button></div>
+    `;
+    modalBody.querySelector('#methodUpi').addEventListener('click', renderPayStep);
+    modalBody.querySelector('#methodRazorpay').addEventListener('click', renderRazorpayStep);
+    modalBody.querySelector('#backToAmountBtn').addEventListener('click', renderAmountStep);
+  }
+
+  function renderRazorpayStep() {
+    const notConfigured = RAZORPAY_PAYMENT_BUTTON_ID.startsWith('REPLACE_WITH');
+    modalBody.innerHTML = `
+      <h3>Pay via Razorpay \u2014 \u20b9${fmt(selectedAmount, 0)}</h3>
+      ${notConfigured
+        ? `<div class="assumptions-note">Razorpay checkout isn't set up yet \u2014 the site owner needs to create a Payment Button in their Razorpay Dashboard and paste its ID into the code (see the comment above RAZORPAY_PAYMENT_BUTTON_ID in js/app.js). Use UPI for now.</div>`
+        : `<div class="scan-pay-note">You'll be taken to Razorpay's secure checkout, where you can confirm or adjust the amount and pay by card, netbanking, UPI, or wallet.</div>
+           <div id="rzpButtonWrap" style="margin-top:14px;display:flex;justify-content:center;"></div>`}
+      <div class="btn-row" style="margin-top:14px;"><button class="btn secondary" id="backToMethodBtn" style="width:100%;justify-content:center;">Back</button></div>
+    `;
+    modalBody.querySelector('#backToMethodBtn').addEventListener('click', renderMethodStep);
+
+    if (!notConfigured) {
+      // Injecting via innerHTML does NOT execute <script> tags in browsers,
+      // so the Razorpay embed must be built with real DOM APIs to actually run.
+      const wrap = modalBody.querySelector('#rzpButtonWrap');
+      const form = document.createElement('form');
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/payment-button.js';
+      script.async = true;
+      script.setAttribute('data-payment_button_id', RAZORPAY_PAYMENT_BUTTON_ID);
+      script.setAttribute('data-button_text', 'Pay \u20b9' + fmt(selectedAmount, 0));
+      script.setAttribute('data-button_theme', 'rzp-dark-standard');
+      form.appendChild(script);
+      wrap.appendChild(form);
+    }
   }
 
   function renderPayStep() {
@@ -3106,7 +3531,9 @@ function pageSupport() {
       <div class="scan-pay-note">📱 <strong>Scan this QR with your UPI app's camera/scan option</strong> (Google Pay, PhonePe, Paytm, BHIM) — then enter ₹${fmt(selectedAmount, 0)}.</div>
       <div class="upi-id-row"><span id="donateUpiIdText">${UPI_ID}</span><button type="button" id="donateCopyUpiBtn">Copy</button></div>
       <button class="btn" id="haveDonatedBtn" type="button" style="width:100%;justify-content:center;background:var(--green);border-color:var(--green);color:#06210c;">I Have Donated</button>
+      <div class="btn-row" style="margin-top:10px;"><button class="btn secondary" id="backToMethodFromUpiBtn" style="width:100%;justify-content:center;">Back</button></div>
     `;
+    modalBody.querySelector('#backToMethodFromUpiBtn').addEventListener('click', renderMethodStep);
     modalBody.querySelector('#donateCopyUpiBtn').addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(UPI_ID);
@@ -3675,6 +4102,784 @@ function pageTxLoading() {
   });
 }
 
+// ---------- Grounding Grid Design (IEEE 80, simplified) ----------
+function pageGroundingGrid() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Grounding Grid Design</h1>
+    <p class="lead">Grid resistance (Sverak's simplified equation) and a screening check of ground potential rise against IEEE 80 tolerable touch voltage. Single-layer soil model \u2014 a preliminary study, not a substitute for a full two-layer design. Defaults include a crushed-rock surface layer, standard practice at real substations since bare soil rarely passes this check at all.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Grid &amp; Soil</div>
+    <div class="input-row">
+      <div class="field"><label>Soil resistivity (\u03a9\u00b7m)</label><input type="number" id="rho" step="any" value="100"></div>
+      <div class="field"><label>Burial depth (m)</label><input type="number" id="depth" step="any" value="0.5"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Total buried conductor length (m)</label><input type="number" id="lt" step="any" value="2400"></div>
+      <div class="field"><label>Grid area (m\u00b2)</label><input type="number" id="area" step="any" value="3600"></div>
+    </div>
+    <div class="hint">Total conductor length includes grid conductors AND any ground rods. Grid area is the plan area enclosed by the outer conductors.</div>
+    <div class="panel-title" style="margin-top:14px;">Fault &amp; Safety</div>
+    <div class="input-row">
+      <div class="field"><label>Ground fault current (A)</label><input type="number" id="ig" step="any" value="1000"></div>
+      <div class="field"><label>Fault duration (s)</label><input type="number" id="ts" step="any" value="0.5"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Body weight</label><select id="bw"><option value="70">70 kg</option><option value="50">50 kg</option></select></div>
+      <div class="field"><label>Surface material</label><select id="surf">${ed.SURFACE_MATERIALS ? Object.keys(ed.SURFACE_MATERIALS).map((k) => `<option${k === 'crushed rock (dry)' ? ' selected' : ''}>${k}</option>`).join('') : ''}</select></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter grid and soil data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.groundingGridCheck({
+        soilResistivityOhmM: +left.querySelector('#rho').value,
+        totalConductorLengthM: +left.querySelector('#lt').value,
+        gridAreaM2: +left.querySelector('#area').value,
+        burialDepthM: +left.querySelector('#depth').value,
+        groundFaultCurrentA: +left.querySelector('#ig').value,
+        faultDurationS: +left.querySelector('#ts').value,
+        bodyWeightKg: +left.querySelector('#bw').value,
+        surfaceMaterial: left.querySelector('#surf').value,
+      });
+      const badge = r.check.startsWith('SCREENING PASS') ? 'normal' : 'out';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.gridResistanceOhm, 3)}</span><span class="unit">\u03a9 grid resistance</span></div>
+        <div class="result-grid">
+          ${resultRow('Ground potential rise (GPR)', fmt(r.gprV, 1) + ' V')}
+          ${resultRow('Tolerable touch voltage', fmt(r.tolerableTouchV, 1) + ' V')}
+          ${resultRow('Tolerable step voltage', fmt(r.tolerableStepV, 1) + ' V')}
+          ${resultRow('Surface derating factor Cs', fmt(r.cs, 3))}
+          ${resultRow('Margin', fmt(r.marginPct, 1) + ' %')}
+          ${resultRow('Verdict', `<span class="badge ${badge}">${r.check}</span>`)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">R\u1d4d = \u03c1\u00b7[1/L\u209c + (1/\u221a(20A))\u00b7(1 + 1/(1+h\u221a(20/A)))]<br>E_touch(tol) = (1000 + 1.5\u00b7Cs\u00b7\u03c1s)\u00b7k/\u221ats</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Neutral Grounding Resistor (NGR) Sizing ----------
+function pageNgrSizing() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Neutral Grounding Resistor (NGR) Sizing</h1>
+    <p class="lead">Resistance and short-time thermal rating for a resistance-grounded MV system, sized backward from a target ground fault current.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">System &amp; Target</div>
+    <div class="input-row">
+      <div class="field"><label>System voltage (V, line-line)</label><input type="number" id="v" step="any" value="11000"></div>
+      <div class="field"><label>Target ground fault current (A)</label><input type="number" id="ig" step="any" value="10"></div>
+    </div>
+    <div class="field"><label>Rated fault duration (s)</label><input type="number" id="ts" step="any" value="10"></div>
+    <div class="hint">10 s is the common short-time rating for MV NGRs \u2014 confirm against your protection clearing time.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter system voltage and target fault current.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.ngrSizing({
+        systemVoltageV: +left.querySelector('#v').value,
+        targetFaultCurrentA: +left.querySelector('#ig').value,
+        faultDurationS: +left.querySelector('#ts').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.resistanceOhm, 2)}</span><span class="unit">\u03a9</span></div>
+        <div class="result-grid">
+          ${resultRow('Line-to-neutral voltage', fmt(r.vLN, 1) + ' V')}
+          ${resultRow('NGR resistance', fmt(r.resistanceOhm, 3) + ' \u03a9')}
+          ${resultRow('Short-time rating', fmt(r.shortTimeRatingKW, 2) + ' kW at ' + r.faultDurationS + ' s')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">R = V_LN / I_target &nbsp;\u00b7&nbsp; P = I\u00b2R</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Standby Generator Sizing ----------
+function pageGeneratorSizing() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Standby Generator Sizing</h1>
+    <p class="lead">Checks BOTH steady running load and the surge when the largest motor starts DOL with everything else already running \u2014 the starting case is the one most often overlooked.</p></div>`));
+
+  let loads = [{ kW: 100, pf: 0.85 }, { kW: 50, pf: 0.9 }, { kW: 30, pf: 0.85 }];
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Connected Loads</div>
+    <div id="loadsWrap"></div>
+    <div class="btn-row" style="margin-top:8px;"><button class="btn secondary" id="addLoad">+ Add load</button></div>
+    <div class="panel-title" style="margin-top:14px;">Largest Motor (DOL Start)</div>
+    <div class="input-row">
+      <div class="field"><label>Rating (kW)</label><input type="number" id="motorKw" step="any" value="75"></div>
+      <div class="field"><label>Power factor</label><input type="number" id="motorPf" step="any" value="0.85"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Starting current (\u00d7 FLC)</label><input type="number" id="startMult" step="any" value="6"></div>
+      <div class="field"><label>Design margin (%)</label><input type="number" id="margin" step="any" value="20"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Define loads and calculate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  const loadsWrap = left.querySelector('#loadsWrap');
+  function renderLoads() {
+    loadsWrap.innerHTML = loads.map((l, i) => `
+      <div class="input-row" data-i="${i}" style="align-items:flex-end;flex-wrap:nowrap;gap:8px;">
+        <div class="field" style="flex:1;min-width:0;"><label>${i === 0 ? 'kW' : ''}</label><input type="number" class="l-kw" step="any" value="${l.kW}"></div>
+        <div class="field" style="flex:1;min-width:0;"><label>${i === 0 ? 'Power factor' : ''}</label><input type="number" class="l-pf" step="any" value="${l.pf}"></div>
+        <div class="field" style="flex:0 0 auto;"><label>${i === 0 ? '&nbsp;' : ''}</label><button class="btn secondary l-del" style="padding:8px 10px;">\u2715</button></div>
+      </div>`).join('');
+    loadsWrap.querySelectorAll('.l-del').forEach((b, i) => b.addEventListener('click', () => {
+      if (loads.length === 1) { toast('Keep at least one load'); return; }
+      readLoads(); loads.splice(i, 1); renderLoads();
+    }));
+  }
+  function readLoads() {
+    loads = [...loadsWrap.querySelectorAll('.input-row')].map((r) => ({
+      kW: +r.querySelector('.l-kw').value, pf: +r.querySelector('.l-pf').value,
+    }));
+  }
+  renderLoads();
+  left.querySelector('#addLoad').addEventListener('click', () => { readLoads(); loads.push({ kW: 20, pf: 0.85 }); renderLoads(); });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      readLoads();
+      const r = ed.generatorSizing({
+        loads,
+        largestMotorKW: +left.querySelector('#motorKw').value,
+        largestMotorPF: +left.querySelector('#motorPf').value,
+        largestMotorStartingMultiple: +left.querySelector('#startMult').value,
+        designMarginPct: +left.querySelector('#margin').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.requiredKVA, 0)}</span><span class="unit">kVA recommended</span></div>
+        <div class="result-grid">
+          ${resultRow('Total running load', fmt(r.totalRunningKW, 1) + ' kW / ' + fmt(r.totalRunningKVA, 1) + ' kVA')}
+          ${resultRow('Motor DOL starting surge', fmt(r.motorStartingKVA, 1) + ' kVA')}
+          ${resultRow('Total starting-case kVA', fmt(r.startingKVA, 1) + ' kVA')}
+          ${resultRow('Governing case', r.governing)}
+          ${resultRow('Recommended generator size', fmt(r.requiredKVA, 0) + ' kVA (incl. margin)')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('generator-sizing',
+        `Generator \u2014 ${fmt(r.requiredKVA, 0)} kVA`, {}, { requiredKVA: r.requiredKVA, governing: r.governing }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Voltage Unbalance & Motor Derating ----------
+function pageVoltageUnbalance() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Voltage Unbalance &amp; Motor Derating</h1>
+    <p class="lead">Unbalance by the NEMA/IEEE max-deviation-from-average definition, with an interpolated approximation of the published NEMA MG-1 derating curve.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Measured Line Voltages</div>
+    <div class="input-row">
+      <div class="field"><label>V<sub>AB</sub></label><input type="number" id="v1" step="any" value="460"></div>
+      <div class="field"><label>V<sub>BC</sub></label><input type="number" id="v2" step="any" value="467"></div>
+      <div class="field"><label>V<sub>CA</sub></label><input type="number" id="v3" step="any" value="450"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter the three line voltages.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.voltageUnbalance(+left.querySelector('#v1').value, +left.querySelector('#v2').value, +left.querySelector('#v3').value);
+      const badge = r.exceedsNemaLimit ? 'out' : r.unbalancePct > 2 ? 'warning' : 'normal';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.unbalancePct, 2)}</span><span class="unit">% unbalance</span></div>
+        <div class="result-grid">
+          ${resultRow('Average voltage', fmt(r.averageV, 1) + ' V')}
+          ${resultRow('Max deviation', fmt(r.maxDeviationV, 1) + ' V')}
+          ${resultRow('Unbalance', `<span class="badge ${badge}">${fmt(r.unbalancePct, 2)}%</span>`)}
+          ${resultRow('NEMA derating factor', fmt(r.deratingFactor, 3))}
+          ${resultRow('Derated motor rating', fmt(r.deratingFactor * 100, 1) + '% of nameplate')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Transformer Inrush Current ----------
+function pageTxInrush() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Transformer Inrush Current</h1>
+    <p class="lead">Estimated energization inrush from a typical guideline multiple and decay time constant \u2014 for checking that protection instantaneous elements won't nuisance-trip on energization.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Transformer &amp; Guideline Values</div>
+    <div class="input-row">
+      <div class="field"><label>Rated current (A)</label><input type="number" id="irated" step="any" value="100"></div>
+      <div class="field"><label>Inrush multiple (\u00d7 rated)</label><input type="number" id="mult" step="any" value="10"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Decay time constant (s)</label><input type="number" id="tau" step="any" value="0.1"></div>
+      <div class="field"><label>Evaluate at (s after energization)</label><input type="number" id="tEval" step="any" value="0.05"></div>
+    </div>
+    <div class="hint">Multiple and time constant are typical guideline ranges (commonly 8\u201312\u00d7, 0.1\u20131 s for distribution transformers) \u2014 use manufacturer data where available.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter transformer rated current.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ed.transformerInrush({
+        ratedCurrentA: +left.querySelector('#irated').value,
+        inrushMultiple: +left.querySelector('#mult').value,
+        timeConstantS: +left.querySelector('#tau').value,
+        evaluateAtS: +left.querySelector('#tEval').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.peakInrushA, 0)}</span><span class="unit">A peak inrush</span></div>
+        <div class="result-grid">
+          ${resultRow('Peak inrush (t=0)', fmt(r.peakInrushA, 1) + ' A')}
+          ${resultRow('Current at evaluation time', fmt(r.atTimeA, 1) + ' A')}
+          ${resultRow('Time to decay within 10% of rated', fmt(r.decayTo110PctS, 3) + ' s')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">I(t) = I_peak \u00b7 e^(\u2212t/\u03c4)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Pipe Pressure Drop (Darcy-Weisbach) ----------
+function pagePipePressureDrop() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Pipe Pressure Drop</h1>
+    <p class="lead">Friction pressure drop for a straight run of pipe using the Darcy-Weisbach equation, with the Swamee-Jain explicit approximation of the Colebrook-White friction factor.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Flow &amp; Pipe</div>
+    <div class="input-row">
+      <div class="field"><label>Flow rate (m&sup3;/h)</label><input type="number" id="flow" step="any" value="72"></div>
+      <div class="field"><label>Internal diameter (mm)</label><input type="number" id="dia" step="any" value="100"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Pipe length (m)</label><input type="number" id="len" step="any" value="100"></div>
+      <div class="field"><label>Sum of fitting K values</label><input type="number" id="fk" step="any" value="0"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Fluid</div>
+    <div class="input-row">
+      <div class="field"><label>Density (kg/m&sup3;)</label><input type="number" id="rho" step="any" value="998"></div>
+      <div class="field"><label>Viscosity (mPa&middot;s)</label><input type="number" id="visc" step="any" value="1.0"></div>
+    </div>
+    <div class="field"><label>Pipe roughness (mm)</label><input type="number" id="rough" step="any" value="0.045"></div>
+    <div class="hint">Default roughness 0.045 mm is typical commercial steel. Use ~0.0015 mm for drawn tubing, ~0.15\u20130.3 mm for cast iron or older/corroded steel.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter flow and pipe data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = pipe.pipePressureDrop({
+        flowM3S: (+left.querySelector('#flow').value) / 3600,
+        diameterM: (+left.querySelector('#dia').value) / 1000,
+        lengthM: +left.querySelector('#len').value,
+        densityKgM3: +left.querySelector('#rho').value,
+        viscosityPaS: (+left.querySelector('#visc').value) / 1000,
+        roughnessM: (+left.querySelector('#rough').value) / 1000,
+        fittingsK: +left.querySelector('#fk').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.totalDropBar, 4)}</span><span class="unit">bar total drop</span></div>
+        <div class="result-grid">
+          ${resultRow('Velocity', fmt(r.velocityMs, 3) + ' m/s')}
+          ${resultRow('Reynolds number', fmt(r.reynolds, 0))}
+          ${resultRow('Flow regime', `<span class="badge normal">${r.flowRegime}</span>`)}
+          ${resultRow('Friction factor', fmt(r.frictionFactor, 5))}
+          ${resultRow('Friction drop', fmt(r.frictionDropPa / 1000, 3) + ' kPa')}
+          ${resultRow('Fittings drop', fmt(r.fittingsDropPa / 1000, 3) + ' kPa')}
+          ${resultRow('Total drop', fmt(r.totalDropPa / 1000, 3) + ' kPa (' + fmt(r.totalDropBar, 4) + ' bar)')}
+          ${resultRow('Per 100 m equivalent', fmt(r.totalDropPer100m / 1000, 3) + ' kPa/100m')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">\u0394P = f\u00b7(L/D)\u00b7(\u03c1v\u00b2/2) + \u03a3K\u00b7(\u03c1v\u00b2/2)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Pipe Wall Thickness (ASME B31.3) ----------
+function pagePipeWallThickness() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Pipe Wall Thickness (ASME B31.3)</h1>
+    <p class="lead">Minimum required wall thickness for straight pipe under internal pressure, per ASME B31.3 Para. 304.1.2. Valid while t &lt; D/6 and P/(S&middot;E) &le; 0.385.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Design Basis</div>
+    <div class="input-row">
+      <div class="field"><label>Design pressure (MPa)</label><input type="number" id="p" step="any" value="2.0"></div>
+      <div class="field"><label>Outside diameter (mm)</label><input type="number" id="od" step="any" value="114.3"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Allowable stress S (MPa)</label><input type="number" id="s" step="any" value="137.9"></div>
+      <div class="field"><label>Joint efficiency E</label><input type="number" id="e" step="any" value="1.0"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Weld strength reduction W</label><input type="number" id="w" step="any" value="1.0"></div>
+      <div class="field"><label>Y coefficient</label><input type="number" id="y" step="any" value="0.4"></div>
+    </div>
+    <div class="hint">S from ASME B31.3 Table A-1 for your material/temperature. Y = 0.4 for ferritic/austenitic steel below the creep range (&lt;482&deg;C); above that, Y comes from Table 304.1.1.</div>
+    <div class="panel-title" style="margin-top:14px;">Allowances</div>
+    <div class="input-row">
+      <div class="field"><label>Corrosion allowance (mm)</label><input type="number" id="ca" step="any" value="1.5"></div>
+      <div class="field"><label>Mill tolerance (%)</label><input type="number" id="mt" step="any" value="12.5"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter pressure, diameter and material data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = pipe.pipeWallThickness({
+        designPressureMPa: +left.querySelector('#p').value,
+        outsideDiameterMm: +left.querySelector('#od').value,
+        allowableStressMPa: +left.querySelector('#s').value,
+        jointEfficiencyE: +left.querySelector('#e').value,
+        weldFactorW: +left.querySelector('#w').value,
+        yCoefficient: +left.querySelector('#y').value,
+        corrosionAllowanceMm: +left.querySelector('#ca').value,
+        millTolerancePct: +left.querySelector('#mt').value,
+      });
+      const badge = r.thinWallValid ? 'normal' : 'out';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.nominalThicknessMm, 3)}</span><span class="unit">mm nominal thickness to order</span></div>
+        <div class="result-grid">
+          ${resultRow('Pressure design thickness t', fmt(r.pressureDesignThicknessMm, 4) + ' mm')}
+          ${resultRow('Min. required thickness (+CA)', fmt(r.minRequiredThicknessMm, 4) + ' mm')}
+          ${resultRow('Nominal thickness (+mill tol.)', fmt(r.nominalThicknessMm, 4) + ' mm')}
+          ${resultRow('D/t ratio', fmt(r.dOverT, 2))}
+          ${resultRow('Thin-wall equation valid', `<span class="badge ${badge}">${r.thinWallValid ? 'YES' : 'NO \u2014 see note'}</span>`)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">t = PD / (2(SEW + PY))</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Relief Valve (PSV) Sizing (API 520) ----------
+function pageReliefValve() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Relief Valve (PSV) Sizing \u2014 API 520</h1>
+    <p class="lead"><b>Preliminary screening only.</b> Core API 520 Part I orifice-area equations for gas/vapor and liquid service \u2014 not the full current-edition procedure (no fire case, no two-phase/omega method, correction factors default to 1.0). Never the sole basis for an installed relief device; use manufacturer certified sizing software and a documented relief scenario review.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="field"><label>Service</label><select id="svc"><option value="gas">Gas / Vapor</option><option value="liquid">Liquid</option></select></div>
+    <div id="gasInputs">
+      <div class="panel-title" style="margin-top:10px;">Relief Case</div>
+      <div class="input-row">
+        <div class="field"><label>Required relief rate (lb/hr)</label><input type="number" id="gW" step="any" value="50000"></div>
+        <div class="field"><label>Molecular weight</label><input type="number" id="gM" step="any" value="18"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Ratio of specific heats k</label><input type="number" id="gK" step="any" value="1.26"></div>
+        <div class="field"><label>Relieving temperature (\u00b0F)</label><input type="number" id="gT" step="any" value="150"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Compressibility Z</label><input type="number" id="gZ" step="any" value="0.90"></div>
+        <div class="field"><label>Set pressure (psig)</label><input type="number" id="gP" step="any" value="300"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Overpressure (%)</label><input type="number" id="gOP" step="any" value="10"></div>
+        <div class="field"><label>Discharge coeff. Kd</label><input type="number" id="gKd" step="any" value="0.975"></div>
+      </div>
+    </div>
+    <div id="liqInputs" style="display:none;">
+      <div class="panel-title" style="margin-top:10px;">Relief Case</div>
+      <div class="input-row">
+        <div class="field"><label>Flow rate (gpm)</label><input type="number" id="lQ" step="any" value="500"></div>
+        <div class="field"><label>Specific gravity</label><input type="number" id="lG" step="any" value="0.9"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Set pressure (psig)</label><input type="number" id="lP" step="any" value="150"></div>
+        <div class="field"><label>Overpressure (%)</label><input type="number" id="lOP" step="any" value="10"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Backpressure (psig)</label><input type="number" id="lPb" step="any" value="0"></div>
+        <div class="field"><label>Discharge coeff. Kd</label><input type="number" id="lKd" step="any" value="0.65"></div>
+      </div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter relief case data.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#svc').addEventListener('change', (e) => {
+    left.querySelector('#gasInputs').style.display = e.target.value === 'gas' ? '' : 'none';
+    left.querySelector('#liqInputs').style.display = e.target.value === 'liquid' ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const svc = left.querySelector('#svc').value;
+      let r, formula, extraRows;
+      if (svc === 'gas') {
+        r = pipe.reliefValveGas({
+          reliefRateLbHr: +left.querySelector('#gW').value,
+          molecularWeight: +left.querySelector('#gM').value,
+          specificHeatRatioK: +left.querySelector('#gK').value,
+          temperatureF: +left.querySelector('#gT').value,
+          compressibilityZ: +left.querySelector('#gZ').value,
+          setPressurePsig: +left.querySelector('#gP').value,
+          overpressurePct: +left.querySelector('#gOP').value,
+          dischargeCoeffKd: +left.querySelector('#gKd').value,
+        });
+        formula = 'A = (W / (C\u00b7Kd\u00b7P\u2081\u00b7Kb\u00b7Kc)) \u00b7 \u221a(T\u00b7Z/M)';
+        extraRows = resultRow('Gas constant C', fmt(r.gasConstantC, 1)) + resultRow('Relieving pressure P\u2081', fmt(r.p1Psia, 1) + ' psia');
+      } else {
+        r = pipe.reliefValveLiquid({
+          flowRateGpm: +left.querySelector('#lQ').value,
+          specificGravity: +left.querySelector('#lG').value,
+          setPressurePsig: +left.querySelector('#lP').value,
+          overpressurePct: +left.querySelector('#lOP').value,
+          backpressurePsig: +left.querySelector('#lPb').value,
+          dischargeCoeffKd: +left.querySelector('#lKd').value,
+        });
+        formula = 'A = (Q / (38\u00b7Kd\u00b7Kw\u00b7Kv\u00b7Kc)) \u00b7 \u221a(G/\u0394P)';
+        extraRows = resultRow('\u0394P', fmt(r.deltaPPsi, 1) + ' psi');
+      }
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.requiredAreaIn2, 3)}</span><span class="unit">in\u00b2 required orifice area</span></div>
+        <div class="result-grid">
+          ${resultRow('Required area', fmt(r.requiredAreaIn2, 4) + ' in\u00b2 (' + fmt(r.requiredAreaMm2, 1) + ' mm\u00b2)')}
+          ${resultRow('Relieving pressure', fmt(r.relievingPressurePsig, 1) + ' psig')}
+          ${extraRows}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">${formula}</div>
+        <div class="assumptions-note" style="margin-top:12px;border-color:var(--red);">\u26a0 ${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Pump NPSH & Affinity Laws ----------
+function pagePumpNpsh() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Pump NPSH &amp; Affinity Laws</h1>
+    <p class="lead">Calculate NPSH available at the pump suction, check margin against NPSH required from the pump curve, and apply the affinity laws for a speed change.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">NPSH Available</div>
+    <div class="input-row">
+      <div class="field"><label>Source pressure (bar a)</label><input type="number" id="ps" step="any" value="1.013"></div>
+      <div class="field"><label>Vapor pressure (bar a)</label><input type="number" id="pv" step="any" value="0.0234"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Specific gravity</label><input type="number" id="sg" step="any" value="1.0"></div>
+      <div class="field"><label>Static head (m, + flooded)</label><input type="number" id="hz" step="any" value="2"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Suction friction loss (m)</label><input type="number" id="hf" step="any" value="0.5"></div>
+      <div class="field"><label>NPSH required, from curve (m)</label><input type="number" id="npshr" step="any" value="4.5"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calcNpsh">Calculate NPSH</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Affinity Laws (Speed Change)</div>
+    <div class="input-row">
+      <div class="field"><label>Flow at N1 (m&sup3;/h)</label><input type="number" id="q1" step="any" value="100"></div>
+      <div class="field"><label>Head at N1 (m)</label><input type="number" id="h1" step="any" value="50"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Power at N1 (kW, optional)</label><input type="number" id="pw1" step="any" value="20"></div>
+      <div class="field"><label>Speed N1 (rpm)</label><input type="number" id="n1" step="any" value="1450"></div>
+    </div>
+    <div class="field"><label>New speed N2 (rpm)</label><input type="number" id="n2" step="any" value="1160"></div>
+    <div class="btn-row"><button class="btn secondary" id="calcAff">Calculate Affinity Laws</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Pump Duty Power (New Duty Point)</div>
+    <div class="input-row">
+      <div class="field"><label>Flow (m&sup3;/h)</label><input type="number" id="pwFlow" step="any" value="180"></div>
+      <div class="field"><label>Head (m)</label><input type="number" id="pwHead" step="any" value="30"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Specific gravity</label><input type="number" id="pwSg" step="any" value="1.0"></div>
+      <div class="field"><label>Pump efficiency (%)</label><input type="number" id="pwEff" step="any" value="75"></div>
+    </div>
+    <div class="field"><label>Motor efficiency (%, optional)</label><input type="number" id="pwMotEff" step="any" value="93"></div>
+    <div class="hint">Unlike the affinity laws above (which SCALE a power you already know), this calculates absolute power from first principles \u2014 for a new duty point with no prior operating data to scale from.</div>
+    <div class="btn-row"><button class="btn secondary" id="calcPwr">Calculate Power</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter suction conditions or affinity law inputs.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calcNpsh').addEventListener('click', () => {
+    try {
+      const r = rot.npshAvailable({
+        sourcePressureBarA: +left.querySelector('#ps').value,
+        vaporPressureBarA: +left.querySelector('#pv').value,
+        specificGravity: +left.querySelector('#sg').value,
+        staticHeadM: +left.querySelector('#hz').value,
+        frictionLossM: +left.querySelector('#hf').value,
+      });
+      const npshr = +left.querySelector('#npshr').value;
+      const margin = rot.npshMarginCheck(r.npshaM, npshr);
+      const badge = margin.adequate ? 'normal' : 'out';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.npshaM, 2)}</span><span class="unit">m NPSH available</span></div>
+        <div class="result-grid">
+          ${resultRow('Pressure head term', fmt(r.pressureHeadM, 2) + ' m')}
+          ${resultRow('NPSH required (from curve)', fmt(npshr, 2) + ' m')}
+          ${resultRow('Margin', fmt(margin.marginActualM, 2) + ' m')}
+          ${resultRow('Status', `<span class="badge ${badge}">${margin.adequate ? 'ADEQUATE' : 'CHECK / AT RISK'}</span>`)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">NPSHa = (P\u209b \u2212 P\u1d65)/(\u03c1g) + h_static \u2212 h_friction</div>
+        <div class="assumptions-note" style="margin-top:12px;">${margin.note}${r.note ? ' ' + r.note : ''}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  left.querySelector('#calcAff').addEventListener('click', () => {
+    try {
+      const r = rot.pumpAffinityLaws({
+        flowM3H: +left.querySelector('#q1').value,
+        headM: +left.querySelector('#h1').value,
+        powerKw: +left.querySelector('#pw1').value,
+        speedRpm1: +left.querySelector('#n1').value,
+        speedRpm2: +left.querySelector('#n2').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.flowM3H2, 1)}</span><span class="unit">m\u00b3/h at new speed</span></div>
+        <div class="result-grid">
+          ${resultRow('Speed ratio N\u2082/N\u2081', fmt(r.ratio, 4))}
+          ${resultRow('Flow at N\u2082', fmt(r.flowM3H2, 2) + ' m\u00b3/h')}
+          ${resultRow('Head at N\u2082', fmt(r.headM2, 2) + ' m')}
+          ${r.powerKw2 !== null ? resultRow('Power at N\u2082', fmt(r.powerKw2, 3) + ' kW') : ''}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Q\u2082/Q\u2081 = N\u2082/N\u2081 &nbsp; H\u2082/H\u2081 = (N\u2082/N\u2081)\u00b2 &nbsp; P\u2082/P\u2081 = (N\u2082/N\u2081)\u00b3</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  left.querySelector('#calcPwr').addEventListener('click', () => {
+    try {
+      const motEffRaw = left.querySelector('#pwMotEff').value;
+      const r = rot.pumpPower({
+        flowM3H: +left.querySelector('#pwFlow').value,
+        headM: +left.querySelector('#pwHead').value,
+        specificGravity: +left.querySelector('#pwSg').value,
+        pumpEfficiencyPct: +left.querySelector('#pwEff').value,
+        motorEfficiencyPct: motEffRaw === '' ? null : +motEffRaw,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.brakePowerKw, 2)}</span><span class="unit">kW brake power</span></div>
+        <div class="result-grid">
+          ${resultRow('Hydraulic power', fmt(r.hydraulicPowerKw, 3) + ' kW')}
+          ${resultRow('Brake power', fmt(r.brakePowerKw, 3) + ' kW')}
+          ${r.motorInputKw !== null ? resultRow('Motor input power', fmt(r.motorInputKw, 3) + ' kW') : ''}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">P_hydraulic = \u03c1\u00b7g\u00b7Q\u00b7H &nbsp; P_brake = P_hydraulic / \u03b7_pump</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Fan / Blower Laws & Power ----------
+function pageFanLaws() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Fan / Blower Laws &amp; Power</h1>
+    <p class="lead">Fan affinity laws for a speed change (constant air density), and shaft power from flow, pressure rise and total efficiency.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Affinity Laws (Speed Change)</div>
+    <div class="input-row">
+      <div class="field"><label>Flow at N1 (m&sup3;/s)</label><input type="number" id="q1" step="any" value="2"></div>
+      <div class="field"><label>Pressure at N1 (Pa)</label><input type="number" id="p1" step="any" value="1000"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Power at N1 (kW, optional)</label><input type="number" id="pw1" step="any" value="5"></div>
+      <div class="field"><label>Speed N1 (rpm)</label><input type="number" id="n1" step="any" value="1000"></div>
+    </div>
+    <div class="field"><label>New speed N2 (rpm)</label><input type="number" id="n2" step="any" value="1500"></div>
+    <div class="btn-row"><button class="btn" id="calcAff">Calculate Affinity Laws</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Shaft Power</div>
+    <div class="input-row">
+      <div class="field"><label>Flow (m&sup3;/s)</label><input type="number" id="qp" step="any" value="2"></div>
+      <div class="field"><label>Pressure rise (Pa)</label><input type="number" id="dp" step="any" value="1000"></div>
+    </div>
+    <div class="field"><label>Total efficiency (%)</label><input type="number" id="eff" step="any" value="70"></div>
+    <div class="btn-row"><button class="btn secondary" id="calcPwr">Calculate Shaft Power</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter affinity law or power inputs.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calcAff').addEventListener('click', () => {
+    try {
+      const r = rot.fanAffinityLaws({
+        flowM3S: +left.querySelector('#q1').value,
+        pressurePa: +left.querySelector('#p1').value,
+        powerKw: +left.querySelector('#pw1').value,
+        speedRpm1: +left.querySelector('#n1').value,
+        speedRpm2: +left.querySelector('#n2').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.flowM3S2, 3)}</span><span class="unit">m\u00b3/s at new speed</span></div>
+        <div class="result-grid">
+          ${resultRow('Speed ratio N\u2082/N\u2081', fmt(r.ratio, 4))}
+          ${resultRow('Flow at N\u2082', fmt(r.flowM3S2, 3) + ' m\u00b3/s')}
+          ${resultRow('Pressure at N\u2082', fmt(r.pressurePa2, 1) + ' Pa')}
+          ${r.powerKw2 !== null ? resultRow('Power at N\u2082', fmt(r.powerKw2, 3) + ' kW') : ''}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  left.querySelector('#calcPwr').addEventListener('click', () => {
+    try {
+      const r = rot.fanShaftPower({
+        flowM3S: +left.querySelector('#qp').value,
+        pressureRisePa: +left.querySelector('#dp').value,
+        totalEfficiencyPct: +left.querySelector('#eff').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.shaftPowerKw, 3)}</span><span class="unit">kW shaft power</span></div>
+        <div class="result-grid">
+          ${resultRow('Aerodynamic power', fmt(r.aeroPowerKw, 3) + ' kW')}
+          ${resultRow('Shaft (brake) power', fmt(r.shaftPowerKw, 3) + ' kW')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">P_shaft = Q\u00b7\u0394P / (1000\u00b7\u03b7)</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Bearing L10 Life (ISO 281) ----------
+function pageBearingLife() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Bearing L10 Life (ISO 281)</h1>
+    <p class="lead">Rolling element bearing rating life from dynamic load rating, equivalent dynamic load, and speed.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="input-row">
+      <div class="field"><label>Dynamic load rating C (kN)</label><input type="number" id="c" step="any" value="35"></div>
+      <div class="field"><label>Equivalent dynamic load P (kN)</label><input type="number" id="p" step="any" value="5"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Bearing type</label><select id="type"><option value="ball">Ball</option><option value="roller">Roller</option></select></div>
+      <div class="field"><label>Speed (rpm)</label><input type="number" id="n" step="any" value="1450"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter bearing load rating and operating conditions.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = rot.bearingL10Life({
+        dynamicLoadRatingKn: +left.querySelector('#c').value,
+        equivalentLoadKn: +left.querySelector('#p').value,
+        bearingType: left.querySelector('#type').value,
+        speedRpm: +left.querySelector('#n').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.l10Hours, 0)}</span><span class="unit">hours (L10)</span></div>
+        <div class="result-grid">
+          ${resultRow('Life exponent p', fmt(r.exponentP, 3))}
+          ${resultRow('L10 (million revolutions)', fmt(r.l10MillionRev, 2))}
+          ${resultRow('L10 life', fmt(r.l10Hours, 0) + ' hours')}
+          ${resultRow('L10 life', fmt(r.l10Years8760h, 2) + ' years (continuous running)')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">L10 = (C/P)^p million revolutions</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Heat Exchanger LMTD & Area ----------
+function pageHeatExchanger() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Heat Exchanger LMTD &amp; Area</h1>
+    <p class="lead">Log mean temperature difference and required heat transfer area from the four terminal temperatures \u2014 the calculation between the plant-level heat balance and checking an actual exchanger.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Terminal Temperatures</div>
+    <div class="input-row">
+      <div class="field"><label>Hot fluid in (\u00b0C)</label><input type="number" id="hIn" step="any" value="150"></div>
+      <div class="field"><label>Hot fluid out (\u00b0C)</label><input type="number" id="hOut" step="any" value="90"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Cold fluid in (\u00b0C)</label><input type="number" id="cIn" step="any" value="30"></div>
+      <div class="field"><label>Cold fluid out (\u00b0C)</label><input type="number" id="cOut" step="any" value="80"></div>
+    </div>
+    <div class="field"><label>Flow arrangement</label><select id="arr"><option value="counter-current">Counter-current</option><option value="co-current">Co-current (parallel)</option></select></div>
+    <div class="btn-row"><button class="btn" id="calcLmtd">Calculate LMTD</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Required Area (optional)</div>
+    <div class="input-row">
+      <div class="field"><label>Heat duty (kW)</label><input type="number" id="duty" step="any" value="500"></div>
+      <div class="field"><label>Overall U (W/m&sup2;K)</label><input type="number" id="uval" step="any" value="800"></div>
+    </div>
+    <div class="field"><label>Correction factor F</label><input type="number" id="fFactor" step="any" value="1.0" min="0.01" max="1"></div>
+    <div class="hint">F = 1.0 only for true counter-current/co-current flow. Shell-and-tube and cross-flow exchangers need F from TEMA/manufacturer charts.</div>
+    <div class="btn-row"><button class="btn secondary" id="calcArea">Calculate Area</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter the four terminal temperatures.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  let lastLmtd = null;
+
+  left.querySelector('#calcLmtd').addEventListener('click', () => {
+    try {
+      const r = hx.lmtd({
+        hotInC: +left.querySelector('#hIn').value,
+        hotOutC: +left.querySelector('#hOut').value,
+        coldInC: +left.querySelector('#cIn').value,
+        coldOutC: +left.querySelector('#cOut').value,
+        flowArrangement: left.querySelector('#arr').value,
+      });
+      lastLmtd = r.lmtdC;
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.lmtdC, 2)}</span><span class="unit">\u00b0C LMTD</span></div>
+        <div class="result-grid">
+          ${resultRow('\u0394T at end 1', fmt(r.dT1, 2) + ' \u00b0C')}
+          ${resultRow('\u0394T at end 2', fmt(r.dT2, 2) + ' \u00b0C')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">LMTD = (\u0394T\u2081 \u2212 \u0394T\u2082) / ln(\u0394T\u2081/\u0394T\u2082)</div>
+        <div class="assumptions-note" style="margin-top:12px;">Enter U and duty below, then Calculate Area, to size the exchanger from this LMTD.</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  left.querySelector('#calcArea').addEventListener('click', () => {
+    try {
+      if (lastLmtd === null) {
+        const l = hx.lmtd({
+          hotInC: +left.querySelector('#hIn').value, hotOutC: +left.querySelector('#hOut').value,
+          coldInC: +left.querySelector('#cIn').value, coldOutC: +left.querySelector('#cOut').value,
+          flowArrangement: left.querySelector('#arr').value,
+        });
+        lastLmtd = l.lmtdC;
+      }
+      const r = hx.heatExchangerArea({
+        dutyKW: +left.querySelector('#duty').value,
+        uValueWm2K: +left.querySelector('#uval').value,
+        lmtdC: lastLmtd,
+        correctionFactorF: +left.querySelector('#fFactor').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.areaM2, 2)}</span><span class="unit">m\u00b2 required area</span></div>
+        <div class="result-grid">
+          ${resultRow('LMTD used', fmt(lastLmtd, 2) + ' \u00b0C')}
+          ${resultRow('Required area', fmt(r.areaM2, 3) + ' m\u00b2')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">A = Q / (U \u00b7 F \u00b7 LMTD)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('heat-exchanger',
+        `Heat exchanger \u2014 ${fmt(r.areaM2, 2)} m\u00b2`, {}, { areaM2: r.areaM2, lmtdC: lastLmtd }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
 // ================= ELECTRICAL SECTION =================
 // These pages surface the electrical protection engines that were already
 // in the codebase (and covered by the 100,000-point fuzz suite) but had no
@@ -3858,6 +5063,101 @@ function pageIdmt() {
         <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
       right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('idmt',
         `IDMT ${curve} \u2014 ${fmt(t, 3)} s`, { ifault, ipickup, curve, tms }, { psm: m, operatingTimeS: t }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Multi-Stage Relay Settings (ABB/Siemens-style) ----------
+function pageRelaySettings() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Multi-Stage Overcurrent Relay Settings</h1>
+    <p class="lead">The real workflow for a numerical feeder relay (ABB REF615/620/630, Siemens SIPROTEC 7SJ, and equivalents): three protection stages \u2014 I&gt; inverse-time, I&gt;&gt; definite-time high-set, I&gt;&gt;&gt; instantaneous \u2014 with every pickup carried in BOTH primary amps and relay per-unit (\u00d7 In), because that is how a relay is actually set and documented, not in raw primary current alone. Curve math follows IEC 60255-151 and IEEE C37.112 \u2014 the standards both manufacturers' relays are built on; this does not reproduce either vendor's proprietary setting software.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">CT &amp; Relay</div>
+    <div class="input-row">
+      <div class="field"><label>CT ratio primary (A)</label><input type="number" id="ctP" step="any" value="400"></div>
+      <div class="field"><label>CT ratio secondary (A)</label><select id="ctS"><option value="1">1 A</option><option value="5">5 A</option></select></div>
+    </div>
+    <div class="field"><label>Relay rated current In (A)</label><select id="inA"><option value="1">1 A</option><option value="5">5 A</option></select></div>
+
+    <div class="panel-title" style="margin-top:14px;">Feeder Currents (primary, A)</div>
+    <div class="input-row">
+      <div class="field"><label>Full load current</label><input type="number" id="flc" step="any" value="320"></div>
+      <div class="field"><label>Max through-fault / inrush</label><input type="number" id="tf" step="any" value="1200"></div>
+    </div>
+    <div class="field"><label>Max fault current (own zone)</label><input type="number" id="fault" step="any" value="6000"></div>
+    <div class="hint">"Max through-fault" is the largest current the relay must NOT trip fast for \u2014 downstream fault contribution, motor starting, or transformer inrush. "Max fault current" is the highest fault level genuinely within this relay's own zone.</div>
+
+    <div class="panel-title" style="margin-top:14px;">Stage 1 (I&gt;) \u2014 IDMT</div>
+    <div class="input-row">
+      <div class="field"><label>Curve</label><select id="curve">${Object.entries(idmt.CURVES).map(([k, v]) => `<option value="${k}"${k === 'SI' ? ' selected' : ''}>${v.name}</option>`).join('')}</select></div>
+      <div class="field"><label>Pickup margin above FLC (%)</label><input type="number" id="m1" step="any" value="20"></div>
+    </div>
+    <div class="field"><label>Target operating time at max fault (s)</label><input type="number" id="t1" step="any" value="0.3"></div>
+
+    <div class="panel-title" style="margin-top:14px;">Stage 2 (I&gt;&gt;) \u2014 Definite Time</div>
+    <div class="input-row">
+      <div class="field"><label>Margin above through-fault (%)</label><input type="number" id="m2" step="any" value="25"></div>
+      <div class="field"><label>Time delay (s)</label><input type="number" id="t2" step="any" value="0.15"></div>
+    </div>
+
+    <div class="panel-title" style="margin-top:14px;">Stage 3 (I&gt;&gt;&gt;) \u2014 Instantaneous</div>
+    <div class="field"><label>Margin above max fault current (%)</label><input type="number" id="m3" step="any" value="20"></div>
+
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter CT ratio, relay rating, and feeder currents.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = rs.relaySettings({
+        ctPrimaryA: +left.querySelector('#ctP').value,
+        ctSecondaryA: +left.querySelector('#ctS').value,
+        relayInA: +left.querySelector('#inA').value,
+        fullLoadCurrentA: +left.querySelector('#flc').value,
+        maxThroughFaultA: +left.querySelector('#tf').value,
+        maxFaultCurrentA: +left.querySelector('#fault').value,
+        pickupMarginPct: +left.querySelector('#m1').value,
+        stage2MarginPct: +left.querySelector('#m2').value,
+        stage3MarginPct: +left.querySelector('#m3').value,
+        curveKey: left.querySelector('#curve').value,
+        desiredStage1TimeS: +left.querySelector('#t1').value,
+        stage2DelayS: +left.querySelector('#t2').value,
+      });
+      const warnHtml = r.warnings.length
+        ? `<div class="assumptions-note" style="margin-top:12px;border-color:var(--red);">${r.warnings.map((w) => `\u26a0 ${w}`).join('<br><br>')}</div>` : '';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.stage1.pickupPu, 3)}</span><span class="unit">\u00d7 In (I&gt; pickup)</span></div>
+        <div class="hint" style="margin-top:-6px;">CT ratio ${r.ctRatio} \u00b7 relay In ${r.relayInA} A</div>
+
+        <div class="panel-title" style="margin-top:14px;">Stage 1 \u2014 I&gt; (${r.stage1.curve})</div>
+        <div class="result-grid">
+          ${resultRow('Pickup (primary)', fmt(r.stage1.pickupA, 1) + ' A')}
+          ${resultRow('Pickup (relay setting)', fmt(r.stage1.pickupPu, 3) + ' \u00d7 In')}
+          ${r.stage1.tms !== null ? resultRow('TMS / TD', fmt(r.stage1.tms, 4)) : resultRow('TMS / TD', 'n/a \u2014 see warning')}
+          ${r.stage1.operatingTimeS !== null ? resultRow('Operating time at max fault', fmt(r.stage1.operatingTimeS, 3) + ' s') : ''}
+        </div>
+
+        <div class="panel-title" style="margin-top:14px;">Stage 2 \u2014 I&gt;&gt; (Definite Time)</div>
+        <div class="result-grid">
+          ${resultRow('Pickup (primary)', fmt(r.stage2.pickupA, 1) + ' A')}
+          ${resultRow('Pickup (relay setting)', fmt(r.stage2.pickupPu, 3) + ' \u00d7 In')}
+          ${resultRow('Time delay', fmt(r.stage2.delayS, 3) + ' s')}
+        </div>
+
+        <div class="panel-title" style="margin-top:14px;">Stage 3 \u2014 I&gt;&gt;&gt; (Instantaneous)</div>
+        <div class="result-grid">
+          ${resultRow('Pickup (primary)', fmt(r.stage3.pickupA, 1) + ' A')}
+          ${resultRow('Pickup (relay setting)', fmt(r.stage3.pickupPu, 3) + ' \u00d7 In')}
+          ${resultRow('Time delay', 'Instantaneous (no intentional delay)')}
+        </div>
+        ${warnHtml}
+        <div class="assumptions-note" style="margin-top:12px;">Every pickup is shown in BOTH primary amps and relay per-unit (\u00d7 In) \u2014 the relay itself is set in per-unit; primary amps are for the setting sheet and coordination study. Confirm against the specific relay's own setting-range limits before commissioning.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('relay-settings',
+        `Relay settings \u2014 I> ${fmt(r.stage1.pickupPu, 2)}\u00d7In`, {}, { stage1PickupPu: r.stage1.pickupPu, stage2PickupPu: r.stage2.pickupPu, stage3PickupPu: r.stage3.pickupPu }));
     } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
   });
 }
@@ -4210,7 +5510,7 @@ function pageControlLoops() {
   app.appendChild(body);
 
   // --- SVG diagram renderer -------------------------------------------
-  const NODE_W = 108, NODE_H = 52;
+  const NODE_W = 120, NODE_H = 56;
   function anchorPoint(n, toward) {
     // Pick the edge midpoint of the node box facing the target, so arrows
     // meet the box cleanly instead of running to its centre.
@@ -4222,10 +5522,30 @@ function pageControlLoops() {
     return { x: cx, y: cy + Math.sign(dy) * (NODE_H / 2) };
   }
 
-  function drawLoop(loop, values) {
+  // PV/MV are the loop's most important signals -- what a controller reads
+  // and what it commands -- so they get their own clear style even when a
+  // loop definition left the edge on the generic default.
+  function resolveEdgeStyleKey(e) {
+    if (e.style) return e.style;
+    if (e.label === 'PV') return 'pv';
+    if (e.label === 'MV') return 'mv';
+    return 'normal';
+  }
+
+  function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq === 0 ? 0 : ((px - x1) * dx + (py - y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = x1 + t * dx, cy = y1 + t * dy;
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  function clampPct(v) { return Math.max(0, Math.min(100, Number.isFinite(v) ? v : 0)); }
+  function drawLoop(loop, values, ctrlInfo, elemInfo) {
     const nodeById = Object.fromEntries(loop.nodes.map((n) => [n.id, n]));
     const maxX = Math.max(...loop.nodes.map((n) => n.x)) + NODE_W + 40;
-    const maxY = Math.max(...loop.nodes.map((n) => n.y)) + NODE_H + 40;
+    const maxY = Math.max(...loop.nodes.map((n) => n.y)) + NODE_H + 52;
 
     // Edge labels are placed at the line midpoint, but two edges crossing
     // the same area put their labels on top of each other and the text
@@ -4246,34 +5566,83 @@ function pageControlLoops() {
     const edgeSvg = loop.edges.map((e, i) => {
       const a = nodeById[e.from], b = nodeById[e.to];
       const p1 = anchorPoint(a, b), p2 = anchorPoint(b, a);
-      const st = cl.EDGE_STYLES[e.style || 'normal'];
-      const midX = (p1.x + p2.x) / 2;
-      const midY = (p1.y + p2.y) / 2 + (e.label ? labelOffset((p1.x + p2.x) / 2, (p1.y + p2.y) / 2) : 0);
+      const styleKey = resolveEdgeStyleKey(e);
+      const st = cl.EDGE_STYLES[styleKey];
+
+      // If the straight line would pass close to a THIRD node's box, bow
+      // it into a gentle curve instead -- routing around the obstruction
+      // rather than crossing straight through it, which is what produced
+      // the tangle of near-invisible lines cutting through unrelated
+      // boxes in the original layout.
+      let collider = null;
+      for (const n of loop.nodes) {
+        if (n === a || n === b) continue;
+        const ncx = n.x + NODE_W / 2, ncy = n.y + NODE_H / 2;
+        const dist = pointToSegmentDist(ncx, ncy, p1.x, p1.y, p2.x, p2.y);
+        if (dist < Math.min(NODE_W, NODE_H) / 2 + 14) { collider = { ncx, ncy }; break; }
+      }
+
+      let pathD, midX, midY;
+      if (collider) {
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy) || 1;
+        let px = -dy / len, py = dx / len;   // unit perpendicular
+        // Curve away from the obstruction: bow to whichever side puts
+        // more distance between the curve and the collider's centre.
+        const midStraightX = (p1.x + p2.x) / 2, midStraightY = (p1.y + p2.y) / 2;
+        const towardCollider = (collider.ncx - midStraightX) * px + (collider.ncy - midStraightY) * py;
+        if (towardCollider > 0) { px = -px; py = -py; }
+        const bow = 34;
+        const ctrlX = midStraightX + px * bow, ctrlY = midStraightY + py * bow;
+        pathD = `M ${p1.x} ${p1.y} Q ${ctrlX} ${ctrlY} ${p2.x} ${p2.y}`;
+        // Actual midpoint of a quadratic bezier at t=0.5.
+        midX = 0.25 * p1.x + 0.5 * ctrlX + 0.25 * p2.x;
+        midY = 0.25 * p1.y + 0.5 * ctrlY + 0.25 * p2.y;
+      } else {
+        pathD = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+        midX = (p1.x + p2.x) / 2;
+        midY = (p1.y + p2.y) / 2;
+      }
+      midY += e.label ? labelOffset(midX, midY) : 0;
+
       return `
-        <line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"
-              stroke="${st.color}" stroke-width="1.6" ${st.dash ? `stroke-dasharray="${st.dash}"` : ''}
-              marker-end="url(#arrow-${e.style || 'normal'})" opacity="0.85"/>
+        <path d="${pathD}" fill="none"
+              stroke="${st.color}" stroke-width="1.8" ${st.dash ? `stroke-dasharray="${st.dash}"` : ''}
+              marker-end="url(#arrow-${styleKey})" opacity="0.95"/>
         <circle r="3.5" fill="${st.color}">
           <animateMotion dur="2.4s" repeatCount="indefinite" begin="${(i * 0.18).toFixed(2)}s"
-            path="M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}"/>
+            path="${pathD}"/>
         </circle>
-        ${e.label ? `<text x="${midX}" y="${midY - 5}" fill="${st.color}" font-size="9"
-             font-family="var(--font-mono)" text-anchor="middle" opacity="0.9">${e.label}</text>` : ''}`;
+        ${e.label ? `<text x="${midX}" y="${midY - 5}" fill="${st.color}" font-size="9.5"
+             font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">${e.label}</text>` : ''}`;
     }).join('');
 
     const nodeSvg = loop.nodes.map((n) => {
       const st = cl.NODE_STYLES[n.type];
       const val = values && values[n.id] ? values[n.id] : '';
+      // Controllers and final elements get an output bar under the box, so
+      // you can SEE how hard the controller is pushing instead of having to
+      // interpret a bare number.
+      const cInfo = ctrlInfo && ctrlInfo[n.id];
+      const eInfo = elemInfo && elemInfo[n.id];
+      const barPct = cInfo ? clampPct(cInfo.outPct) : eInfo ? clampPct(eInfo.pct) : null;
+      const barCol = cInfo ? (cInfo.saturated ? 'var(--red)' : 'var(--amber)') : 'var(--green)';
+      const bar = barPct === null ? '' : `
+        <rect x="${n.x + 8}" y="${n.y + NODE_H + 4}" width="${NODE_W - 16}" height="5" rx="2.5"
+              fill="var(--bg-inset)" stroke="var(--line-soft)" stroke-width="0.5"/>
+        <rect x="${n.x + 8}" y="${n.y + NODE_H + 4}" width="${((NODE_W - 16) * barPct / 100).toFixed(1)}" height="5" rx="2.5"
+              fill="${barCol}"/>`;
       return `
         <g class="loop-node" data-node="${n.id}" style="cursor:pointer;">
-          <rect x="${n.x}" y="${n.y}" width="${NODE_W}" height="${NODE_H}" rx="6"
+          <rect x="${n.x}" y="${n.y}" width="${NODE_W}" height="${NODE_H}" rx="7"
                 fill="var(--bg-panel)" stroke="${st.color}" stroke-width="1.8"/>
-          <text x="${n.x + NODE_W / 2}" y="${n.y + 19}" fill="${st.color}" font-size="11"
-                font-family="var(--font-mono)" font-weight="600" text-anchor="middle">${n.label.replace(/<br\/>/g, ' ')}</text>
-          <text x="${n.x + NODE_W / 2}" y="${n.y + 32}" fill="var(--text-faint)" font-size="8"
+          <text x="${n.x + NODE_W / 2}" y="${n.y + 20}" fill="${st.color}" font-size="11.5"
+                font-family="var(--font-mono)" font-weight="700" text-anchor="middle">${n.label.replace(/<br\/>/g, ' ')}</text>
+          <text x="${n.x + NODE_W / 2}" y="${n.y + 34}" fill="var(--text-faint)" font-size="8.5"
                 font-family="var(--font-mono)" text-anchor="middle">${n.sub}</text>
-          <text x="${n.x + NODE_W / 2}" y="${n.y + 45}" fill="var(--text)" font-size="10"
-                font-family="var(--font-mono)" font-weight="600" text-anchor="middle">${val}</text>
+          <text x="${n.x + NODE_W / 2}" y="${n.y + 48}" fill="var(--text)" font-size="10.5"
+                font-family="var(--font-mono)" font-weight="700" text-anchor="middle">${val}</text>
+          ${bar}
         </g>`;
     }).join('');
 
@@ -4316,16 +5685,34 @@ function pageControlLoops() {
           <button class="btn secondary" id="simReset" style="flex:0 0 auto;">Reset</button>
         </div>
 
-        <div id="loopSvg" style="overflow-x:auto;margin-top:14px;padding:10px 0;"></div>
-        <div id="trendChart" style="margin-top:4px;"></div>
-
-        <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-size:.72rem;color:var(--text-faint);">
-          ${Object.entries(cl.EDGE_STYLES).map(([, st]) =>
-            `<span style="display:inline-flex;align-items:center;gap:5px;">
-              <span style="display:inline-block;width:18px;height:0;border-top:2px ${st.dash ? 'dashed' : 'solid'} ${st.color};"></span>${st.label}</span>`).join('')}
+        <!-- Big live number first: this is the ONE thing to watch. -->
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;">
+          <div class="readout" style="margin:0;">
+            <span class="value" id="liveValue">\u2014</span><span class="unit" id="liveUnit"></span>
+          </div>
+          <span class="badge" id="liveStatus" style="font-size:.8rem;padding:6px 12px;"></span>
         </div>
+        <div id="zeroNote" style="display:none;font-size:.76rem;color:var(--text-faint);margin-top:4px;"></div>
+        <div id="trendChart" style="margin-top:10px;"></div>
 
         <div class="assumptions-note" id="simInsight" style="margin-top:14px;"></div>
+
+        <div style="margin-top:16px;">
+          <div id="loopSvg" style="overflow-x:auto;padding:10px 0;"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-size:.72rem;color:var(--text-faint);">
+            ${Object.entries(cl.EDGE_STYLES).map(([, st]) =>
+              `<span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px ${st.dash ? 'dashed' : 'solid'} ${st.color};"></span>${st.label}</span>`).join('')}
+          </div>
+        </div>
+
+        <div style="margin-top:18px;border-top:1px solid var(--line-soft);padding-top:12px;">
+          <span id="detailsToggle" role="link" tabindex="0" style="color:var(--amber);font-size:.85rem;cursor:pointer;">\u25b8 Show controller detail &amp; step-by-step signal flow</span>
+        </div>
+        <div id="detailsBody" style="display:none;margin-top:12px;">
+          <div id="ctrlCards"></div>
+          <div id="chainPanel" style="margin-top:14px;"></div>
+        </div>
       </div>
 
       <div class="calc-layout" style="margin-top:16px;">
@@ -4385,9 +5772,70 @@ function pageControlLoops() {
     const clockEl = body.querySelector('#simClock');
     let simTime = 0, hist = [], running = true;
 
+    function renderControllers(r) {
+      const wrap = body.querySelector('#ctrlCards');
+      if (!wrap) return;
+      if (!r.controllers || !Object.keys(r.controllers).length) { wrap.innerHTML = ''; return; }
+      wrap.innerHTML = `
+        <div class="panel-title" style="margin-top:4px;">Controller Outputs</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        ${Object.entries(r.controllers).map(([id, k]) => {
+          const node = loop.nodes.find((n) => n.id === id);
+          const name = node ? node.label.replace(/<br\/>/g, ' ') : id;
+          const err = k.sp - k.pv;
+          const pct = clampPct(k.outPct);
+          return `<div style="flex:1 1 230px;min-width:0;background:var(--bg-inset);border:1px solid ${k.saturated ? 'var(--red)' : 'var(--line-soft)'};border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+              <b style="color:var(--amber);font-family:var(--font-mono);">${name}</b>
+              ${k.saturated ? '<span class="badge out">SATURATED</span>' : ''}
+            </div>
+            <div style="font-size:.7rem;color:var(--text-faint);margin-bottom:8px;">${k.role || ''}</div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-family:var(--font-mono);font-size:.78rem;">
+              <span style="color:var(--text-faint);">SP</span><span>${fmt(k.sp, 2)} ${k.unit}</span>
+              <span style="color:var(--text-faint);">PV</span><span>${fmt(k.pv, 2)} ${k.unit}</span>
+              <span style="color:var(--text-faint);">ERR</span><span style="color:var(--cyan);">${err >= 0 ? '+' : ''}${fmt(err, 3)} ${k.unit}</span>
+              <span style="color:var(--text-faint);">OUT</span><span style="color:var(--amber);font-weight:600;">${fmt(k.out, 2)} ${k.outUnit}</span>
+            </div>
+            <div style="margin-top:8px;height:7px;background:var(--bg-panel);border-radius:4px;overflow:hidden;">
+              <div style="height:100%;width:${pct.toFixed(1)}%;background:${k.saturated ? 'var(--red)' : 'var(--amber)'};"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text-faint);margin-top:3px;font-family:var(--font-mono);">
+              <span>${fmt(k.outMin, 0)}</span><span>${pct.toFixed(0)}% of range</span><span>${fmt(k.outMax, 0)}</span>
+            </div>
+          </div>`;
+        }).join('')}
+        </div>`;
+    }
+
+    function renderChain(r) {
+      const wrap = body.querySelector('#chainPanel');
+      if (!wrap) return;
+      if (!r.chain || !r.chain.length) { wrap.innerHTML = ''; return; }
+      wrap.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px;">
+          <div class="panel-title" style="margin:0;">How the signal flows right now</div>
+          ${r.strategy ? `<span class="badge status-predicted" style="font-family:var(--font-mono);">${r.strategy}</span>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;margin-top:8px;">
+        ${r.chain.map((s, i) => `
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;${i ? 'border-top:1px solid var(--line-soft);' : ''}">
+            <div style="flex:0 0 22px;height:22px;border-radius:50%;background:var(--bg-inset);border:1px solid var(--amber);
+                        color:var(--amber);display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-mono);font-size:.7rem;">${i + 1}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:.85rem;">${s.step}</b>
+                <span style="font-family:var(--font-mono);color:var(--cyan);font-size:.85rem;">${s.value}</span>
+              </div>
+              <div style="font-size:.78rem;color:var(--text-dim);margin-top:2px;">${s.why}</div>
+            </div>
+          </div>`).join('')}
+        </div>`;
+    }
+
     function drawTrend() {
       if (!trendEl || !dyn || hist.length < 2) return;
-      const W = 700, H = 132, pad = 30;
+      const W = 700, H = 200, pad = 34;
       const vals = hist.map((p) => p.v);
       let lo = Math.min(...vals), hi = Math.max(...vals);
       if (dyn.setpoint !== null && dyn.setpoint !== undefined) { lo = Math.min(lo, dyn.setpoint); hi = Math.max(hi, dyn.setpoint); }
@@ -4411,6 +5859,36 @@ function pageControlLoops() {
       </svg>`;
     }
 
+    const liveValueEl = body.querySelector('#liveValue');
+    const liveUnitEl = body.querySelector('#liveUnit');
+    const liveStatusEl = body.querySelector('#liveStatus');
+    const unitMatch = /\(([^)]+)\)\s*$/.exec(dyn ? dyn.trendLabel : '');
+    if (liveUnitEl) liveUnitEl.textContent = unitMatch ? unitMatch[1] : '';
+
+    // These level loops display a SIGNED DEVIATION from the normal setpoint
+    // (0 = at normal, real drum/heater/deaerator level transmitters are
+    // ranged this way, not empty-to-full) rather than an absolute reading.
+    // That is easy to misread as "level is zero / empty" without saying so.
+    const zeroNoteEl = body.querySelector('#zeroNote');
+    if (zeroNoteEl && dyn && dyn.setpoint === 0 && /\(mm\)/.test(dyn.trendLabel)) {
+      zeroNoteEl.style.display = 'block';
+      zeroNoteEl.textContent = '0 mm here means "at the normal operating level" (the setpoint), not empty \u2014 real level transmitters are ranged around normal level, not the full vessel. Positive = above normal, negative = below.';
+    }
+
+    function updateLiveReadout(r) {
+      if (!liveValueEl) return;
+      liveValueEl.textContent = fmt(r.trend, 2);
+      const anySaturated = r.controllers && Object.values(r.controllers).some((k) => k.saturated);
+      let status = 'ADJUSTING', cls = 'warning';
+      if (dyn.setpoint !== null && dyn.setpoint !== undefined && hist.length > 4) {
+        const vals = hist.map((p) => p.v);
+        const span = Math.max(1e-6, Math.max(...vals) - Math.min(...vals), Math.abs(dyn.setpoint) * 0.02);
+        if (Math.abs(r.trend - dyn.setpoint) < span * 0.08) { status = 'ON TARGET'; cls = 'normal'; }
+      }
+      if (anySaturated) { status = 'AT LIMIT'; cls = 'out'; }
+      if (liveStatusEl) { liveStatusEl.textContent = status; liveStatusEl.className = 'badge ' + cls; }
+    }
+
     function tick() {
       if (!dyn || !running) return;
       let r = null;
@@ -4418,8 +5896,11 @@ function pageControlLoops() {
       for (let i = 0; i < steps; i++) { r = dyn.step(DT, simInput); simTime += DT; }
       hist.push({ t: simTime, v: r.trend });
       if (hist.length > 320) hist.shift();
-      svgWrap.innerHTML = drawLoop(loop, r.nodeValues);
+      svgWrap.innerHTML = drawLoop(loop, r.nodeValues, r.controllers, r.elements);
+      renderControllers(r);
+      renderChain(r);
       insight.innerHTML = r.insight;
+      updateLiveReadout(r);
       if (clockEl) clockEl.textContent = simTime.toFixed(0) + ' s';
       drawTrend();
       svgWrap.querySelectorAll('.loop-node').forEach((g) => {
@@ -4451,6 +5932,16 @@ function pageControlLoops() {
         for (let i = 0; i < 1500; i++) dyn.step(DT, simInput);
         simTime = 0; hist = [];
       } else refresh();
+    });
+
+    const detailsToggle = body.querySelector('#detailsToggle');
+    const detailsBody = body.querySelector('#detailsBody');
+    if (detailsToggle) detailsToggle.addEventListener('click', () => {
+      const open = detailsBody.style.display !== 'none';
+      detailsBody.style.display = open ? 'none' : 'block';
+      detailsToggle.textContent = open
+        ? '\u25b8 Show controller detail & step-by-step signal flow'
+        : '\u25be Hide controller detail & step-by-step signal flow';
     });
 
     if (dyn) {
@@ -4802,7 +6293,7 @@ async function initTheme() {
 // ---------- Boot ----------
 initTheme();
 initGlobalSearch();
-loadContentVisibility().then(() => navigate(''));
+loadContentVisibility().then(() => navigate(currentRoute, { skipHistory: true }));
 const adminLoginLink = document.getElementById('adminLoginLink');
 if (adminLoginLink) {
   adminLoginLink.addEventListener('click', attemptAdminLogin);
@@ -4815,7 +6306,7 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260901162932';
+const APP_BUILD = '20260903093433';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('buildTag')) {

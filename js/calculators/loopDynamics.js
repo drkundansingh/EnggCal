@@ -107,6 +107,9 @@ export class PID {
     this.error = 0;
   }
   step(sp, pv, dt) {
+    // Remember the last SP/PV so the UI can display what the controller is
+    // actually comparing, rather than just its output number.
+    this.sp = sp; this.pv = pv;
     let err = sp - pv;
     if (this.reverse) err = -err;
 
