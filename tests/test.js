@@ -24,6 +24,13 @@ import * as steam from '../js/calculators/steamTable.js';
 import * as idmt from '../js/calculators/idmt.js';
 import * as rs from '../js/calculators/relaySettings.js';
 import * as hx from '../js/calculators/heatExchanger.js';
+import * as cst from '../js/calculators/civilStructural.js';
+import * as ccon from '../js/calculators/civilConcrete.js';
+import * as cgeo from '../js/calculators/civilGeotech.js';
+import * as chyd from '../js/calculators/civilHydraulics.js';
+import * as csur from '../js/calculators/civilSurveying.js';
+import * as vt from '../js/calculators/vesselsTanks.js';
+import * as pt from '../js/calculators/processThermal.js';
 import * as pipe from '../js/calculators/piping.js';
 import * as rot from '../js/calculators/rotatingEquipment.js';
 import * as ctEngine from '../js/calculators/ctEngine.js';
@@ -1581,6 +1588,270 @@ test('pumpPower: rejects zero or negative flow, head, and efficiency', () => {
   assert.throws(() => rot.pumpPower({ flowM3H: 0, headM: 30, specificGravity: 1, pumpEfficiencyPct: 75 }));
   assert.throws(() => rot.pumpPower({ flowM3H: 100, headM: 0, specificGravity: 1, pumpEfficiencyPct: 75 }));
   assert.throws(() => rot.pumpPower({ flowM3H: 100, headM: 30, specificGravity: 1, pumpEfficiencyPct: 0 }));
+});
+
+console.log('\n--- civilStructural.js (beam theory, Euler buckling) ---');
+test('beamAnalysis: simply supported point load matches classical PL^3/48EI', () => {
+  const r = cst.beamAnalysis({ support: 'simply-supported', loadType: 'point', spanM: 4, loadN: 10000, E_Pa: 200e9, I_m4: 6.6667e-5 });
+  approx(r.deflectionMm, 1.0, 1e-3);
+  approx(r.momentMaxNm, 10000, 1e-6);
+  approx(r.shearMaxN, 5000, 1e-6);
+});
+test('beamAnalysis: simply supported UDL matches classical 5wL^4/384EI', () => {
+  const r = cst.beamAnalysis({ support: 'simply-supported', loadType: 'udl', spanM: 4, loadN: 20000, E_Pa: 200e9, I_m4: 6.6667e-5 });
+  approx(r.deflectionMm, 1.25, 1e-3);
+  approx(r.momentMaxNm, 10000, 1e-6);
+});
+test('beamAnalysis: cantilever point load matches classical PL^3/3EI and M=PL', () => {
+  const r = cst.beamAnalysis({ support: 'cantilever', loadType: 'point', spanM: 2, loadN: 1000, E_Pa: 200e9, I_m4: 5e-6 });
+  const manual = (1000 * 2 ** 3) / (3 * 200e9 * 5e-6);
+  approx(r.deflectionMm, manual * 1000, 1e-6);
+  approx(r.momentMaxNm, 2000, 1e-9);
+});
+test('sectionProperties: rectangle matches bh^3/12 and bh^2/6', () => {
+  const r = cst.sectionProperties({ shape: 'rectangle', widthM: 0.1, heightM: 0.2 });
+  approx(r.momentOfInertiaM4, (0.1 * 0.2 ** 3) / 12, 1e-12);
+  approx(r.sectionModulusM3, (0.1 * 0.2 ** 2) / 6, 1e-12);
+});
+test('columnBuckling: pinned-pinned matches classical Euler pi^2 EI / L^2', () => {
+  const r = cst.columnBuckling({ endCondition: 'pinned-pinned', lengthM: 4, E_Pa: 200e9, I_m4: 6.6667e-5, areaM2: 0.02 });
+  approx(r.criticalLoadN, (Math.PI ** 2 * 200e9 * 6.6667e-5) / 4 ** 2, 1);
+  approx(r.kFactor, 1.0, 1e-9);
+});
+test('columnBuckling: fixed-free K=2 gives one quarter the capacity of pinned-pinned at the same length', () => {
+  const pinned = cst.columnBuckling({ endCondition: 'pinned-pinned', lengthM: 4, E_Pa: 200e9, I_m4: 6.6667e-5, areaM2: 0.02 });
+  const fixedFree = cst.columnBuckling({ endCondition: 'fixed-free', lengthM: 4, E_Pa: 200e9, I_m4: 6.6667e-5, areaM2: 0.02 });
+  approx(fixedFree.criticalLoadN, pinned.criticalLoadN / 4, 1e-6);
+});
+test('steelWeight: round bar matches the familiar d\u00b2/162 rule of thumb within 0.2%', () => {
+  const r = cst.steelWeight({ shape: 'round-bar', lengthM: 1, diameterMm: 16 });
+  const ruleOfThumb = (16 * 16) / 162;
+  assert.ok(Math.abs(r.weightPerMKgM - ruleOfThumb) / ruleOfThumb < 0.002);
+});
+
+console.log('\n--- civilConcrete.js (IS 456 nominal mix, rebar weight) ---');
+test('nominalMixQuantities: M20 for 1 m\u00b3 matches the commonly cited ~8 bags of cement', () => {
+  const r = ccon.nominalMixQuantities({ grade: 'M20', wetVolumeM3: 1 });
+  assert.ok(Math.abs(r.cementBags - 8.06) < 0.05);
+});
+test('nominalMixQuantities: rejects a grade outside the IS 456 nominal-mix range', () => {
+  assert.throws(() => ccon.nominalMixQuantities({ grade: 'M25', wetVolumeM3: 1 }));
+});
+test('rebarWeight: matches density x area x length exactly, and the field rule of thumb closely', () => {
+  const r = ccon.rebarWeight({ diameterMm: 16, lengthM: 1 });
+  const exact = 7850 * (Math.PI / 4) * (16 * 1e-3) ** 2 * 1;
+  approx(r.weightPerMKgM, exact, 1e-9);
+});
+test('waterCementRatio: solves for the missing value from any two given', () => {
+  const r = ccon.waterCementRatio({ cementKg: 50, targetRatio: 0.45 });
+  approx(r.waterKg, 22.5, 1e-9);
+});
+
+console.log('\n--- civilGeotech.js (Rankine earth pressure, phase relationships) ---');
+test('rankineEarthPressure: phi=30deg gives the textbook Ka=1/3, Kp=3 exactly', () => {
+  const r = cgeo.rankineEarthPressure({ frictionAngleDeg: 30, depthM: 3, unitWeightKNm3: 18 });
+  approx(r.Ka, 1 / 3, 1e-9);
+  approx(r.Kp, 3, 1e-9);
+  approx(r.activePressureKPa, (1 / 3) * 18 * 3, 1e-6);
+  approx(r.passivePressureKPa, 3 * 18 * 3, 1e-6);
+});
+test('soilPhaseRelationships: e and n convert consistently both directions', () => {
+  const r1 = cgeo.soilPhaseRelationships({ voidRatio: 0.6 });
+  approx(r1.porosity, 0.6 / 1.6, 1e-9);
+  const r2 = cgeo.soilPhaseRelationships({ porosity: r1.porosity });
+  approx(r2.voidRatio, 0.6, 1e-9);
+});
+test('effectiveStress: total minus pore pressure matches hand calculation across the water table', () => {
+  const r = cgeo.effectiveStress({ depthM: 5, waterTableDepthM: 2, unitWeightAboveWaterKNm3: 17, unitWeightBelowWaterKNm3: 19 });
+  approx(r.totalStressKPa, 17 * 2 + 19 * 3, 1e-9);
+  approx(r.porePressureKPa, 9.81 * 3, 1e-9);
+  approx(r.effectiveStressKPa, r.totalStressKPa - r.porePressureKPa, 1e-9);
+});
+
+console.log('\n--- civilHydraulics.js (Manning\'s equation, weir flow) ---');
+test('manningFlow: rectangular channel matches hand calculation', () => {
+  const r = chyd.manningFlow({ channelShape: 'rectangular', bottomWidthM: 2, flowDepthM: 1, manningN: 0.013, longitudinalSlope: 0.001 });
+  const A = 2, P = 4, R = A / P;
+  const V = (1 / 0.013) * Math.pow(R, 2 / 3) * Math.sqrt(0.001);
+  approx(r.velocityMs, V, 1e-9);
+  approx(r.flowM3s, V * A, 1e-9);
+});
+test('weirFlow: matches the Francis formula Q=1.84*L*H^1.5', () => {
+  const r = chyd.weirFlow({ crestLengthM: 1.5, headM: 0.3 });
+  approx(r.flowM3s, 1.84 * 1.5 * Math.pow(0.3, 1.5), 1e-9);
+});
+
+console.log('\n--- civilSurveying.js (area, slope, earthwork) ---');
+test('triangleArea and trapezoidArea match exact geometry', () => {
+  approx(csur.triangleArea({ baseM: 6, heightM: 4 }).areaM2, 12, 1e-9);
+  approx(csur.trapezoidArea({ side1M: 4, side2M: 8, heightM: 5 }).areaM2, 30, 1e-9);
+});
+test('slopeCalc: 1 in 10 rise/run gives exactly 10% and the correct angle', () => {
+  const r = csur.slopeCalc({ riseM: 2, runM: 20 });
+  approx(r.slopePct, 10, 1e-9);
+  approx(r.slopeAngleDeg, Math.atan(0.1) * 180 / Math.PI, 1e-9);
+});
+test('cutFillVolume: average end area method matches hand calculation', () => {
+  const r = csur.cutFillVolume({ area1M2: 20, area2M2: 30, distanceM: 50 });
+  approx(r.volumeM3, ((20 + 30) / 2) * 50, 1e-9);
+});
+
+console.log('\n--- vesselsTanks.js (tank volume, ASME VIII vessel) ---');
+test('horizontalTankVolume: half-full and full match exact circular-segment geometry', () => {
+  const half = vt.horizontalTankVolume({ diameterM: 2, lengthM: 5, fillDepthM: 1 });
+  approx(half.filledVolumeM3, (Math.PI * 1 ** 2 * 5) / 2, 1e-6);
+  const full = vt.horizontalTankVolume({ diameterM: 2, lengthM: 5, fillDepthM: 2 });
+  approx(full.filledVolumeM3, Math.PI * 1 ** 2 * 5, 1e-6);
+});
+test('horizontalTankVolume: empty tank gives zero, and fill percentage is monotonic', () => {
+  const empty = vt.horizontalTankVolume({ diameterM: 2, lengthM: 5, fillDepthM: 0 });
+  approx(empty.filledVolumeM3, 0, 1e-9);
+  const q1 = vt.horizontalTankVolume({ diameterM: 2, lengthM: 5, fillDepthM: 0.5 }).filledVolumeM3;
+  const q2 = vt.horizontalTankVolume({ diameterM: 2, lengthM: 5, fillDepthM: 1.5 }).filledVolumeM3;
+  assert.ok(q2 > q1);
+});
+test('horizontalTankVolume: rejects a fill depth beyond the tank diameter', () => {
+  assert.throws(() => vt.horizontalTankVolume({ diameterM: 2, lengthM: 5, fillDepthM: 3 }));
+});
+test('verticalTankVolume: flat heads match a plain cylinder volume exactly', () => {
+  const r = vt.verticalTankVolume({ diameterM: 2, cylinderHeightM: 5, headType: 'flat' });
+  approx(r.totalVolumeM3, Math.PI * 1 ** 2 * 5, 1e-9);
+});
+test('verticalTankVolume: hemispherical heads add exactly one sphere of volume', () => {
+  const r = vt.verticalTankVolume({ diameterM: 2, cylinderHeightM: 5, headType: 'hemispherical' });
+  approx(r.headVolumeM3, (4 / 3) * Math.PI * 1 ** 3, 1e-9);
+});
+test('vesselWallThickness: matches the ASME VIII UG-27 formula t=PR/(SE-0.6P) by hand', () => {
+  const r = vt.vesselWallThickness({ designPressureMPa: 1.5, insideRadiusMm: 500, allowableStressMPa: 138, jointEfficiencyE: 1.0 });
+  approx(r.tCircumferentialMm, (1.5 * 500) / (138 * 1.0 - 0.6 * 1.5), 1e-9);
+});
+test('vesselWallThickness: circumferential stress governs over longitudinal (as it should)', () => {
+  const r = vt.vesselWallThickness({ designPressureMPa: 1.5, insideRadiusMm: 500, allowableStressMPa: 138, jointEfficiencyE: 1.0 });
+  assert.ok(r.tCircumferentialMm > r.tLongitudinalMm);
+  assert.equal(r.governingCase, 'circumferential (hoop) stress');
+});
+test('vesselWallThickness: rejects a pressure too high for the equation to have a valid solution', () => {
+  assert.throws(() => vt.vesselWallThickness({ designPressureMPa: 250, insideRadiusMm: 500, allowableStressMPa: 138 }));
+});
+
+console.log('\n--- processThermal.js (insulation heat loss, expansion, compression work) ---');
+test('insulationHeatLoss: matches the series conduction+convection thermal resistance by hand', () => {
+  const r = pt.insulationHeatLoss({ pipeOutsideDiaMm: 100, insulationThicknessMm: 30, thermalConductivityWmK: 0.04, surfaceHeatTransferCoeffWm2K: 10, pipeTempC: 150, ambientTempC: 25 });
+  const rIn = 0.05, rOut = 0.08;
+  const Rins = Math.log(rOut / rIn) / (2 * Math.PI * 0.04);
+  const Rconv = 1 / (10 * 2 * Math.PI * rOut);
+  approx(r.heatLossWm, (150 - 25) / (Rins + Rconv), 1e-6);
+});
+test('insulationHeatLoss: more insulation thickness reduces heat loss', () => {
+  const thin = pt.insulationHeatLoss({ pipeOutsideDiaMm: 100, insulationThicknessMm: 20, thermalConductivityWmK: 0.04, surfaceHeatTransferCoeffWm2K: 10, pipeTempC: 150, ambientTempC: 25 });
+  const thick = pt.insulationHeatLoss({ pipeOutsideDiaMm: 100, insulationThicknessMm: 60, thermalConductivityWmK: 0.04, surfaceHeatTransferCoeffWm2K: 10, pipeTempC: 150, ambientTempC: 25 });
+  assert.ok(thick.heatLossWm < thin.heatLossWm);
+});
+test('thermalExpansion: matches L*alpha*deltaT exactly', () => {
+  const r = pt.thermalExpansion({ originalLengthM: 10, coeffPerC: 12e-6, tempChangeC: 100 });
+  approx(r.expansionMm, 12.0, 1e-9);
+});
+test('gasCompressionWork: adiabatic requires more work than isothermal for the same compression ratio', () => {
+  const iso = pt.gasCompressionWork({ moleFlowMolS: 1, tempInK: 300, p1Bar: 1, p2Bar: 5, mode: 'isothermal' });
+  const adi = pt.gasCompressionWork({ moleFlowMolS: 1, tempInK: 300, p1Bar: 1, p2Bar: 5, polytropicIndex: 1.4, mode: 'adiabatic' });
+  assert.ok(adi.workJPerMol > iso.workJPerMol);
+});
+test('gasCompressionWork: matches the isothermal formula nRT*ln(P2/P1) exactly', () => {
+  const r = pt.gasCompressionWork({ moleFlowMolS: 2, tempInK: 300, p1Bar: 1, p2Bar: 5, mode: 'isothermal' });
+  approx(r.workJPerMol, 8.314 * 300 * Math.log(5), 1e-6);
+  approx(r.powerW, r.workJPerMol * 2, 1e-9);
+});
+test('gasCompressionWork: rejects a non-compression (outlet pressure not above inlet)', () => {
+  assert.throws(() => pt.gasCompressionWork({ moleFlowMolS: 1, tempInK: 300, p1Bar: 5, p2Bar: 5 }));
+});
+
+console.log('\n--- processThermal.js gasCompressionWork mass-flow extension ---');
+test('gasCompressionWork: mass-flow input matches equivalent molar-flow input exactly', () => {
+  const byMass = pt.gasCompressionWork({ massFlowKgS: 1, molecularWeightGMol: 29, tempInK: 300, p1Bar: 1, p2Bar: 5, polytropicIndex: 1.4, mode: 'adiabatic' });
+  const byMolar = pt.gasCompressionWork({ moleFlowMolS: 1000 / 29, tempInK: 300, p1Bar: 1, p2Bar: 5, polytropicIndex: 1.4, mode: 'adiabatic' });
+  approx(byMass.powerKW, byMolar.powerKW, 1e-9);
+});
+test('gasCompressionWork: rejects mass flow without a molecular weight to convert it', () => {
+  assert.throws(() => pt.gasCompressionWork({ massFlowKgS: 1, tempInK: 300, p1Bar: 1, p2Bar: 5 }));
+});
+
+console.log('\n--- rotatingEquipment.js pumpSpecificSpeed ---');
+test('pumpSpecificSpeed: matches hand calculation N*sqrt(Q)/H^0.75', () => {
+  const r = rot.pumpSpecificSpeed({ speedRpm: 1770, flowGpm: 500, headFt: 150 });
+  approx(r.specificSpeedUS, 1770 * Math.sqrt(500) / Math.pow(150, 0.75), 1e-6);
+});
+test('pumpSpecificSpeed: multistage divides head by stage count before computing Ns', () => {
+  const single = rot.pumpSpecificSpeed({ speedRpm: 1770, flowGpm: 500, headFt: 150, numberOfStages: 1 });
+  const triple = rot.pumpSpecificSpeed({ speedRpm: 1770, flowGpm: 500, headFt: 450, numberOfStages: 3 });
+  approx(single.specificSpeedUS, triple.specificSpeedUS, 1e-9);
+});
+test('pumpSpecificSpeed: classifies a very low and very high Ns into different impeller families', () => {
+  const low = rot.pumpSpecificSpeed({ speedRpm: 1770, flowGpm: 50, headFt: 1000 });
+  const high = rot.pumpSpecificSpeed({ speedRpm: 1770, flowGpm: 20000, headFt: 20 });
+  assert.notEqual(low.impellerType, high.impellerType);
+});
+
+console.log('\n--- relaySettings.js sensitivity check (minimum fault detection) ---');
+test('relaySettings: sensitivity ratio matches minFault/stage1Pickup exactly', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    minFaultCurrentA: 900,
+  });
+  approx(r.sensitivity.sensitivityRatio, 900 / r.stage1.pickupA, 1e-9);
+  assert.equal(r.sensitivity.adequate, true);
+  assert.equal(r.warnings.length, 0);
+});
+test('relaySettings: flags a marginal (but non-zero) sensitivity ratio below the target', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    minFaultCurrentA: 500,
+  });
+  assert.equal(r.sensitivity.adequate, false);
+  assert.ok(r.sensitivity.sensitivityRatio > 1);
+  assert.ok(r.warnings.some((w) => w.includes('Sensitivity ratio')));
+});
+test('relaySettings: flags a genuine protection gap when the relay cannot see the minimum fault at all', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    minFaultCurrentA: 300,
+  });
+  assert.ok(r.sensitivity.sensitivityRatio < 1);
+  assert.equal(r.sensitivity.adequate, false);
+  assert.ok(r.warnings.some((w) => w.includes('never see this fault')));
+});
+test('relaySettings: omitting minFaultCurrentA reproduces the original behaviour exactly (no regression)', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+  });
+  assert.equal(r.sensitivity, null);
+  approx(r.stage1.pickupA, 384, 1e-9);
+  approx(r.stage2.pickupA, 1500, 1e-9);
+  approx(r.stage3.pickupA, 7200, 1e-9);
+});
+test('relaySettings: rejects a zero or negative minimum fault current when supplied', () => {
+  assert.throws(() => rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    minFaultCurrentA: 0,
+  }));
+});
+test('relaySettings: a custom minSensitivityRatio changes the pass/fail threshold consistently', () => {
+  const strict = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    minFaultCurrentA: 900, minSensitivityRatio: 3.0,
+  });
+  const lenient = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    minFaultCurrentA: 900, minSensitivityRatio: 1.5,
+  });
+  assert.equal(strict.sensitivity.adequate, false);
+  assert.equal(lenient.sensitivity.adequate, true);
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

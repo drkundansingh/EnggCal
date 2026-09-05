@@ -22,6 +22,13 @@ import * as rs from './calculators/relaySettings.js';
 import * as pipe from './calculators/piping.js';
 import * as rot from './calculators/rotatingEquipment.js';
 import * as hx from './calculators/heatExchanger.js';
+import * as vt from './calculators/vesselsTanks.js';
+import * as pt from './calculators/processThermal.js';
+import * as cst from './calculators/civilStructural.js';
+import * as ccon from './calculators/civilConcrete.js';
+import * as cgeo from './calculators/civilGeotech.js';
+import * as chyd from './calculators/civilHydraulics.js';
+import * as csur from './calculators/civilSurveying.js';
 import * as ctEng from './calculators/ctEngine.js';
 import * as tfProt from './calculators/transformerProtection.js';
 import * as motProt from './calculators/motorProtection.js';
@@ -136,9 +143,34 @@ const NAV = [
       { id: 'pipe-wall-thickness', label: 'Pipe Wall Thickness (ASME B31.3)', icon: '◯' },
       { id: 'relief-valve', label: 'Relief Valve Sizing (API 520)', icon: '⚠' },
       { id: 'pump-npsh', label: 'Pump NPSH & Affinity Laws', icon: '↻' },
+      { id: 'pump-specific-speed', label: 'Pump Specific Speed', icon: '§' },
       { id: 'fan-laws', label: 'Fan / Blower Laws & Power', icon: '≈' },
       { id: 'bearing-life', label: 'Bearing L10 Life (ISO 281)', icon: '●' },
       { id: 'heat-exchanger', label: 'Heat Exchanger LMTD & Area', icon: '⇌' },
+      { id: 'horizontal-tank', label: 'Horizontal Tank Volume (Dip Chart)', icon: '▭' },
+      { id: 'vertical-tank', label: 'Vertical Tank Volume', icon: '▯' },
+      { id: 'vessel-wall', label: 'Pressure Vessel Wall Thickness (ASME VIII)', icon: '◎' },
+      { id: 'insulation-loss', label: 'Pipe Insulation Heat Loss', icon: '≋' },
+      { id: 'thermal-expansion', label: 'Thermal (Linear) Expansion', icon: '↔' },
+      { id: 'gas-compression', label: 'Gas Compression Work', icon: '⇑' },
+    ],
+  },
+  {
+    group: 'Civil Engineering', items: [
+      { id: 'civil-beam', label: 'Beam Analysis (Deflection, Moment, Shear)', icon: '─' },
+      { id: 'civil-section', label: 'Section Properties (I, S)', icon: '▭' },
+      { id: 'civil-column', label: 'Column Buckling (Euler)', icon: '┃' },
+      { id: 'civil-combined-stress', label: 'Combined Axial & Bending Stress', icon: '±' },
+      { id: 'civil-steel-weight', label: 'Steel Weight (Bar/Plate/Pipe)', icon: '⬛' },
+      { id: 'civil-concrete-volume', label: 'Concrete Volume & Weight', icon: '▦' },
+      { id: 'civil-water-cement', label: 'Water-Cement Ratio', icon: '≈' },
+      { id: 'civil-concrete-mix', label: 'Concrete Nominal Mix (IS 456)', icon: '▤' },
+      { id: 'civil-rebar', label: 'Rebar Weight & Quantity', icon: '#' },
+      { id: 'civil-earth-pressure', label: 'Earth Pressure (Rankine)', icon: '◺' },
+      { id: 'civil-soil-phase', label: 'Soil Phase & Effective Stress', icon: '○' },
+      { id: 'civil-manning', label: "Manning's Open Channel Flow", icon: '≋' },
+      { id: 'civil-weir', label: 'Weir Flow (Rectangular)', icon: '⊓' },
+      { id: 'civil-earthwork', label: 'Land Area & Earthwork Volume', icon: '△' },
     ],
   },
   {
@@ -257,7 +289,7 @@ const SEO_META = {
   'voltage-unbalance': { title: 'Voltage Unbalance & Motor Derating Calculator (NEMA MG-1)', description: 'Calculate three-phase voltage unbalance and the resulting motor derating factor per NEMA MG-1.' },
   'tx-inrush': { title: 'Transformer Inrush Current Calculator', description: 'Estimate transformer energization inrush current and decay time to check protection relay settings.' },
   'dp-flow-wizard': { title: 'DP to Flow Calculator \u2014 Orifice, Venturi & Nozzle', description: 'Convert differential pressure to mass or volumetric flow for orifice plates, venturis and flow nozzles \u2014 step-by-step wizard.' },
-  'dp-flow-cal': { title: 'DP to Flow Calculator \u2014 No Pipe or Orifice Diameter Needed', description: 'Calculate flow from a DP transmitter\u2019s calibrated range alone, with real IAPWS-IF97 steam density compensation \u2014 no geometry required.' },
+  'dp-flow-cal': { title: 'Steam, Water & Air Flow Calculator \u2014 No Pipe or Orifice Diameter Needed', description: 'Calculate steam, water, or air flow from a DP transmitter\u2019s calibrated range alone \u2014 real IAPWS-IF97 steam tables for steam/water, ideal-gas for air, no pipe or orifice diameter required.' },
   'steam-props': { title: 'Steam Properties Calculator (IAPWS-IF97)', description: 'Calculate real steam density and specific volume from pressure and temperature using IAPWS-IF97 \u2014 not an ideal-gas approximation.' },
   'converter': { title: 'Engineering Unit Converter', description: 'Convert between engineering units for pressure, flow, temperature, length, and more.' },
   'transmitter': { title: '4\u201320 mA Transmitter Calculator', description: 'Convert between 4\u201320 mA signal, percentage of range, and engineering units for any transmitter.' },
@@ -279,9 +311,30 @@ const SEO_META = {
   'pipe-wall-thickness': { title: 'Pipe Wall Thickness Calculator (ASME B31.3)', description: 'Calculate minimum required process piping wall thickness per ASME B31.3, with corrosion allowance and mill tolerance.' },
   'relief-valve': { title: 'Relief Valve (PSV) Sizing Calculator (API 520)', description: 'Preliminary relief valve orifice area sizing for gas/vapor and liquid service per API 520 Part I core equations.' },
   'pump-npsh': { title: 'Pump NPSH & Affinity Laws Calculator', description: 'Calculate NPSH available, check margin against NPSH required, and apply pump affinity laws for a speed change.' },
+  'pump-specific-speed': { title: 'Pump Specific Speed Calculator', description: 'Calculate centrifugal pump specific speed (Ns) and get an impeller type (radial/mixed/axial) selection guide.' },
   'fan-laws': { title: 'Fan / Blower Affinity Laws & Power Calculator', description: 'Apply fan affinity laws for a speed change and calculate fan shaft power from flow, pressure rise and efficiency.' },
   'bearing-life': { title: 'Bearing L10 Life Calculator (ISO 281)', description: 'Calculate rolling element bearing L10 life in revolutions and hours from dynamic load rating and equivalent load.' },
   'heat-exchanger': { title: 'Heat Exchanger LMTD & Area Calculator', description: 'Calculate log mean temperature difference (LMTD) and required heat transfer area for a heat exchanger from its four terminal temperatures.' },
+  'horizontal-tank': { title: 'Horizontal Cylindrical Tank Volume Calculator (Dip Chart)', description: 'Calculate partial and total volume of a horizontal cylindrical tank from diameter, length and liquid fill depth \u2014 exact circular-segment geometry.' },
+  'vertical-tank': { title: 'Vertical Tank Volume Calculator', description: 'Calculate vertical storage tank volume from diameter and cylinder height, with optional hemispherical or conical heads.' },
+  'vessel-wall': { title: 'Pressure Vessel Wall Thickness Calculator (ASME VIII)', description: 'Calculate minimum shell thickness for a thin-wall pressure vessel per ASME Section VIII Division 1, UG-27.' },
+  'insulation-loss': { title: 'Pipe & Vessel Insulation Heat Loss Calculator', description: 'Calculate steady-state heat loss through cylindrical pipe or vessel insulation from thickness, conductivity and surface conditions.' },
+  'thermal-expansion': { title: 'Thermal (Linear) Expansion Calculator', description: 'Calculate linear thermal expansion of pipe or equipment from length, material coefficient, and temperature change.' },
+  'gas-compression': { title: 'Gas Compression Work Calculator', description: 'Calculate ideal-gas isothermal and adiabatic compression work and power for compressor sizing estimates.' },
+  'civil-beam': { title: 'Beam Deflection, Bending Moment & Shear Force Calculator', description: 'Calculate beam deflection, maximum bending moment and shear force for simply-supported and cantilever beams, point load or UDL.' },
+  'civil-section': { title: 'Section Properties Calculator (Moment of Inertia & Section Modulus)', description: 'Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.' },
+  'civil-column': { title: 'Column Buckling Calculator (Euler)', description: 'Calculate Euler critical buckling load and slenderness ratio for a column with any standard end-support condition.' },
+  'civil-combined-stress': { title: 'Combined Axial & Bending Stress Calculator', description: 'Calculate combined axial and bending stress on a structural section from axial load, bending moment, area and section modulus.' },
+  'civil-steel-weight': { title: 'Steel Weight Calculator (Bar, Plate, Pipe)', description: 'Calculate the weight of round bar, flat plate, or pipe steel sections from dimensions and density.' },
+  'civil-concrete-volume': { title: 'Concrete Volume & Weight Calculator', description: 'Calculate concrete volume and weight for slabs, columns, and footings from dimensions and unit weight.' },
+  'civil-water-cement': { title: 'Water-Cement Ratio Calculator', description: 'Calculate water-cement ratio, or solve for water or cement quantity from a target ratio.' },
+  'civil-concrete-mix': { title: 'Concrete Nominal Mix Calculator (IS 456)', description: 'Calculate cement, sand and aggregate quantities for IS 456:2000 nominal concrete mixes M5 to M20.' },
+  'civil-rebar': { title: 'Rebar Weight & Quantity Calculator', description: 'Calculate reinforcement bar weight from diameter and length, with the familiar d\u00b2/162 site rule of thumb shown alongside.' },
+  'civil-earth-pressure': { title: 'Earth Pressure Calculator (Rankine Active & Passive)', description: 'Calculate active and passive earth pressure on a retaining wall using Rankine theory, with optional cohesion.' },
+  'civil-soil-phase': { title: 'Soil Phase Relationships & Effective Stress Calculator', description: 'Calculate void ratio, porosity, and effective (Terzaghi) stress from total stress and pore water pressure.' },
+  'civil-manning': { title: "Manning's Equation Calculator (Open Channel Flow)", description: 'Calculate open channel flow velocity and discharge using Manning\u2019s equation for rectangular and trapezoidal channels.' },
+  'civil-weir': { title: 'Weir Flow Calculator (Rectangular, Francis Formula)', description: 'Calculate discharge over a rectangular sharp-crested weir using the Francis formula.' },
+  'civil-earthwork': { title: 'Land Area & Earthwork Volume Calculator', description: 'Calculate triangle and trapezoid land area, slope grade, and cut/fill earthwork volume by the average end area method.' },
 };
 
 // ---------- On-page educational content (SEO + genuine user value) ----------
@@ -404,6 +457,114 @@ const PAGE_CONTENT = {
       { q: 'Does this replace manufacturer certified capacity data?', a: 'No \u2014 real relief device selection uses the specific manufacturer\u2019s certified capacity for the chosen valve model, not a generic theoretical orifice area. This calculator estimates the required area as a starting point for that selection, and as a check, not a substitute for it.' },
     ],
   },
+  'civil-beam': {
+    about: 'Beam deflection, bending moment and shear force are the starting point of any beam design check \u2014 before you can verify a section against a code (AISC, IS 800, Eurocode), you need the actual mechanics result for the load case you have. This calculator uses classical Euler-Bernoulli beam theory, the same equations in every mechanics-of-materials textbook, for the four most common cases: simply-supported or cantilever, under a point load or a uniformly distributed load. It gives you the mechanics answer; verifying that answer against deflection limits, allowable stress, and code-specific safety factors is the next step, done separately.',
+    faq: [
+      { q: 'Why does deflection formula have 48 in the denominator for a point load but 384/5 for a UDL?', a: 'Both come from integrating the same bending-moment equation twice along the beam \u2014 the different load distributions (a single point load vs. a load spread evenly along the whole span) integrate to different constants. Both are standard, independently verifiable results, not approximations of each other.' },
+      { q: 'Does this account for the beam\u2019s own self-weight?', a: 'No \u2014 self-weight is not automatically added. If it\u2019s significant relative to the applied load, add it into your UDL input as an additional distributed load before calculating.' },
+      { q: 'What is the difference between a simply-supported and a cantilever beam here?', a: 'A simply-supported beam is free to rotate at both ends (like a beam resting on two supports) \u2014 its maximum deflection and moment occur at midspan. A cantilever is fixed at one end and free at the other \u2014 both occur at the free end for deflection, and at the fixed support for moment, which is why a cantilever of the same span typically deflects far more under the same load.' },
+      { q: 'Is this result enough to check the beam is safe?', a: 'No \u2014 this gives you the deflection, moment and shear for the load case. A real design check still needs the section\u2019s actual capacity (from a code-compliant stress or deflection-limit check), load and resistance factors, and confirmation the assumed support conditions match reality.' },
+    ],
+  },
+  'civil-concrete-volume': {
+    about: 'Concrete volume and weight calculations are the first step in almost every concrete pour \u2014 slab, footing, or column \u2014 and the material order, formwork design, and crane/pump sizing all depend on getting the volume right. The geometry itself is exact (length \u00d7 width \u00d7 thickness for a slab, or the circular equivalent for a round column); the only real variable is the unit weight, which depends on the actual mix and aggregate used rather than being a single universal constant.',
+    faq: [
+      { q: 'What unit weight should I use for normal concrete?', a: '2400 kg/m\u00b3 is the commonly used default for normal-weight reinforced concrete, but the real figure depends on the aggregate type and mix \u2014 lightweight concrete can be well under 2000 kg/m\u00b3, and dense/heavyweight mixes can exceed 2500 kg/m\u00b3.' },
+      { q: 'Should I add extra volume for wastage?', a: 'Yes, in practice \u2014 this calculator gives the exact geometric volume; site practice commonly adds 3\u20135% for spillage, formwork imperfection, and over-excavation, especially for footings poured against undisturbed soil.' },
+      { q: 'Does this include the volume taken up by reinforcement steel?', a: 'No \u2014 rebar volume is normally small enough relative to the concrete volume to be ignored in a quantity estimate, and is conventionally not subtracted. For a very heavily reinforced section this becomes a more significant simplification worth checking.' },
+      { q: 'How is a circular column\u2019s volume calculated differently from a rectangular one?', a: 'A circular column uses \u03c0/4 \u00d7 diameter\u00b2 \u00d7 height for its cross-sectional area instead of width \u00d7 thickness \u2014 the same basic volume = area \u00d7 height relationship, just with a circular cross-section.' },
+    ],
+  },
+  'civil-rebar': {
+    about: 'Reinforcement bar weight comes directly from geometry and steel density \u2014 the cross-sectional area of a round bar times its length times the density of steel. This calculator computes that precisely rather than relying on the rounded rule of thumb (d\u00b2/162 kg/m) that\u2019s widely used on site, though the two agree closely: the difference is under 0.2% for any standard bar size, which is exactly why the rule of thumb has stuck around \u2014 it\u2019s a very good approximation, just not an exact one.',
+    faq: [
+      { q: 'Why does the calculator show both a precise value and the d\u00b2/162 rule of thumb?', a: 'So you can cross-check against the number a site engineer would calculate by hand or recognize from memory \u2014 the two should always agree closely; a large mismatch would indicate a data-entry error rather than a real discrepancy in the physics.' },
+      { q: 'What steel density does this use?', a: '7850 kg/m\u00b3, the standard value for structural and reinforcing steel used in virtually all rebar weight tables and mill certificates.' },
+      { q: 'Does bar length here mean the cut length or the finished length after bends and hooks?', a: 'Enter the actual cut length of the bar, including any allowance for hooks or bends \u2014 the calculator has no way to know your bar bending schedule, so the length you provide should already reflect the real fabricated length.' },
+      { q: 'How do I estimate total reinforcement weight for a whole structural element?', a: 'Calculate the weight per bar here, then multiply by the number of bars of that diameter and length \u2014 the "number of bars" field does exactly this multiplication for you, useful once you have a bar bending schedule with bar counts by diameter.' },
+    ],
+  },
+  'civil-manning': {
+    about: 'Manning\u2019s equation (1889) is the standard formula for uniform flow in an open channel \u2014 a storm drain, irrigation channel, or natural stream flowing under gravity rather than under pressure. It relates flow velocity to the channel\u2019s roughness, its hydraulic radius (a shape-dependent ratio of flow area to wetted perimeter), and the slope driving the flow. It\u2019s been the industry standard for well over a century precisely because it\u2019s simple, robust, and matches real channel behavior closely across a very wide range of conditions.',
+    faq: [
+      { q: 'What is hydraulic radius, and why does it matter?', a: 'Hydraulic radius (R = flow area \u00f7 wetted perimeter) captures how efficiently a channel shape moves water \u2014 a wide, shallow channel has more wetted perimeter (more friction) per unit of flow area than a deep, narrow one, so it carries less flow for the same slope and roughness.' },
+      { q: 'How do I choose Manning\u2019s n for my channel?', a: 'It depends on the surface material and condition \u2014 smooth concrete (n\u22480.012\u20130.017) is far less resistive than an untended earth channel choked with weeds (n\u22480.030 or higher). Published tables list typical values by material; matching the actual surface condition (not just the material) matters more than people expect.' },
+      { q: 'Does this work for a partially full pipe, not just an open channel?', a: 'The same equation applies to a partially full circular pipe flowing under gravity (not pressurized) \u2014 this calculator implements rectangular and trapezoidal channel shapes specifically; a circular partially-full pipe needs a different area/wetted-perimeter geometry not covered here.' },
+      { q: 'What does the calculated velocity assume about the flow?', a: 'Uniform, steady flow \u2014 the same depth and velocity all along the channel. Real channels have transitions, bends, and changing cross-sections where flow is genuinely non-uniform; Manning\u2019s equation is a good working approximation for a long, reasonably straight, constant-section reach.' },
+    ],
+  },
+  'civil-earth-pressure': {
+    about: 'Rankine earth pressure theory (1857) gives the lateral pressure soil exerts on a retaining wall \u2014 active pressure, which pushes the wall outward as the retained soil tries to slide, and passive pressure, the much larger resistance available on the other side if the wall is pushed into the soil. Both come from the same friction-angle-based coefficients, and both scale directly with depth and soil unit weight. It\u2019s the standard starting point for retaining wall design, though real designs also need to check Coulomb theory (which accounts for wall friction) and overall stability, not lateral pressure alone.',
+    faq: [
+      { q: 'Why is passive pressure so much larger than active pressure for the same soil?', a: 'The active and passive coefficients (Ka and Kp) are reciprocals of each other by the Rankine formula \u2014 at a typical friction angle of 30\u00b0, Ka \u2248 0.33 while Kp = 3, a nine-fold difference. Physically, soil resists being compressed (passive case) far more than it resists relaxing as a wall moves away from it (active case).' },
+      { q: 'What does cohesion do to the active pressure calculation?', a: 'Cohesion REDUCES active pressure (by a term proportional to \u2212c\u221aKa) because cohesive soil can partly support itself without relying on friction alone \u2014 enough cohesion can theoretically make the calculated active pressure negative near the surface, which is why the calculator also reports a tension-crack depth for cohesive soils.' },
+      { q: 'Does this account for water pressure behind the wall?', a: 'Not directly \u2014 this calculates lateral EARTH pressure using the soil\u2019s unit weight. If the backfill is saturated or has a water table behind the wall, hydrostatic water pressure adds a separate, often very significant, additional lateral load that must be calculated and added on top of this result.' },
+      { q: 'Why does the calculator only handle a horizontal backfill with no wall friction?', a: 'That\u2019s the scope of classical Rankine theory itself \u2014 sloped backfill and wall friction genuinely change the pressure coefficients, and are handled by Coulomb theory instead, which uses a more complex (and more broadly applicable) set of equations.' },
+    ],
+  },
+  'civil-column': {
+    about: 'Euler\u2019s column buckling formula (1757) predicts the load at which a slender column fails by sudden lateral buckling rather than by the material simply crushing \u2014 a fundamentally different failure mode from a short, stocky column\u2019s. The critical load depends on the column\u2019s stiffness (EI), its length, and critically, how its ends are restrained: a column fixed at both ends can carry four times the load of the same column pinned at both ends, purely from the end conditions changing its effective buckling length.',
+    faq: [
+      { q: 'Why does the end-condition factor K matter so much?', a: 'K converts the column\u2019s actual length into an "effective length" \u2014 the length an equivalent pinned-pinned column would need to buckle at the same load. A fixed-fixed column (K=0.5) is four times stiffer against buckling than the same column pinned-pinned (K=1), since critical load scales with 1/(KL)\u00b2.' },
+      { q: 'How do I know if my column is "short" or "slender"?', a: 'Slenderness ratio (effective length \u00f7 radius of gyration) is the standard indicator \u2014 a low slenderness ratio (commonly cited as roughly below 30) usually means the column will crush before it buckles elastically, meaning Euler\u2019s formula alone overstates its real capacity; a real design still needs the appropriate short/intermediate-column code provisions for that range.' },
+      { q: 'Does the Euler load include a safety factor?', a: 'No \u2014 this is the theoretical elastic critical load assuming a perfectly straight, centrally-loaded, perfectly elastic column. Real design codes apply safety/resistance factors and account for initial crookedness and eccentric loading on top of this, which is why a real allowable load is always well below the calculated Euler load.' },
+      { q: 'What is radius of gyration, and why is it computed from I and area?', a: 'Radius of gyration (r = \u221a(I/A)) is a measure of how the cross-section\u2019s material is distributed relative to its centroid \u2014 a section with material spread further from center (like a tube vs. a solid rod of the same area) has a larger r and resists buckling better for the same cross-sectional area.' },
+    ],
+  },
+  'civil-concrete-mix': {
+    about: 'IS 456:2000 nominal mixes give fixed cement:sand:aggregate ratios (like 1:1.5:3 for M20) for ordinary-grade concrete, without needing a full mix design process \u2014 a practical, code-sanctioned shortcut for M5 through M20 grades specifically. Higher grades (M25 and above) are required by IS 456 itself to use a proper design mix instead, since a fixed ratio can no longer reliably guarantee the target strength at that level.',
+    faq: [
+      { q: 'Why does the calculator use a 1.54 "dry volume factor"?', a: 'Dry, loose materials (cement, sand, aggregate) take up more volume than the same materials once compacted into wet concrete, because of the air voids between particles before mixing \u2014 1.54 is the standard, widely-used factor to convert a target wet (finished) concrete volume into the dry material volume you actually need to procure.' },
+      { q: 'Why does the M20 result come out to about 8 bags of cement per cubic metre?', a: 'That figure follows directly from the 1:1.5:3 ratio and the 1.54 dry volume factor \u2014 it also happens to closely match the "8 bags per m\u00b3 for M20" figure very commonly cited in Indian construction practice, which is a useful cross-check that the calculation method is sound.' },
+      { q: 'Can I use this method for M25 or higher grades?', a: 'No \u2014 IS 456:2000 itself requires M25 and above to use a design mix (based on target mean strength, water-cement ratio, and specific aggregate properties), not a fixed nominal ratio. This calculator deliberately does not offer those grades, rather than apply a method the code says isn\u2019t valid for them.' },
+      { q: 'Does this account for moisture in the sand or aggregate?', a: 'No \u2014 real site batching needs to adjust water content and aggregate weight for actual moisture/bulking, which varies day to day. Treat this calculator\u2019s output as a material quantity estimate for procurement, not a final batching instruction.' },
+    ],
+  },
+  'civil-section': {
+    about: 'Moment of inertia and section modulus describe how a cross-section resists bending, independent of the material it\u2019s made from \u2014 a bigger moment of inertia means less curvature (and deflection) for the same bending moment, and a bigger section modulus means lower peak bending stress for the same moment. Every beam or column calculation needs one or both of these as an input, which is why this is usually the very first calculation done before a beam deflection or column buckling check.',
+    faq: [
+      { q: 'Why does a deeper beam resist bending so much better than a wider one of the same cross-sectional area?', a: 'Both moment of inertia and section modulus for a rectangle scale with the CUBE (or square) of height but only linearly with width \u2014 material placed further from the bending axis (further from the centroid) contributes disproportionately more stiffness and strength, which is exactly why I-beams put most of their material in the top and bottom flanges, far from the neutral axis.' },
+      { q: 'What is the practical difference between moment of inertia and section modulus?', a: 'Moment of inertia (I) is used for deflection and buckling calculations; section modulus (S = I / distance to extreme fibre) is used directly for bending stress (\u03c3 = M/S). They come from the same underlying geometry but answer two different questions \u2014 "how much does it deflect" versus "what stress does it see".' },
+      { q: 'How is a hollow (tube) section\u2019s moment of inertia different from a solid one?', a: 'It\u2019s the solid section\u2019s moment of inertia minus the "missing" inner section\u2019s moment of inertia (I = \u03c0(D\u2074\u2212d\u2074)/64) \u2014 removing material from near the center (where it contributes little to bending resistance anyway) barely reduces stiffness while meaningfully reducing weight, which is the whole rationale for using tube sections.' },
+      { q: 'Does this cover I-beams, channels, or angle sections?', a: 'Not directly \u2014 this covers solid rectangles, solid circles, and hollow circles (tubes), which have simple closed-form formulas. Standard rolled steel sections (I-beams, channels, angles) have properties published directly in steel section tables rather than needing to be calculated from basic geometry.' },
+    ],
+  },
+  'civil-steel-weight': {
+    about: 'Steel weight for a bar, plate, or pipe follows directly from its cross-sectional area, length, and the standard density of steel (7850 kg/m\u00b3) \u2014 the same calculation whether you\u2019re estimating structural steel for a takeoff, checking a delivery note, or working out shipping weight. The geometry differs by shape (a solid circle for round bar, a rectangle for flat plate, an annulus for pipe), but the underlying physics \u2014 density \u00d7 volume \u2014 is identical.',
+    faq: [
+      { q: 'What density value does this use, and does it vary by steel grade?', a: '7850 kg/m\u00b3, the standard reference density for carbon and most structural/reinforcing steel grades \u2014 alloy content changes this only slightly for ordinary structural steels, not enough to matter for a material takeoff.' },
+      { q: 'How is a pipe\u2019s cross-sectional area calculated from outer diameter and wall thickness?', a: 'The pipe\u2019s inner diameter is first found by subtracting twice the wall thickness from the outer diameter, then the area is the solid outer circle\u2019s area minus the solid inner circle\u2019s area \u2014 the same annulus (ring) geometry used for any hollow circular section.' },
+      { q: 'Can I use this for a square or rectangular hollow section (box tube)?', a: 'Not directly \u2014 this covers round bar, flat plate, and round pipe. A rectangular hollow section would need the outer rectangle\u2019s area minus the inner rectangle\u2019s area, a straightforward extension not currently implemented as a separate shape option.' },
+      { q: 'Is the weight this gives the same as what a mill certificate would show?', a: 'It should be very close \u2014 mill certificates use the same density-based calculation, though actual delivered weight can vary slightly from nominal dimensions due to rolling tolerances, which this calculator (using your entered nominal dimensions) doesn\u2019t account for.' },
+    ],
+  },
+  'relay-settings': {
+    about: 'A real feeder protection relay is never set in isolation \u2014 it needs three coordinated stages (I> inverse-time, I>> definite-time high-set, I>>> instantaneous), every pickup expressed in both primary amps and the relay\u2019s own per-unit setting, and a check that it can actually see the smallest fault it\u2019s meant to clear, not just the largest. This calculator follows that real workflow rather than treating relay setting as a single time-current curve calculation, matching how ABB, Siemens, and equivalent numerical relays are actually configured and documented.',
+    faq: [
+      { q: 'Why does every pickup show up in both primary amps and \u00d7In?', a: 'The relay itself is set in per-unit (multiples of its rated current In); primary amps are what goes on the setting sheet and coordination study. Confusing the two \u2014 a real, common commissioning error \u2014 is exactly what showing both values side by side is meant to prevent.' },
+      { q: 'What is the sensitivity check, and why does it matter?', a: 'It checks whether Stage 1 (I>) can actually detect the SMALLEST fault current the relay needs to clear \u2014 often much lower than the maximum fault used to set the other stages. A relay set only against the maximum fault can be technically blind to a legitimate, smaller fault elsewhere in its zone; this check catches that before it becomes a real gap in protection.' },
+      { q: 'Why does Stage 3 (instantaneous) have no time delay at all?', a: 'It\u2019s set safely above the maximum fault current the relay could ever see for a fault genuinely within its own protected zone, so it only operates for a close-in fault \u2014 at that point, instantaneous clearance is both safe and desirable, since there\u2019s no coordination concern with anything further downstream.' },
+      { q: 'Does this replace the relay manufacturer\u2019s own setting software?', a: 'No \u2014 this calculates the underlying primary-amp and per-unit values using standard IEC 60255 and IEEE C37.112 equations, the same standards both manufacturers build their relays on. It doesn\u2019t reproduce either vendor\u2019s specific setting software or menu structure, and final settings should always be checked against that specific relay\u2019s own setting-range limits.' },
+    ],
+  },
+  'grounding-grid': {
+    about: 'A substation or plant grounding grid has one job during a fault: keep the voltage a person could touch (or step across) below what the human body can safely withstand for the time it takes protection to clear the fault. This calculator uses the IEEE 80 Sverak equation for grid resistance and the standard IEEE 80 tolerable touch/step voltage equations, for a single-layer (uniform) soil model \u2014 a real design with genuinely non-uniform soil needs the full two-layer method or dedicated software, but the single-layer method is a legitimate, widely-used screening-level check.',
+    faq: [
+      { q: 'Why does the default example use a crushed-rock surface layer?', a: 'Because bare soil essentially never passes this safety check at any realistic fault current \u2014 that\u2019s exactly why real substations almost universally spec a high-resistivity surface layer (crushed rock, asphalt) under the areas people walk, which meaningfully raises the tolerable touch voltage by limiting current through a person\u2019s feet.' },
+      { q: 'What is Ground Potential Rise (GPR), and why is it compared to the tolerable touch voltage?', a: 'GPR is the voltage the entire grid rises to relative to remote earth during a fault (fault current \u00d7 grid resistance). Comparing GPR to the tolerable touch voltage is a CONSERVATIVE screening check \u2014 actual touch voltage at the grid\u2019s center is normally lower than GPR, but can approach it near the grid\u2019s perimeter, so this comparison errs on the safe side rather than claiming the precision of the full mesh-voltage calculation.' },
+      { q: 'Why does body weight (50 kg vs 70 kg) change the tolerable voltage?', a: 'IEEE 80\u2019s tolerable voltage equations are based on the energy a human body can safely absorb, which the standard tabulates separately for 50 kg and 70 kg body weights \u2014 a heavier body is calculated to tolerate a higher voltage for the same fault duration.' },
+      { q: 'What does this calculator NOT cover that a full grounding study would?', a: 'Two-layer (non-uniform) soil resistivity data, the complete IEEE 80 Annex B mesh and step voltage procedure across the whole grid geometry, and non-uniform current distribution around the grid perimeter \u2014 all genuinely needed for a final substation grounding design, typically done with dedicated grounding-analysis software.' },
+    ],
+  },
+  'dp-flow-cal': {
+    about: 'For a flow element that\u2019s already installed and commissioned, the calibrated range itself (the DP span and flow span already programmed into the transmitter) already encodes the pipe and orifice geometry \u2014 you don\u2019t need to re-derive it from scratch. This calculator uses that calibrated range directly, with real IAPWS-IF97 steam tables for steam and water density (correctly reporting which phase you\u2019re actually in) and ideal-gas density for air, to correct the reading for whatever conditions the plant is actually running at versus what the element was originally calibrated for.',
+    faq: [
+      { q: 'Why does density correction matter if the calibration is already done?', a: 'A DP flow element is calibrated at ONE specific design density. If the plant runs at a different actual pressure or temperature than that design point \u2014 common with steam, since density there is very sensitive to both \u2014 the raw calibrated-range reading is wrong until it\u2019s corrected for the ratio between actual and design density.' },
+      { q: 'Why does water need density correction less than steam, in this calculator\u2019s experience?', a: 'Liquid water\u2019s density barely changes with modest temperature or pressure shifts (a few percent at most across a wide range), while steam density is highly sensitive to both, especially near saturation \u2014 so the same size of process upset produces a much smaller correction for water than for steam.' },
+      { q: 'Is ideal-gas density accurate enough for air?', a: 'Yes, for ordinary duct and instrument-air conditions \u2014 air behaves close to an ideal gas well below its critical point, unlike steam at typical power-plant pressures, which is exactly why this calculator treats the two differently rather than applying one approximation to both.' },
+      { q: 'What happens if I also enter pipe and orifice dimensions?', a: 'The calculator runs the full geometric flow model alongside the calibrated-range result and compares the two \u2014 useful as a sanity check, but entering geometry is always optional here; the calibrated-range method works completely on its own without it.' },
+    ],
+  },
 };
 
 function faqJsonLd(route) {
@@ -470,7 +631,7 @@ const ROUTE_TIER = {
   'control-loops': 'verified', 'relief-valve': 'verified',
 
   'orifice': 'scoped', 'heat-exchanger': 'scoped', 'cable-sizing': 'scoped',
-  'cable-withstand': 'scoped', 'pump-npsh': 'scoped', 'fan-laws': 'scoped',
+  'cable-withstand': 'scoped', 'pump-npsh': 'scoped', 'fan-laws': 'scoped', 'pump-specific-speed': 'scoped',
   'bearing-life': 'scoped', 'pipe-pressure-drop': 'scoped', 'pipe-wall-thickness': 'scoped',
   'ngr-sizing': 'scoped', 'generator-sizing': 'scoped', 'voltage-unbalance': 'scoped',
   'tx-inrush': 'scoped', 'ct-sizing': 'scoped', 'transformer-prot': 'scoped',
@@ -479,6 +640,14 @@ const ROUTE_TIER = {
   'tx-loading': 'scoped', 'dp-flow-wizard': 'scoped', 'dp-level': 'scoped',
   'control-valve': 'scoped', 'cavitation': 'scoped', 'rtd': 'scoped',
   'thermocouple': 'scoped', 'pid': 'scoped', 'loop-uncertainty': 'scoped',
+  'horizontal-tank': 'scoped', 'vertical-tank': 'scoped', 'vessel-wall': 'scoped',
+  'insulation-loss': 'scoped', 'thermal-expansion': 'scoped', 'gas-compression': 'scoped',
+  'civil-beam': 'scoped', 'civil-section': 'scoped', 'civil-column': 'scoped',
+  'civil-combined-stress': 'scoped', 'civil-steel-weight': 'scoped',
+  'civil-concrete-volume': 'scoped', 'civil-water-cement': 'scoped',
+  'civil-concrete-mix': 'scoped', 'civil-rebar': 'scoped',
+  'civil-earth-pressure': 'scoped', 'civil-soil-phase': 'scoped',
+  'civil-manning': 'scoped', 'civil-weir': 'scoped', 'civil-earthwork': 'scoped',
 
   'thermal-plant': 'estimator', 'protection': 'estimator',
 };
@@ -579,9 +748,30 @@ const ROUTES = {
   'pipe-wall-thickness': pagePipeWallThickness,
   'relief-valve': pageReliefValve,
   'pump-npsh': pagePumpNpsh,
+  'pump-specific-speed': pagePumpSpecificSpeed,
   'fan-laws': pageFanLaws,
   'bearing-life': pageBearingLife,
   'heat-exchanger': pageHeatExchanger,
+  'horizontal-tank': pageHorizontalTank,
+  'vertical-tank': pageVerticalTank,
+  'vessel-wall': pageVesselWall,
+  'insulation-loss': pageInsulationLoss,
+  'thermal-expansion': pageThermalExpansion,
+  'gas-compression': pageGasCompression,
+  'civil-beam': pageCivilBeam,
+  'civil-section': pageCivilSection,
+  'civil-column': pageCivilColumn,
+  'civil-combined-stress': pageCivilCombinedStress,
+  'civil-steel-weight': pageCivilSteelWeight,
+  'civil-concrete-volume': pageCivilConcreteVolume,
+  'civil-water-cement': pageCivilWaterCement,
+  'civil-concrete-mix': pageCivilConcreteMix,
+  'civil-rebar': pageCivilRebar,
+  'civil-earth-pressure': pageCivilEarthPressure,
+  'civil-soil-phase': pageCivilSoilPhase,
+  'civil-manning': pageCivilManning,
+  'civil-weir': pageCivilWeir,
+  'civil-earthwork': pageCivilEarthwork,
 };
 
 // NOTE: navigation is driven entirely by JS state (`currentRoute`), not by
@@ -2876,8 +3066,8 @@ function pageProtection() {
 // ---------- DP -> Flow (Calibrated Range + Geometric) ----------
 function pageDPFlowCalibrated() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div>
-    <h1>DP &rarr; Flow (Calibrated Range)</h1>
-    <p class="lead">For a flow element that is already installed and commissioned you don't need the bore or pipe ID \u2014 the calibrated range already contains all of it. This page does that, with real IAPWS-IF97 steam density for compensation, and will also run the geometric model alongside if you happen to have the dimensions.</p></div>`));
+    <h1>Steam, Water &amp; Air Flow (Calibrated Range)</h1>
+    <p class="lead">For a flow element that is already installed and commissioned you don't need the bore or pipe ID \u2014 the calibrated range already contains all of it. Real IAPWS-IF97 steam tables for steam and water (it correctly tells you which phase you're actually in), ideal-gas density for air \u2014 no pipe or orifice diameter required for any of them.</p></div>`));
 
   const layout = h('<div class="calc-layout"></div>');
   const left = h(`<div class="card">
@@ -2896,6 +3086,7 @@ function pageDPFlowCalibrated() {
     <div class="panel-title" style="margin-top:16px;">Density Compensation</div>
     <div class="field"><label>Fluid</label><select id="fluid">
       <option value="steam">Steam / water (IAPWS-IF97)</option>
+      <option value="air">Air / dry gas (ideal gas)</option>
       <option value="manual">Enter densities directly</option>
       <option value="none">None \u2014 assume design density</option>
     </select></div>
@@ -2908,7 +3099,18 @@ function pageDPFlowCalibrated() {
         <div class="field"><label>Actual pressure (bar a)</label><input type="number" id="pA" step="any" value="130"></div>
         <div class="field"><label>Actual temp (\u00b0C)</label><input type="number" id="tA" step="any" value="520"></div>
       </div>
-      <div class="hint">The conditions the element was <b>calibrated</b> at, versus what the plant is running <b>now</b>.</div>
+      <div class="hint">The conditions the element was <b>calibrated</b> at, versus what the plant is running <b>now</b>. Works for both steam and liquid water \u2014 IAPWS-IF97 covers both phases and reports which one you're in.</div>
+    </div>
+    <div id="airInputs" style="display:none;">
+      <div class="input-row">
+        <div class="field"><label>Design pressure (bar a)</label><input type="number" id="pDAir" step="any" value="1.05"></div>
+        <div class="field"><label>Design temp (\u00b0C)</label><input type="number" id="tDAir" step="any" value="25"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Actual pressure (bar a)</label><input type="number" id="pAAir" step="any" value="1.02"></div>
+        <div class="field"><label>Actual temp (\u00b0C)</label><input type="number" id="tAAir" step="any" value="35"></div>
+      </div>
+      <div class="hint">Ideal-gas density (\u03c1 = P/RT) \u2014 a well-justified approximation for combustion/instrument air and most dry gases at ordinary duct pressures, unlike the same approximation applied to steam.</div>
     </div>
     <div id="manualInputs" style="display:none;">
       <div class="input-row">
@@ -2933,6 +3135,7 @@ function pageDPFlowCalibrated() {
   fluidSel.addEventListener('change', () => {
     const v = fluidSel.value;
     left.querySelector('#steamInputs').style.display = v === 'steam' ? '' : 'none';
+    left.querySelector('#airInputs').style.display = v === 'air' ? '' : 'none';
     left.querySelector('#manualInputs').style.display = v === 'manual' ? '' : 'none';
   });
 
@@ -2960,6 +3163,18 @@ function pageDPFlowCalibrated() {
             ${resultRow('Actual state', sA.phase)}
           </div>
           ${sA.phase === 'saturated / wet' ? `<div class="assumptions-note" style="margin-top:10px;">${sA.note}</div>` : ''}`;
+      } else if (mode === 'air') {
+        const pD = +left.querySelector('#pDAir').value, tD = +left.querySelector('#tDAir').value;
+        const pA = +left.querySelector('#pAAir').value, tA = +left.querySelector('#tAAir').value;
+        rhoD = flow.airDensity(pD * 1e5, tD);
+        rhoA = flow.airDensity(pA * 1e5, tA);
+        steamHtml = `
+          <div class="panel-title" style="margin-top:16px;">Air Density (Ideal Gas)</div>
+          <div class="result-grid">
+            ${resultRow('Design density', fmt(rhoD, 4) + ' kg/m\u00b3')}
+            ${resultRow('Actual density', fmt(rhoA, 4) + ' kg/m\u00b3')}
+          </div>
+          <div class="assumptions-note" style="margin-top:10px;">\u03c1 = P/(R\u00b7T), R = 287.05 J/(kg\u00b7K) for dry air. A good approximation at ordinary duct pressures; not corrected for humidity or real-gas deviation at high pressure.</div>`;
       } else if (mode === 'manual') {
         rhoD = +left.querySelector('#rhoD').value;
         rhoA = +left.querySelector('#rhoA').value;
@@ -4684,6 +4899,51 @@ function pagePumpNpsh() {
   });
 }
 
+// ---------- Pump Specific Speed ----------
+function pagePumpSpecificSpeed() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Pump Specific Speed</h1>
+    <p class="lead">Specific speed (Ns) is a dimensionless-in-spirit indicator of impeller geometry \u2014 useful early in pump selection to sanity-check whether a radial, mixed, or axial-flow design fits the duty point, before going to a manufacturer's curves.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Duty Point (Best Efficiency Point)</div>
+    <div class="input-row">
+      <div class="field"><label>Speed (rpm)</label><input type="number" id="speed" step="any" value="1770"></div>
+      <div class="field"><label>Flow at BEP (US gpm)</label><input type="number" id="flow" step="any" value="500"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Total head (ft)</label><input type="number" id="head" step="any" value="150"></div>
+      <div class="field"><label>Number of stages</label><input type="number" id="stages" step="any" value="1"></div>
+    </div>
+    <div class="hint">Multistage pumps: enter TOTAL head across all stages \u2014 the calculator divides by stage count, since specific speed is a per-stage quantity.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter the pump duty point.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = rot.pumpSpecificSpeed({
+        speedRpm: +left.querySelector('#speed').value,
+        flowGpm: +left.querySelector('#flow').value,
+        headFt: +left.querySelector('#head').value,
+        numberOfStages: +left.querySelector('#stages').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.specificSpeedUS, 0)}</span><span class="unit">Ns (US units)</span></div>
+        <div class="result-grid">
+          ${resultRow('Head per stage', fmt(r.headPerStageFt, 1) + ' ft')}
+          ${resultRow('Indicated impeller type', r.impellerType)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Ns = N\u221aQ / H^0.75 &nbsp; (N in rpm, Q in US gpm, H in ft per stage)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('pump-specific-speed',
+        `Ns \u2014 ${fmt(r.specificSpeedUS, 0)} (${r.impellerType})`, {}, { specificSpeedUS: r.specificSpeedUS }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
 // ---------- Fan / Blower Laws & Power ----------
 function pageFanLaws() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Fan / Blower Laws &amp; Power</h1>
@@ -4876,6 +5136,1020 @@ function pageHeatExchanger() {
         <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
       right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('heat-exchanger',
         `Heat exchanger \u2014 ${fmt(r.areaM2, 2)} m\u00b2`, {}, { areaM2: r.areaM2, lmtdC: lastLmtd }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Horizontal Cylindrical Tank Volume ----------
+function pageHorizontalTank() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Horizontal Tank Volume (Dip Chart)</h1>
+    <p class="lead">Partial and total volume of a horizontal cylindrical tank from diameter, length and liquid fill depth \u2014 exact circular-segment geometry, the basis of a real tank dip/strapping chart.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Tank &amp; Fill Depth</div>
+    <div class="input-row">
+      <div class="field"><label>Diameter (m)</label><input type="number" id="dia" step="any" value="2"></div>
+      <div class="field"><label>Length (m)</label><input type="number" id="len" step="any" value="5"></div>
+    </div>
+    <div class="field"><label>Fill depth (m, measured from bottom)</label><input type="number" id="depth" step="any" value="1"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter tank dimensions and fill depth.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = vt.horizontalTankVolume({
+        diameterM: +left.querySelector('#dia').value,
+        lengthM: +left.querySelector('#len').value,
+        fillDepthM: +left.querySelector('#depth').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.filledVolumeM3, 3)}</span><span class="unit">m\u00b3 filled volume</span></div>
+        <div class="result-grid">
+          ${resultRow('Filled volume', fmt(r.filledVolumeM3, 4) + ' m\u00b3')}
+          ${resultRow('Total tank volume', fmt(r.totalVolumeM3, 4) + ' m\u00b3')}
+          ${resultRow('Fill level', fmt(r.fillPct, 2) + ' %')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('horizontal-tank',
+        `Horizontal tank \u2014 ${fmt(r.filledVolumeM3, 2)} m\u00b3`, {}, { filledVolumeM3: r.filledVolumeM3, fillPct: r.fillPct }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Vertical Tank Volume ----------
+function pageVerticalTank() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Vertical Tank Volume</h1>
+    <p class="lead">Vertical storage tank volume from diameter and cylinder height, with an optional head type added on top.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Tank</div>
+    <div class="input-row">
+      <div class="field"><label>Diameter (m)</label><input type="number" id="dia" step="any" value="2"></div>
+      <div class="field"><label>Cylinder (shell) height (m)</label><input type="number" id="height" step="any" value="5"></div>
+    </div>
+    <div class="field"><label>Head type</label><select id="headType"><option value="flat">Flat (no added head volume)</option><option value="hemispherical">Hemispherical</option><option value="conical">Conical (45\u00b0)</option></select></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter tank dimensions.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = vt.verticalTankVolume({
+        diameterM: +left.querySelector('#dia').value,
+        cylinderHeightM: +left.querySelector('#height').value,
+        headType: left.querySelector('#headType').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.totalVolumeM3, 3)}</span><span class="unit">m\u00b3 total volume</span></div>
+        <div class="result-grid">
+          ${resultRow('Cylinder volume', fmt(r.cylinderVolumeM3, 4) + ' m\u00b3')}
+          ${resultRow('Head volume', fmt(r.headVolumeM3, 4) + ' m\u00b3')}
+          ${resultRow('Total volume', fmt(r.totalVolumeM3, 4) + ' m\u00b3')}
+        </div>
+        ${r.note ? `<div class="assumptions-note" style="margin-top:12px;">${r.note}</div>` : ''}
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('vertical-tank',
+        `Vertical tank \u2014 ${fmt(r.totalVolumeM3, 2)} m\u00b3`, {}, { totalVolumeM3: r.totalVolumeM3 }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Pressure Vessel Wall Thickness (ASME VIII) ----------
+function pageVesselWall() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Pressure Vessel Wall Thickness (ASME VIII)</h1>
+    <p class="lead">Minimum shell thickness for a thin-wall cylindrical pressure vessel per ASME Section VIII Division 1, UG-27 \u2014 the real code equation, not the further-simplified textbook thin-wall approximation.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Design Conditions</div>
+    <div class="input-row">
+      <div class="field"><label>Design pressure (MPa)</label><input type="number" id="press" step="any" value="1.5"></div>
+      <div class="field"><label>Inside radius (mm)</label><input type="number" id="radius" step="any" value="500"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Allowable stress (MPa)</label><input type="number" id="stress" step="any" value="138"></div>
+      <div class="field"><label>Joint efficiency E</label><input type="number" id="eff" step="any" value="1.0" min="0.01" max="1"></div>
+    </div>
+    <div class="field"><label>Corrosion allowance (mm)</label><input type="number" id="corr" step="any" value="3"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter design conditions.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = vt.vesselWallThickness({
+        designPressureMPa: +left.querySelector('#press').value,
+        insideRadiusMm: +left.querySelector('#radius').value,
+        allowableStressMPa: +left.querySelector('#stress').value,
+        jointEfficiencyE: +left.querySelector('#eff').value,
+        corrosionAllowanceMm: +left.querySelector('#corr').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.totalMm, 2)}</span><span class="unit">mm required thickness (incl. corrosion allowance)</span></div>
+        <div class="result-grid">
+          ${resultRow('Circumferential (hoop) case', fmt(r.tCircumferentialMm, 3) + ' mm')}
+          ${resultRow('Longitudinal case', fmt(r.tLongitudinalMm, 3) + ' mm')}
+          ${resultRow('Governing case', r.governingCase)}
+          ${resultRow('Governing thickness', fmt(r.governingMm, 3) + ' mm')}
+          ${resultRow('Total (with corrosion allowance)', fmt(r.totalMm, 3) + ' mm')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">t = PR / (SE \u2212 0.6P)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('vessel-wall',
+        `Vessel wall \u2014 ${fmt(r.totalMm, 2)} mm`, {}, { totalMm: r.totalMm }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Pipe/Vessel Insulation Heat Loss ----------
+function pageInsulationLoss() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Pipe &amp; Vessel Insulation Heat Loss</h1>
+    <p class="lead">Steady-state heat loss through cylindrical insulation \u2014 conduction through the insulation layer in series with surface convection to ambient air.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Pipe &amp; Insulation</div>
+    <div class="input-row">
+      <div class="field"><label>Pipe outside diameter (mm)</label><input type="number" id="pipeDia" step="any" value="100"></div>
+      <div class="field"><label>Insulation thickness (mm)</label><input type="number" id="insThick" step="any" value="30"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Insulation conductivity k (W/m\u00b7K)</label><input type="number" id="kval" step="any" value="0.04"></div>
+      <div class="field"><label>Surface h (W/m\u00b2\u00b7K)</label><input type="number" id="hval" step="any" value="10"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Pipe (process) temperature (\u00b0C)</label><input type="number" id="pipeTemp" step="any" value="150"></div>
+      <div class="field"><label>Ambient temperature (\u00b0C)</label><input type="number" id="ambTemp" step="any" value="25"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter pipe and insulation details.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = pt.insulationHeatLoss({
+        pipeOutsideDiaMm: +left.querySelector('#pipeDia').value,
+        insulationThicknessMm: +left.querySelector('#insThick').value,
+        thermalConductivityWmK: +left.querySelector('#kval').value,
+        surfaceHeatTransferCoeffWm2K: +left.querySelector('#hval').value,
+        pipeTempC: +left.querySelector('#pipeTemp').value,
+        ambientTempC: +left.querySelector('#ambTemp').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.heatLossWm, 2)}</span><span class="unit">W/m heat loss</span></div>
+        <div class="result-grid">
+          ${resultRow('Insulation resistance', fmt(r.rInsulationMK_W, 4) + ' m\u00b7K/W')}
+          ${resultRow('Surface (convection) resistance', fmt(r.rConvectionMK_W, 4) + ' m\u00b7K/W')}
+          ${resultRow('Heat loss', fmt(r.heatLossWm, 2) + ' W/m')}
+          ${resultRow('Outer surface temperature', fmt(r.surfaceTempC, 1) + ' \u00b0C')}
+          ${resultRow('Finished OD (with insulation)', fmt(r.outsideDiaWithInsulationMm, 1) + ' mm')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('insulation-loss',
+        `Insulation loss \u2014 ${fmt(r.heatLossWm, 1)} W/m`, {}, { heatLossWm: r.heatLossWm }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Thermal (Linear) Expansion ----------
+function pageThermalExpansion() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Thermal (Linear) Expansion</h1>
+    <p class="lead">Linear thermal expansion of a pipe run or piece of equipment from length, material, and temperature change \u2014 essential input for expansion loop / expansion joint spacing.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Length &amp; Temperature Change</div>
+    <div class="input-row">
+      <div class="field"><label>Original length (m)</label><input type="number" id="len" step="any" value="10"></div>
+      <div class="field"><label>Temperature change (\u00b0C)</label><input type="number" id="dT" step="any" value="100"></div>
+    </div>
+    <div class="field"><label>Material</label><select id="material">${Object.keys(pt.LINEAR_EXPANSION_COEFF).map((k) => `<option value="${k}">${k}</option>`).join('')}<option value="custom">Custom\u2026</option></select></div>
+    <div id="customCoeffField" class="field" style="display:none;"><label>Custom coefficient (per \u00b0C)</label><input type="number" id="customCoeff" step="any" value="0.000012"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter length, temperature change, and material.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#material').addEventListener('change', () => {
+    left.querySelector('#customCoeffField').style.display = left.querySelector('#material').value === 'custom' ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const mat = left.querySelector('#material').value;
+      const coeff = mat === 'custom' ? +left.querySelector('#customCoeff').value : pt.LINEAR_EXPANSION_COEFF[mat];
+      const r = pt.thermalExpansion({
+        originalLengthM: +left.querySelector('#len').value,
+        coeffPerC: coeff,
+        tempChangeC: +left.querySelector('#dT').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.expansionMm, 2)}</span><span class="unit">mm expansion</span></div>
+        <div class="result-grid">
+          ${resultRow('Expansion', fmt(r.expansionMm, 3) + ' mm')}
+          ${resultRow('Final length', fmt(r.finalLengthM, 5) + ' m')}
+          ${resultRow('Coefficient used', coeff.toExponential(3) + ' /\u00b0C')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">\u0394L = L\u2080 \u00b7 \u03b1 \u00b7 \u0394T</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('thermal-expansion',
+        `Thermal expansion \u2014 ${fmt(r.expansionMm, 2)} mm`, {}, { expansionMm: r.expansionMm }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Gas Compression Work ----------
+function pageGasCompression() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Gas Compression Work</h1>
+    <p class="lead">Ideal-gas isothermal and adiabatic/polytropic compression work and power \u2014 for compressor sizing estimates, not a substitute for a manufacturer's performance curve.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Gas &amp; Conditions</div>
+    <div class="field"><label>Flow input</label><select id="flowMode"><option value="molar">Molar flow (mol/s)</option><option value="mass">Mass flow (kg/s)</option></select></div>
+    <div id="molarFlowField" class="field"><label>Molar flow rate (mol/s)</label><input type="number" id="flow" step="any" value="10"></div>
+    <div id="massFlowFields" class="input-row" style="display:none;">
+      <div class="field"><label>Mass flow rate (kg/s)</label><input type="number" id="massFlow" step="any" value="1"></div>
+      <div class="field"><label>Molecular weight (g/mol)</label><input type="number" id="mw" step="any" value="29"></div>
+    </div>
+    <div class="hint">Air \u2248 29 g/mol, natural gas (mostly methane) \u2248 17\u201319 g/mol, nitrogen 28 g/mol, CO\u2082 44 g/mol.</div>
+    <div class="input-row">
+      <div class="field"><label>Inlet temperature (K)</label><input type="number" id="temp" step="any" value="300"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Inlet pressure (bar a)</label><input type="number" id="p1" step="any" value="1"></div>
+      <div class="field"><label>Outlet pressure (bar a)</label><input type="number" id="p2" step="any" value="5"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Mode</label><select id="mode"><option value="adiabatic">Adiabatic / Polytropic</option><option value="isothermal">Isothermal</option></select></div>
+      <div id="nField" class="field"><label>Polytropic index n (k=Cp/Cv for air \u2248 1.4)</label><input type="number" id="nval" step="any" value="1.4"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter gas flow and compression conditions.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#mode').addEventListener('change', () => {
+    left.querySelector('#nField').style.display = left.querySelector('#mode').value === 'adiabatic' ? '' : 'none';
+  });
+  left.querySelector('#flowMode').addEventListener('change', () => {
+    const isMass = left.querySelector('#flowMode').value === 'mass';
+    left.querySelector('#molarFlowField').style.display = isMass ? 'none' : '';
+    left.querySelector('#massFlowFields').style.display = isMass ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const isMass = left.querySelector('#flowMode').value === 'mass';
+      const r = pt.gasCompressionWork({
+        moleFlowMolS: isMass ? null : +left.querySelector('#flow').value,
+        massFlowKgS: isMass ? +left.querySelector('#massFlow').value : null,
+        molecularWeightGMol: isMass ? +left.querySelector('#mw').value : null,
+        tempInK: +left.querySelector('#temp').value,
+        p1Bar: +left.querySelector('#p1').value,
+        p2Bar: +left.querySelector('#p2').value,
+        polytropicIndex: +left.querySelector('#nval').value,
+        mode: left.querySelector('#mode').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.powerKW, 3)}</span><span class="unit">kW theoretical power</span></div>
+        <div class="result-grid">
+          ${resultRow('Work per mole', fmt(r.workJPerMol, 1) + ' J/mol')}
+          ${resultRow('Molar flow used', fmt(r.moleFlowUsedMolS, 3) + ' mol/s')}
+          ${resultRow('Power', fmt(r.powerKW, 4) + ' kW')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('gas-compression',
+        `Gas compression \u2014 ${fmt(r.powerKW, 2)} kW`, {}, { powerKW: r.powerKW }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ================= CIVIL ENGINEERING SECTION =================
+
+// ---------- Beam Analysis ----------
+function pageCivilBeam() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Structural</div><h1>Beam Analysis</h1>
+    <p class="lead">Deflection, maximum bending moment, and maximum shear force for a simply-supported or cantilever beam under a point load or uniformly distributed load. Classical Euler-Bernoulli beam theory \u2014 linear elastic, small-deflection.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Beam &amp; Load</div>
+    <div class="input-row">
+      <div class="field"><label>Support condition</label><select id="support"><option value="simply-supported">Simply Supported</option><option value="cantilever">Cantilever</option></select></div>
+      <div class="field"><label>Load type</label><select id="loadType"><option value="point">Point Load</option><option value="udl">Uniformly Distributed Load (total)</option></select></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Span / length (m)</label><input type="number" id="span" step="any" value="4"></div>
+      <div class="field"><label>Load (N) \u2014 point load, or TOTAL UDL</label><input type="number" id="load" step="any" value="10000"></div>
+    </div>
+    <div class="panel-title" style="margin-top:14px;">Section &amp; Material</div>
+    <div class="input-row">
+      <div class="field"><label>Modulus of elasticity E (GPa)</label><input type="number" id="eGpa" step="any" value="200"></div>
+      <div class="field"><label>Moment of inertia I (mm&#8308;)</label><input type="number" id="iMm4" step="any" value="66670000"></div>
+    </div>
+    <div class="hint">Don't know I? Use the Section Properties calculator first, then paste its value here.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter beam, load and section properties.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = cst.beamAnalysis({
+        support: left.querySelector('#support').value,
+        loadType: left.querySelector('#loadType').value,
+        spanM: +left.querySelector('#span').value,
+        loadN: +left.querySelector('#load').value,
+        E_Pa: (+left.querySelector('#eGpa').value) * 1e9,
+        I_m4: (+left.querySelector('#iMm4').value) * 1e-12,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.deflectionMm, 3)}</span><span class="unit">mm deflection (${r.deflLocation})</span></div>
+        <div class="result-grid">
+          ${resultRow('Maximum deflection', fmt(r.deflectionMm, 4) + ' mm at ' + r.deflLocation)}
+          ${resultRow('Maximum bending moment', fmt(r.momentMaxKNm, 4) + ' kN\u00b7m at ' + r.momentLocation)}
+          ${resultRow('Maximum shear force', fmt(r.shearMaxKN, 4) + ' kN')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">Linear-elastic, small-deflection Euler-Bernoulli beam theory. Self-weight of the beam is not included \u2014 add it as part of the UDL if significant. This is a mechanics result, not a code-compliant design check (deflection limits, load factors, and material capacity checks are separate).</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-beam',
+        `Beam \u2014 ${fmt(r.deflectionMm, 2)} mm deflection`, {}, { deflectionMm: r.deflectionMm, momentMaxKNm: r.momentMaxKNm }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Section Properties ----------
+function pageCivilSection() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Structural</div><h1>Section Properties</h1>
+    <p class="lead">Moment of inertia and section modulus for rectangular, circular, and hollow-circular (tube) sections about the centroidal bending axis.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Shape</div>
+    <div class="field"><label>Section shape</label><select id="shape"><option value="rectangle">Rectangle</option><option value="circle">Solid Circle</option><option value="hollow-circle">Hollow Circle (Tube)</option></select></div>
+    <div id="rectFields" class="input-row">
+      <div class="field"><label>Width (mm)</label><input type="number" id="width" step="any" value="100"></div>
+      <div class="field"><label>Height (mm)</label><input type="number" id="height" step="any" value="200"></div>
+    </div>
+    <div id="circFields" class="field" style="display:none;"><label>Diameter (mm)</label><input type="number" id="dia" step="any" value="150"></div>
+    <div id="hollowFields" class="input-row" style="display:none;">
+      <div class="field"><label>Outer diameter (mm)</label><input type="number" id="oDia" step="any" value="150"></div>
+      <div class="field"><label>Inner diameter (mm)</label><input type="number" id="iDia" step="any" value="130"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Choose a shape and enter dimensions.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#shape').addEventListener('change', () => {
+    const s = left.querySelector('#shape').value;
+    left.querySelector('#rectFields').style.display = s === 'rectangle' ? '' : 'none';
+    left.querySelector('#circFields').style.display = s === 'circle' ? '' : 'none';
+    left.querySelector('#hollowFields').style.display = s === 'hollow-circle' ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const shape = left.querySelector('#shape').value;
+      const r = cst.sectionProperties({
+        shape,
+        widthM: (+left.querySelector('#width').value) / 1000,
+        heightM: (+left.querySelector('#height').value) / 1000,
+        diameterM: (+left.querySelector('#dia').value) / 1000,
+        outerDiaM: (+left.querySelector('#oDia').value) / 1000,
+        innerDiaM: (+left.querySelector('#iDia').value) / 1000,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.momentOfInertiaMm4, 0)}</span><span class="unit">mm\u2074 moment of inertia (I)</span></div>
+        <div class="result-grid">
+          ${resultRow('Moment of inertia (I)', fmt(r.momentOfInertiaMm4, 0) + ' mm\u2074')}
+          ${resultRow('Section modulus (S)', fmt(r.sectionModulusMm3, 0) + ' mm\u00b3')}
+          ${resultRow('Cross-section area', fmt(r.areaMm2, 1) + ' mm\u00b2')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">${shape === 'rectangle' ? 'I = bh\u00b3/12 &nbsp; S = bh\u00b2/6' : shape === 'circle' ? 'I = \u03c0d\u2074/64 &nbsp; S = \u03c0d\u00b3/32' : 'I = \u03c0(D\u2074\u2212d\u2074)/64'}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-section',
+        `Section \u2014 I=${fmt(r.momentOfInertiaMm4, 0)} mm\u2074`, {}, { momentOfInertiaMm4: r.momentOfInertiaMm4 }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Column Buckling ----------
+function pageCivilColumn() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Structural</div><h1>Column Buckling (Euler)</h1>
+    <p class="lead">Elastic critical buckling load and slenderness ratio for a column, for any standard end-support condition. Gives the theoretical elastic buckling load \u2014 not a code-compliant allowable load, which also needs safety/resistance factors and a short-column check.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Column</div>
+    <div class="field"><label>End condition</label><select id="endCond">${Object.entries(cst.END_CONDITIONS).map(([k, v]) => `<option value="${k}">${v.label} (K=${v.k})</option>`).join('')}</select></div>
+    <div class="input-row">
+      <div class="field"><label>Unsupported length (m)</label><input type="number" id="len" step="any" value="4"></div>
+      <div class="field"><label>Modulus of elasticity E (GPa)</label><input type="number" id="eGpa" step="any" value="200"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Moment of inertia I (mm&#8308;)</label><input type="number" id="iMm4" step="any" value="66670000"></div>
+      <div class="field"><label>Cross-section area (mm\u00b2)</label><input type="number" id="areaMm2" step="any" value="20000"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter column and section properties.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = cst.columnBuckling({
+        endCondition: left.querySelector('#endCond').value,
+        lengthM: +left.querySelector('#len').value,
+        E_Pa: (+left.querySelector('#eGpa').value) * 1e9,
+        I_m4: (+left.querySelector('#iMm4').value) * 1e-12,
+        areaM2: (+left.querySelector('#areaMm2').value) * 1e-6,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.criticalLoadKN, 1)}</span><span class="unit">kN critical buckling load</span></div>
+        <div class="result-grid">
+          ${resultRow('Effective length (KL)', fmt(r.effectiveLengthM, 3) + ' m')}
+          ${resultRow('Radius of gyration', fmt(r.radiusOfGyrationMm, 2) + ' mm')}
+          ${resultRow('Slenderness ratio', fmt(r.slendernessRatio, 1))}
+          ${resultRow('Critical stress', fmt(r.criticalStressMPa, 2) + ' MPa')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">P_cr = \u03c0\u00b2EI / (KL)\u00b2</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-column',
+        `Column \u2014 P_cr ${fmt(r.criticalLoadKN, 1)} kN`, {}, { criticalLoadKN: r.criticalLoadKN, slendernessRatio: r.slendernessRatio }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Combined Axial & Bending Stress ----------
+function pageCivilCombinedStress() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Structural</div><h1>Combined Axial &amp; Bending Stress</h1>
+    <p class="lead">Superposition of axial stress and bending stress on a section \u2014 the maximum fiber stress a beam-column or eccentrically loaded member sees.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Loads &amp; Section</div>
+    <div class="input-row">
+      <div class="field"><label>Axial load (kN)</label><input type="number" id="axial" step="any" value="50"></div>
+      <div class="field"><label>Bending moment (kN\u00b7m)</label><input type="number" id="moment" step="any" value="10"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Cross-section area (mm\u00b2)</label><input type="number" id="area" step="any" value="20000"></div>
+      <div class="field"><label>Section modulus (mm\u00b3)</label><input type="number" id="sMod" step="any" value="666700"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter loads and section properties.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = cst.combinedStress({
+        axialLoadN: (+left.querySelector('#axial').value) * 1000,
+        bendingMomentNm: (+left.querySelector('#moment').value) * 1000,
+        areaM2: (+left.querySelector('#area').value) * 1e-6,
+        sectionModulusM3: (+left.querySelector('#sMod').value) * 1e-9,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.maxCombinedStressMPa, 2)}</span><span class="unit">MPa max combined stress</span></div>
+        <div class="result-grid">
+          ${resultRow('Axial stress', fmt(r.axialStressMPa, 3) + ' MPa')}
+          ${resultRow('Bending stress', fmt(r.bendingStressMPa, 3) + ' MPa')}
+          ${resultRow('Maximum (compression face)', fmt(r.maxCombinedStressMPa, 3) + ' MPa')}
+          ${resultRow('Minimum (tension face)', fmt(r.minCombinedStressMPa, 3) + ' MPa')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">\u03c3 = P/A \u00b1 M/S</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-combined-stress',
+        `Combined stress \u2014 ${fmt(r.maxCombinedStressMPa, 2)} MPa`, {}, { maxCombinedStressMPa: r.maxCombinedStressMPa }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Steel Weight ----------
+function pageCivilSteelWeight() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Structural</div><h1>Steel Weight Calculator</h1>
+    <p class="lead">Weight of round bar, flat plate, or pipe from dimensions and density \u2014 for material takeoff and procurement.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Shape &amp; Dimensions</div>
+    <div class="field"><label>Shape</label><select id="shape"><option value="round-bar">Round Bar</option><option value="flat-plate">Flat Plate</option><option value="pipe">Pipe</option></select></div>
+    <div id="barFields" class="field"><label>Diameter (mm)</label><input type="number" id="dia" step="any" value="20"></div>
+    <div id="plateFields" class="input-row" style="display:none;">
+      <div class="field"><label>Width (mm)</label><input type="number" id="width" step="any" value="200"></div>
+      <div class="field"><label>Thickness (mm)</label><input type="number" id="thick" step="any" value="10"></div>
+    </div>
+    <div id="pipeFields" class="input-row" style="display:none;">
+      <div class="field"><label>Outer diameter (mm)</label><input type="number" id="oDia" step="any" value="60"></div>
+      <div class="field"><label>Wall thickness (mm)</label><input type="number" id="wallT" step="any" value="5"></div>
+    </div>
+    <div class="field"><label>Length (m)</label><input type="number" id="len" step="any" value="6"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Choose a shape and enter dimensions.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#shape').addEventListener('change', () => {
+    const s = left.querySelector('#shape').value;
+    left.querySelector('#barFields').style.display = s === 'round-bar' ? '' : 'none';
+    left.querySelector('#plateFields').style.display = s === 'flat-plate' ? '' : 'none';
+    left.querySelector('#pipeFields').style.display = s === 'pipe' ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const shape = left.querySelector('#shape').value;
+      const r = cst.steelWeight({
+        shape, lengthM: +left.querySelector('#len').value,
+        diameterMm: +left.querySelector('#dia').value,
+        widthMm: +left.querySelector('#width').value, thicknessMm: +left.querySelector('#thick').value,
+        outerDiaMm: +left.querySelector('#oDia').value, wallThicknessMm: +left.querySelector('#wallT').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.weightKg, 2)}</span><span class="unit">kg total weight</span></div>
+        <div class="result-grid">
+          ${resultRow('Cross-section area', fmt(r.crossSectionAreaMm2, 1) + ' mm\u00b2')}
+          ${resultRow('Weight per metre', fmt(r.weightPerMKgM, 3) + ' kg/m')}
+          ${resultRow('Total weight', fmt(r.weightKg, 3) + ' kg')}
+        </div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-steel-weight',
+        `Steel weight \u2014 ${fmt(r.weightKg, 2)} kg`, {}, { weightKg: r.weightKg }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Concrete Volume & Weight ----------
+function pageCivilConcreteVolume() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Concrete</div><h1>Concrete Volume &amp; Weight</h1>
+    <p class="lead">Volume and weight of concrete for slabs, columns, and footings \u2014 for material quantity and procurement estimates.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Element</div>
+    <div class="field"><label>Shape</label><select id="shape">
+      <option value="slab-rectangular">Slab (Rectangular)</option>
+      <option value="footing-rectangular">Footing (Rectangular)</option>
+      <option value="column-rectangular">Column (Rectangular)</option>
+      <option value="column-circular">Column (Circular)</option>
+    </select></div>
+    <div id="rectDims" class="input-row">
+      <div class="field"><label>Length (m)</label><input type="number" id="len" step="any" value="5"></div>
+      <div class="field"><label>Width (m)</label><input type="number" id="width" step="any" value="4"></div>
+    </div>
+    <div id="thickField" class="field"><label>Thickness (m)</label><input type="number" id="thick" step="any" value="0.15"></div>
+    <div id="colDims" style="display:none;">
+      <div class="input-row">
+        <div class="field"><label>Width (m)</label><input type="number" id="colWidth" step="any" value="0.3"></div>
+        <div class="field"><label>Thickness (m)</label><input type="number" id="colThick" step="any" value="0.3"></div>
+      </div>
+      <div class="field"><label>Height (m)</label><input type="number" id="colHeight" step="any" value="3"></div>
+    </div>
+    <div id="circDims" style="display:none;">
+      <div class="input-row">
+        <div class="field"><label>Diameter (m)</label><input type="number" id="circDia" step="any" value="0.4"></div>
+        <div class="field"><label>Height (m)</label><input type="number" id="circHeight" step="any" value="3"></div>
+      </div>
+    </div>
+    <div class="field"><label>Unit weight (kg/m\u00b3)</label><input type="number" id="uw" step="any" value="2400"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Choose a shape and enter dimensions.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  const shapeSel = left.querySelector('#shape');
+  shapeSel.addEventListener('change', () => {
+    const s = shapeSel.value;
+    left.querySelector('#rectDims').style.display = (s === 'slab-rectangular' || s === 'footing-rectangular') ? '' : 'none';
+    left.querySelector('#thickField').style.display = (s === 'slab-rectangular' || s === 'footing-rectangular') ? '' : 'none';
+    left.querySelector('#colDims').style.display = s === 'column-rectangular' ? '' : 'none';
+    left.querySelector('#circDims').style.display = s === 'column-circular' ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const shape = shapeSel.value;
+      const r = ccon.concreteVolume({
+        shape,
+        lengthM: +left.querySelector('#len').value, widthM: shape === 'column-rectangular' ? +left.querySelector('#colWidth').value : +left.querySelector('#width').value,
+        thicknessM: shape === 'column-rectangular' ? +left.querySelector('#colThick').value : +left.querySelector('#thick').value,
+        diameterM: +left.querySelector('#circDia').value,
+        heightM: shape === 'column-rectangular' ? +left.querySelector('#colHeight').value : +left.querySelector('#circHeight').value,
+        unitWeightKgM3: +left.querySelector('#uw').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.volumeM3, 3)}</span><span class="unit">m\u00b3 concrete volume</span></div>
+        <div class="result-grid">
+          ${resultRow('Volume', fmt(r.volumeM3, 4) + ' m\u00b3')}
+          ${resultRow('Weight', fmt(r.weightKg, 1) + ' kg (' + fmt(r.weightTonne, 3) + ' tonne)')}
+        </div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-concrete-volume',
+        `Concrete \u2014 ${fmt(r.volumeM3, 2)} m\u00b3`, {}, { volumeM3: r.volumeM3, weightKg: r.weightKg }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Water-Cement Ratio ----------
+function pageCivilWaterCement() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Concrete</div><h1>Water-Cement Ratio</h1>
+    <p class="lead">Enter any two of water quantity, cement quantity, and target ratio \u2014 the third is calculated.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Enter Any Two</div>
+    <div class="field"><label>Water quantity (kg)</label><input type="number" id="water" step="any" placeholder="leave blank to solve for this"></div>
+    <div class="field"><label>Cement quantity (kg)</label><input type="number" id="cement" step="any" value="50"></div>
+    <div class="field"><label>Target water-cement ratio</label><input type="number" id="ratio" step="any" value="0.45"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter any two values.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const w = left.querySelector('#water').value, c = left.querySelector('#cement').value, tr = left.querySelector('#ratio').value;
+      const r = ccon.waterCementRatio({
+        waterKg: w === '' ? null : +w,
+        cementKg: c === '' ? null : +c,
+        targetRatio: tr === '' ? null : +tr,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.ratio, 3)}</span><span class="unit">water-cement ratio</span></div>
+        <div class="result-grid">
+          ${resultRow('Water', fmt(r.waterKg, 2) + ' kg')}
+          ${resultRow('Cement', fmt(r.cementKg, 2) + ' kg')}
+          ${resultRow('Ratio (W/C)', fmt(r.ratio, 4))}
+        </div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-water-cement',
+        `W/C \u2014 ${fmt(r.ratio, 3)}`, {}, { ratio: r.ratio }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Concrete Nominal Mix (IS 456) ----------
+function pageCivilConcreteMix() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Concrete</div><h1>Concrete Nominal Mix (IS 456:2000)</h1>
+    <p class="lead">Cement, sand and aggregate quantities for IS 456:2000 nominal mixes (M5\u2013M20 only \u2014 M25 and above require a design mix under IS 456, not covered here).</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Mix &amp; Volume</div>
+    <div class="input-row">
+      <div class="field"><label>Grade</label><select id="grade">${Object.keys(ccon.IS456_NOMINAL_MIXES).map((g) => `<option value="${g}">${g.replace('_', '.')}</option>`).join('')}</select></div>
+      <div class="field"><label>Wet concrete volume (m\u00b3)</label><input type="number" id="vol" step="any" value="1"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Dry volume factor</label><input type="number" id="dvf" step="any" value="1.54"></div>
+      <div class="field"><label>Cement bag size (kg)</label><input type="number" id="bagKg" step="any" value="50"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Choose a grade and volume.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ccon.nominalMixQuantities({
+        grade: left.querySelector('#grade').value,
+        wetVolumeM3: +left.querySelector('#vol').value,
+        dryVolumeFactor: +left.querySelector('#dvf').value,
+        cementBagKg: +left.querySelector('#bagKg').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.cementBags, 2)}</span><span class="unit">bags of cement</span></div>
+        <div class="result-grid">
+          ${resultRow('Mix ratio', r.mixRatio)}
+          ${resultRow('Cement', fmt(r.cementWeightKg, 1) + ' kg (' + fmt(r.cementBags, 2) + ' bags)')}
+          ${resultRow('Sand volume', fmt(r.sandVolumeM3, 4) + ' m\u00b3')}
+          ${resultRow('Aggregate volume', fmt(r.aggregateVolumeM3, 4) + ' m\u00b3')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-concrete-mix',
+        `Mix ${left.querySelector('#grade').value} \u2014 ${fmt(r.cementBags, 1)} bags`, {}, { cementBags: r.cementBags }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Rebar Weight & Quantity ----------
+function pageCivilRebar() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Reinforcement</div><h1>Rebar Weight &amp; Quantity</h1>
+    <p class="lead">Reinforcement bar weight from diameter, length and count \u2014 computed from steel density, with the familiar site rule of thumb (d\u00b2/162) shown for cross-reference.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Bar</div>
+    <div class="input-row">
+      <div class="field"><label>Diameter (mm)</label><input type="number" id="dia" step="any" value="16"></div>
+      <div class="field"><label>Length per bar (m)</label><input type="number" id="len" step="any" value="12"></div>
+    </div>
+    <div class="field"><label>Number of bars</label><input type="number" id="num" step="any" value="20"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter bar diameter, length and count.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = ccon.rebarWeight({
+        diameterMm: +left.querySelector('#dia').value,
+        lengthM: +left.querySelector('#len').value,
+        numberOfBars: +left.querySelector('#num').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.totalWeightKg, 2)}</span><span class="unit">kg total</span></div>
+        <div class="result-grid">
+          ${resultRow('Weight per metre', fmt(r.weightPerMKgM, 4) + ' kg/m')}
+          ${resultRow('Weight per bar', fmt(r.weightPerBarKg, 3) + ' kg')}
+          ${resultRow('Total weight', fmt(r.totalWeightKg, 2) + ' kg')}
+          ${resultRow('Site rule of thumb (d\u00b2/162)', fmt(r.ruleOfThumbKgM, 4) + ' kg/m')}
+        </div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-rebar',
+        `Rebar \u2014 ${fmt(r.totalWeightKg, 2)} kg`, {}, { totalWeightKg: r.totalWeightKg }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Earth Pressure (Rankine) ----------
+function pageCivilEarthPressure() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Geotechnical</div><h1>Earth Pressure (Rankine)</h1>
+    <p class="lead">Active and passive earth pressure on a retaining wall using Rankine theory \u2014 vertical wall, horizontal backfill, no wall friction. Optional cohesion.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Soil &amp; Depth</div>
+    <div class="input-row">
+      <div class="field"><label>Friction angle \u03c6 (\u00b0)</label><input type="number" id="phi" step="any" value="30"></div>
+      <div class="field"><label>Cohesion c (kPa)</label><input type="number" id="coh" step="any" value="0"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Depth (m)</label><input type="number" id="depth" step="any" value="3"></div>
+      <div class="field"><label>Unit weight (kN/m\u00b3)</label><input type="number" id="uw" step="any" value="18"></div>
+    </div>
+    <div class="field"><label>Surcharge (kPa)</label><input type="number" id="sur" step="any" value="0"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter soil properties and depth.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = cgeo.rankineEarthPressure({
+        frictionAngleDeg: +left.querySelector('#phi').value,
+        cohesionKPa: +left.querySelector('#coh').value,
+        depthM: +left.querySelector('#depth').value,
+        unitWeightKNm3: +left.querySelector('#uw').value,
+        surchargeKPa: +left.querySelector('#sur').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.activePressureKPa, 2)}</span><span class="unit">kPa active pressure</span></div>
+        <div class="result-grid">
+          ${resultRow('K\u2090 (active coefficient)', fmt(r.Ka, 4))}
+          ${resultRow('K\u209a (passive coefficient)', fmt(r.Kp, 4))}
+          ${resultRow('Vertical stress at depth', fmt(r.verticalStressKPa, 2) + ' kPa')}
+          ${resultRow('Active pressure', fmt(r.activePressureKPa, 2) + ' kPa')}
+          ${resultRow('Passive pressure', fmt(r.passivePressureKPa, 2) + ' kPa')}
+          ${r.tensionCrackDepthM > 0 ? resultRow('Tension crack depth', fmt(r.tensionCrackDepthM, 3) + ' m') : ''}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">K\u2090 = tan\u00b2(45\u00b0 \u2212 \u03c6/2) &nbsp; K\u209a = tan\u00b2(45\u00b0 + \u03c6/2)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-earth-pressure',
+        `Earth pressure \u2014 ${fmt(r.activePressureKPa, 1)} kPa active`, {}, { activePressureKPa: r.activePressureKPa }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Soil Phase Relationships & Effective Stress ----------
+function pageCivilSoilPhase() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Geotechnical</div><h1>Soil Phase &amp; Effective Stress</h1>
+    <p class="lead">Void ratio / porosity conversion, and Terzaghi effective stress (total stress minus pore water pressure) at a given depth.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Void Ratio / Porosity</div>
+    <div class="field"><label>Void ratio (e) \u2014 leave blank to solve from porosity</label><input type="number" id="e" step="any" value="0.6"></div>
+    <div class="field"><label>Porosity (n, as a fraction)</label><input type="number" id="n" step="any" placeholder="e.g. 0.375"></div>
+    <div class="btn-row"><button class="btn" id="calcPhase">Calculate Phase Relationship</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Effective Stress</div>
+    <div class="input-row">
+      <div class="field"><label>Depth (m)</label><input type="number" id="depth" step="any" value="5"></div>
+      <div class="field"><label>Water table depth (m)</label><input type="number" id="wt" step="any" value="2"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Unit weight above WT (kN/m\u00b3)</label><input type="number" id="uwAbove" step="any" value="17"></div>
+      <div class="field"><label>Unit weight below WT (kN/m\u00b3)</label><input type="number" id="uwBelow" step="any" value="19"></div>
+    </div>
+    <div class="btn-row"><button class="btn secondary" id="calcStress">Calculate Effective Stress</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter values and calculate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calcPhase').addEventListener('click', () => {
+    try {
+      const eVal = left.querySelector('#e').value, nVal = left.querySelector('#n').value;
+      const r = cgeo.soilPhaseRelationships({ voidRatio: eVal === '' ? null : +eVal, porosity: nVal === '' ? null : +nVal });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.voidRatio, 4)}</span><span class="unit">void ratio (e)</span></div>
+        <div class="result-grid">
+          ${resultRow('Void ratio (e)', fmt(r.voidRatio, 4))}
+          ${resultRow('Porosity (n)', fmt(r.porosity, 4) + ' (' + fmt(r.porosity * 100, 2) + '%)')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">n = e / (1 + e)</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  left.querySelector('#calcStress').addEventListener('click', () => {
+    try {
+      const r = cgeo.effectiveStress({
+        depthM: +left.querySelector('#depth').value,
+        waterTableDepthM: +left.querySelector('#wt').value,
+        unitWeightAboveWaterKNm3: +left.querySelector('#uwAbove').value,
+        unitWeightBelowWaterKNm3: +left.querySelector('#uwBelow').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.effectiveStressKPa, 2)}</span><span class="unit">kPa effective stress</span></div>
+        <div class="result-grid">
+          ${resultRow('Total stress', fmt(r.totalStressKPa, 2) + ' kPa')}
+          ${resultRow('Pore water pressure', fmt(r.porePressureKPa, 2) + ' kPa')}
+          ${resultRow('Effective stress', fmt(r.effectiveStressKPa, 2) + ' kPa')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">\u03c3' = \u03c3 \u2212 u</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-soil-phase',
+        `Effective stress \u2014 ${fmt(r.effectiveStressKPa, 1)} kPa`, {}, { effectiveStressKPa: r.effectiveStressKPa }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Manning's Equation ----------
+function pageCivilManning() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Hydraulics</div><h1>Manning's Equation</h1>
+    <p class="lead">Open channel flow velocity and discharge for rectangular and trapezoidal channels using Manning's uniform-flow equation.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Channel</div>
+    <div class="input-row">
+      <div class="field"><label>Channel shape</label><select id="shape"><option value="rectangular">Rectangular</option><option value="trapezoidal">Trapezoidal</option></select></div>
+      <div class="field"><label>Bottom width (m)</label><input type="number" id="width" step="any" value="2"></div>
+    </div>
+    <div id="sideSlopeField" class="field" style="display:none;"><label>Side slope (H per 1V)</label><input type="number" id="sideSlope" step="any" value="1.5"></div>
+    <div class="input-row">
+      <div class="field"><label>Flow depth (m)</label><input type="number" id="depth" step="any" value="1"></div>
+      <div class="field"><label>Longitudinal slope (m/m)</label><input type="number" id="slope" step="any" value="0.001"></div>
+    </div>
+    <div class="field"><label>Manning's n</label><select id="nSelect">${Object.entries(chyd.MANNING_N).map(([k, v]) => `<option value="${v}">${k} (n=${v})</option>`).join('')}<option value="custom">Custom\u2026</option></select></div>
+    <div id="customNField" class="field" style="display:none;"><label>Custom n</label><input type="number" id="customN" step="any" value="0.013"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter channel geometry and roughness.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#shape').addEventListener('change', () => {
+    left.querySelector('#sideSlopeField').style.display = left.querySelector('#shape').value === 'trapezoidal' ? '' : 'none';
+  });
+  left.querySelector('#nSelect').addEventListener('change', () => {
+    left.querySelector('#customNField').style.display = left.querySelector('#nSelect').value === 'custom' ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const nSel = left.querySelector('#nSelect').value;
+      const n = nSel === 'custom' ? +left.querySelector('#customN').value : +nSel;
+      const r = chyd.manningFlow({
+        channelShape: left.querySelector('#shape').value,
+        bottomWidthM: +left.querySelector('#width').value,
+        sideSlopeH: +left.querySelector('#sideSlope').value,
+        flowDepthM: +left.querySelector('#depth').value,
+        manningN: n,
+        longitudinalSlope: +left.querySelector('#slope').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.flowM3s, 4)}</span><span class="unit">m\u00b3/s discharge</span></div>
+        <div class="result-grid">
+          ${resultRow('Flow area', fmt(r.areaM2, 3) + ' m\u00b2')}
+          ${resultRow('Wetted perimeter', fmt(r.wettedPerimeterM, 3) + ' m')}
+          ${resultRow('Hydraulic radius', fmt(r.hydraulicRadiusM, 4) + ' m')}
+          ${resultRow('Velocity', fmt(r.velocityMs, 3) + ' m/s')}
+          ${resultRow('Discharge', fmt(r.flowM3s, 4) + ' m\u00b3/s (' + fmt(r.flowLs, 1) + ' L/s)')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">V = (1/n)\u00b7R^(2/3)\u00b7S^(1/2)</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-manning',
+        `Manning \u2014 ${fmt(r.flowM3s, 3)} m\u00b3/s`, {}, { flowM3s: r.flowM3s }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Weir Flow ----------
+function pageCivilWeir() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Hydraulics</div><h1>Weir Flow (Rectangular)</h1>
+    <p class="lead">Discharge over a rectangular sharp-crested weir using the Francis formula. Does not apply to V-notch, Cipolletti, or broad-crested weirs, which use different formulas.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Weir</div>
+    <div class="input-row">
+      <div class="field"><label>Crest length (m)</label><input type="number" id="len" step="any" value="1.5"></div>
+      <div class="field"><label>Head over crest (m)</label><input type="number" id="head" step="any" value="0.3"></div>
+    </div>
+    <div class="field"><label><input type="checkbox" id="contracted" style="width:auto;margin-right:6px;">End contractions present (subtract 0.2H from crest length)</label></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter crest length and head.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = chyd.weirFlow({
+        crestLengthM: +left.querySelector('#len').value,
+        headM: +left.querySelector('#head').value,
+        contracted: left.querySelector('#contracted').checked,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.flowM3s, 4)}</span><span class="unit">m\u00b3/s discharge</span></div>
+        <div class="result-grid">
+          ${resultRow('Effective crest length', fmt(r.effectiveLengthM, 3) + ' m')}
+          ${resultRow('Discharge', fmt(r.flowM3s, 4) + ' m\u00b3/s (' + fmt(r.flowLs, 1) + ' L/s)')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Q = 1.84 \u00b7 L \u00b7 H^1.5</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-weir',
+        `Weir \u2014 ${fmt(r.flowM3s, 3)} m\u00b3/s`, {}, { flowM3s: r.flowM3s }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Land Area & Earthwork ----------
+function pageCivilEarthwork() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Surveying</div><h1>Land Area &amp; Earthwork Volume</h1>
+    <p class="lead">Triangle and trapezoid land area, slope grade, and cut/fill earthwork volume by the average end area method.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Triangle Area</div>
+    <div class="input-row">
+      <div class="field"><label>Base (m)</label><input type="number" id="triBase" step="any" value="6"></div>
+      <div class="field"><label>Height (m)</label><input type="number" id="triHeight" step="any" value="4"></div>
+    </div>
+    <div class="btn-row"><button class="btn secondary" id="calcTri">Calculate Triangle Area</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Trapezoid Area</div>
+    <div class="input-row">
+      <div class="field"><label>Side 1 (m)</label><input type="number" id="tzSide1" step="any" value="4"></div>
+      <div class="field"><label>Side 2 (m)</label><input type="number" id="tzSide2" step="any" value="8"></div>
+    </div>
+    <div class="field"><label>Height (m)</label><input type="number" id="tzHeight" step="any" value="5"></div>
+    <div class="btn-row"><button class="btn secondary" id="calcTz">Calculate Trapezoid Area</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Slope</div>
+    <div class="input-row">
+      <div class="field"><label>Rise (m)</label><input type="number" id="rise" step="any" value="2"></div>
+      <div class="field"><label>Run (m)</label><input type="number" id="run" step="any" value="20"></div>
+    </div>
+    <div class="btn-row"><button class="btn secondary" id="calcSlope">Calculate Slope</button></div>
+
+    <div class="panel-title" style="margin-top:16px;">Cut &amp; Fill Volume (Average End Area)</div>
+    <div class="input-row">
+      <div class="field"><label>Area 1 (m\u00b2)</label><input type="number" id="area1" step="any" value="20"></div>
+      <div class="field"><label>Area 2 (m\u00b2)</label><input type="number" id="area2" step="any" value="30"></div>
+    </div>
+    <div class="field"><label>Distance between sections (m)</label><input type="number" id="dist" step="any" value="50"></div>
+    <div class="btn-row"><button class="btn secondary" id="calcCutFill">Calculate Volume</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Choose a calculation above.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calcTri').addEventListener('click', () => {
+    try {
+      const r = csur.triangleArea({ baseM: +left.querySelector('#triBase').value, heightM: +left.querySelector('#triHeight').value });
+      right.innerHTML = `<div class="readout"><span class="value">${fmt(r.areaM2, 3)}</span><span class="unit">m\u00b2 triangle area</span></div>
+        <div class="formula-box" style="margin-top:12px;">A = \u00bd \u00d7 base \u00d7 height</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+  left.querySelector('#calcTz').addEventListener('click', () => {
+    try {
+      const r = csur.trapezoidArea({ side1M: +left.querySelector('#tzSide1').value, side2M: +left.querySelector('#tzSide2').value, heightM: +left.querySelector('#tzHeight').value });
+      right.innerHTML = `<div class="readout"><span class="value">${fmt(r.areaM2, 3)}</span><span class="unit">m\u00b2 trapezoid area</span></div>
+        <div class="formula-box" style="margin-top:12px;">A = \u00bd(a+b)\u00d7h</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+  left.querySelector('#calcSlope').addEventListener('click', () => {
+    try {
+      const r = csur.slopeCalc({ riseM: +left.querySelector('#rise').value, runM: +left.querySelector('#run').value });
+      right.innerHTML = `<div class="readout"><span class="value">${fmt(r.slopePct, 2)}</span><span class="unit">% slope</span></div>
+        <div class="result-grid">${resultRow('Slope angle', fmt(r.slopeAngleDeg, 3) + ' \u00b0')}${resultRow('Slope ratio', r.slopeRatio)}</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+  left.querySelector('#calcCutFill').addEventListener('click', () => {
+    try {
+      const r = csur.cutFillVolume({ area1M2: +left.querySelector('#area1').value, area2M2: +left.querySelector('#area2').value, distanceM: +left.querySelector('#dist').value });
+      right.innerHTML = `<div class="readout"><span class="value">${fmt(r.volumeM3, 2)}</span><span class="unit">m\u00b3 earthwork volume</span></div>
+        <div class="formula-box" style="margin-top:12px;">V = ((A\u2081+A\u2082)/2) \u00d7 L</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.note}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('civil-earthwork',
+        `Earthwork \u2014 ${fmt(r.volumeM3, 1)} m\u00b3`, {}, { volumeM3: r.volumeM3 }));
     } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
   });
 }
@@ -5088,6 +6362,11 @@ function pageRelaySettings() {
     </div>
     <div class="field"><label>Max fault current (own zone)</label><input type="number" id="fault" step="any" value="6000"></div>
     <div class="hint">"Max through-fault" is the largest current the relay must NOT trip fast for \u2014 downstream fault contribution, motor starting, or transformer inrush. "Max fault current" is the highest fault level genuinely within this relay's own zone.</div>
+    <div class="input-row">
+      <div class="field"><label>Min fault current (optional, primary A)</label><input type="number" id="minFault" step="any" placeholder="e.g. far-end fault"></div>
+      <div class="field"><label>Min acceptable sensitivity ratio</label><input type="number" id="minSens" step="any" value="2.0"></div>
+    </div>
+    <div class="hint">A relay set only against the MAXIMUM fault can still be blind to a legitimate but smaller one elsewhere in its zone \u2014 leave blank to skip this check, or enter the smallest fault current the relay must actually clear (often a far-end or minimum-plant-condition fault).</div>
 
     <div class="panel-title" style="margin-top:14px;">Stage 1 (I&gt;) \u2014 IDMT</div>
     <div class="input-row">
@@ -5125,6 +6404,8 @@ function pageRelaySettings() {
         curveKey: left.querySelector('#curve').value,
         desiredStage1TimeS: +left.querySelector('#t1').value,
         stage2DelayS: +left.querySelector('#t2').value,
+        minFaultCurrentA: left.querySelector('#minFault').value === '' ? null : +left.querySelector('#minFault').value,
+        minSensitivityRatio: +left.querySelector('#minSens').value,
       });
       const warnHtml = r.warnings.length
         ? `<div class="assumptions-note" style="margin-top:12px;border-color:var(--red);">${r.warnings.map((w) => `\u26a0 ${w}`).join('<br><br>')}</div>` : '';
@@ -5153,6 +6434,13 @@ function pageRelaySettings() {
           ${resultRow('Pickup (relay setting)', fmt(r.stage3.pickupPu, 3) + ' \u00d7 In')}
           ${resultRow('Time delay', 'Instantaneous (no intentional delay)')}
         </div>
+        ${r.sensitivity ? `
+        <div class="panel-title" style="margin-top:14px;">Sensitivity Check \u2014 Minimum Fault</div>
+        <div class="result-grid">
+          ${resultRow('Sensitivity ratio', fmt(r.sensitivity.sensitivityRatio, 2) + '\u00d7')}
+          ${resultRow('Target', '\u2265 ' + fmt(r.sensitivity.minSensitivityRatio, 2) + '\u00d7')}
+          ${resultRow('Result', `<span class="badge ${r.sensitivity.adequate ? 'normal' : 'out'}">${r.sensitivity.adequate ? 'ADEQUATE' : 'BELOW TARGET'}</span>`)}
+        </div>` : ''}
         ${warnHtml}
         <div class="assumptions-note" style="margin-top:12px;">Every pickup is shown in BOTH primary amps and relay per-unit (\u00d7 In) \u2014 the relay itself is set in per-unit; primary amps are for the setting sheet and coordination study. Confirm against the specific relay's own setting-range limits before commissioning.</div>
         <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
@@ -5501,6 +6789,23 @@ function pageControlLoops() {
   clearLoopTimers();
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Control Loops \u2014 Visual Reference</h1>
     <p class="lead">The major control loops of a thermal power plant, drawn as live block diagrams. Move the disturbance slider and watch the signals actually propagate \u2014 these loops are far easier to understand seeing them move than reading about them.</p></div>`));
+
+  // Every node label uses standard ISA-5.1 instrument tag letters (LT,
+  // LIC, FCV, and so on) without ever spelling them out on the diagram
+  // itself -- understandable shorthand once you know the convention,
+  // opaque before that. Shown ONCE here, above all 13 loops, rather than
+  // repeated per-tab, since the convention itself doesn't change loop to
+  // loop.
+  app.appendChild(h(`<div class="card" style="margin-top:14px;padding:14px 16px;">
+    <div style="font-size:.72rem;letter-spacing:.04em;color:var(--text-faint);text-transform:uppercase;margin-bottom:8px;">How to read the tag names (ISA-5.1)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:.82rem;color:var(--text-dim);">
+      <span><b style="color:var(--text);">1st letter</b> = what's measured: <b>L</b>evel, <b>F</b>low, <b>P</b>ressure, <b>T</b>emperature</span>
+      <span><b style="color:var(--text);">T</b> = Transmitter (measures it) &mdash; e.g. <b style="color:var(--cyan);">LT</b> = Level Transmitter</span>
+      <span><b style="color:var(--text);">IC</b> = Indicating Controller &mdash; e.g. <b style="color:var(--amber);">FIC</b> = Flow Indicating Controller</span>
+      <span><b style="color:var(--text);">CV</b> = Control Valve, the final element &mdash; e.g. <b style="color:var(--green);">FCV</b> = Flow Control Valve</span>
+      <span><b style="color:var(--blue);">\u03a3</b> = a compute block (sum, select, ratio) &mdash; not a physical instrument</span>
+    </div>
+  </div>`));
 
   const loopTabs = h(`<div class="tabs" id="loopTabs">${cl.LOOP_IDS.map((id, i) =>
     `<div class="tab ${i === 0 ? 'active' : ''}" data-l="${id}">${cl.CONTROL_LOOPS[id].name}</div>`).join('')}</div>`);
@@ -6306,7 +7611,7 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260903093433';
+const APP_BUILD = '20260905112703';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('buildTag')) {

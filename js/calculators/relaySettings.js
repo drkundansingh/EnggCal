@@ -76,12 +76,25 @@ export function puToPrimary(pu, ctRatioPrimaryA, ctRatioSecondaryA, relayInA) {
  * @param {string} o.curveKey - IDMT curve for Stage 1, from idmt.CURVES
  * @param {number} o.desiredStage1TimeS - Stage 1 operating time target at maxFaultCurrentA
  * @param {number} o.stage2DelayS - Stage 2 definite-time delay, s
+ * @param {number} [o.minFaultCurrentA] - smallest fault current the relay must
+ *   actually detect and clear (often a far-end or minimum-plant-condition
+ *   fault, well below maxFaultCurrentA) -- primary A. Optional, but a real
+ *   setting exercise is incomplete without this sensitivity check: a
+ *   relay set only against the MAXIMUM fault can still be blind to a
+ *   legitimate but smaller fault elsewhere in its zone.
+ * @param {number} [o.minSensitivityRatio=2.0] - commonly used minimum
+ *   acceptable ratio of minFaultCurrentA to Stage 1 pickup for reliable
+ *   operation. Cited practice varies by source/utility (some use lower
+ *   values); 2.0 is a widely used conservative default, not a universal
+ *   fixed law -- adjust to your own protection philosophy or grading
+ *   guide.
  */
 export function relaySettings({
   ctPrimaryA, ctSecondaryA, relayInA,
   fullLoadCurrentA, maxThroughFaultA, maxFaultCurrentA,
   pickupMarginPct = 20, stage2MarginPct = 25, stage3MarginPct = 20,
   curveKey = 'SI', desiredStage1TimeS = 0.3, stage2DelayS = 0.15,
+  minFaultCurrentA = null, minSensitivityRatio = 2.0,
 }) {
   if (!(ctPrimaryA > 0)) throw new Error('CT primary rating must be greater than zero.');
   if (!(ctSecondaryA > 0)) throw new Error('CT secondary rating must be greater than zero.');
@@ -125,12 +138,34 @@ export function relaySettings({
     warnings.push('A per-unit pickup above ~40\u00d7In is outside the setting range of most numerical relays \u2014 check the CT ratio and rated current selection.');
   }
 
+  // ---- Sensitivity check: can Stage 1 actually SEE the smallest fault it
+  // is meant to clear? Setting a relay against the maximum fault alone
+  // and never checking the minimum is a genuinely common real-world
+  // oversight -- a relay that never sees a legitimate smaller fault
+  // provides no protection for it at all, regardless of how well-graded
+  // the time-current curve looks on paper. ----
+  let sensitivity = null;
+  if (minFaultCurrentA !== null && minFaultCurrentA !== undefined && minFaultCurrentA !== '') {
+    if (!(minFaultCurrentA > 0)) throw new Error('Minimum fault current must be greater than zero.');
+    const sensitivityRatio = minFaultCurrentA / stage1PickupA;
+    const adequate = sensitivityRatio >= minSensitivityRatio;
+    sensitivity = { minFaultCurrentA, sensitivityRatio, minSensitivityRatio, adequate };
+    if (!adequate) {
+      if (sensitivityRatio <= 1) {
+        warnings.push(`Stage 1 (I>) pickup (${stage1PickupA.toFixed(1)} A) is at or ABOVE the minimum fault current (${minFaultCurrentA.toFixed(1)} A) supplied \u2014 the relay would never see this fault at all. This is not a marginal sensitivity issue; it is a real protection gap that needs a lower pickup or a different protection scheme for this fault condition.`);
+      } else {
+        warnings.push(`Sensitivity ratio at the minimum fault (${sensitivityRatio.toFixed(2)}\u00d7) is below the ${minSensitivityRatio}\u00d7 target \u2014 the relay would technically operate, but slowly and close to its pickup threshold, where CT error and system variation matter most. Consider a lower pickup margin if load current allows it.`);
+      }
+    }
+  }
+
   return {
     stage1: { pickupA: stage1PickupA, pickupPu: stage1PickupPu, curve: curve.name, tms: stage1Tms, operatingTimeS: stage1OperTime, psmAtMaxFault: stage1M },
     stage2: { pickupA: stage2PickupA, pickupPu: stage2PickupPu, delayS: stage2DelayS, clearsMaxFault: stage2ClearsFault },
     stage3: { pickupA: stage3PickupA, pickupPu: stage3PickupPu, delayS: 0 },
     ctRatio: `${ctPrimaryA}/${ctSecondaryA} A`,
     relayInA,
+    sensitivity,
     warnings,
   };
 }

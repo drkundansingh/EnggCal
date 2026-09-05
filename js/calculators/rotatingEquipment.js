@@ -157,3 +157,43 @@ export function pumpPower({ flowM3H, headM, specificGravity, pumpEfficiencyPct, 
     note: 'Add a service factor / sizing margin per site practice before selecting an actual motor rating \u2014 this is the calculated duty point, not a motor nameplate recommendation.',
   };
 }
+
+// ============================================================
+// 5. PUMP SPECIFIC SPEED (type/impeller selection guide)
+// ============================================================
+//
+// Ns = N*sqrt(Q) / H^0.75 (US customary: N in rpm, Q in US gpm at best
+// efficiency point, H in ft per stage) -- the standard dimensional
+// specific speed used industry-wide to indicate impeller GEOMETRY family
+// (radial/Francis/mixed/axial-flow), not an absolute performance rating.
+// Different unit systems give numerically different Ns for the same
+// physical pump; this uses the US customary form, the most commonly
+// quoted in industry references and pump curves.
+
+export function pumpSpecificSpeed({ speedRpm, flowGpm, headFt, numberOfStages = 1 }) {
+  if (!(speedRpm > 0)) throw new Error('Pump speed must be greater than zero.');
+  if (!(flowGpm > 0)) throw new Error('Flow rate (at best efficiency point) must be greater than zero.');
+  if (!(headFt > 0)) throw new Error('Head must be greater than zero.');
+  if (!(numberOfStages > 0)) throw new Error('Number of stages must be greater than zero.');
+  const headPerStageFt = headFt / numberOfStages;
+  const ns = (speedRpm * Math.sqrt(flowGpm)) / Math.pow(headPerStageFt, 0.75);
+
+  let impellerType, note;
+  if (ns < 1500) {
+    impellerType = 'Radial flow';
+    note = 'Low specific speed \u2014 typical of radial-flow impellers: high head, lower flow per stage. Common in multistage boiler feed and high-head process pumps.';
+  } else if (ns < 4500) {
+    impellerType = 'Mixed flow (Francis-type)';
+    note = 'Mid-range specific speed \u2014 typical of general-purpose single-stage centrifugal pumps, the most common industrial pump type.';
+  } else if (ns < 10000) {
+    impellerType = 'Mixed flow (high)';
+    note = 'Higher specific speed \u2014 lower head, higher flow per stage than a standard radial pump. Common in circulating water and low-head, high-flow service.';
+  } else {
+    impellerType = 'Axial flow (propeller)';
+    note = 'Very high specific speed \u2014 typical of axial-flow (propeller) pumps: very high flow, low head. Common in flood control and large circulating water service.';
+  }
+  return {
+    specificSpeedUS: ns, headPerStageFt, impellerType,
+    note: `${note} This indicates the impeller geometry FAMILY typically used at this duty point \u2014 it is a selection guide, not a guarantee of which type a specific manufacturer will offer.`,
+  };
+}

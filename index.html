@@ -3,6 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Replace BOTH placeholders below with your real values from your
+     AdSense account before this goes live — see the notes at the end
+     of this changeset for exactly where and how.
+     ca-pub-6794299102016509  ->  your AdSense publisher/client ID
+     ============================================================ -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
 <title>Engineering Calculator Hub — Free Power Plant & Electrical Calculators</title>
 <meta name="description" content="Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers — real formulas, verified against standards, no signup required.">
 <link rel="canonical" href="https://engineeringhubcalc.com/">
@@ -68,6 +78,30 @@
     </div>
     <main class="content" id="content"></main>
     <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review.</footer>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Placed here deliberately: this sits OUTSIDE #content, the
+         element the app's router clears/rebuilds on every page
+         navigation (see js/app.js, `const app = document.getElementById
+         ('content')`), so the ad persists correctly across navigation
+         instead of being wiped out, and it sits below the calculator
+         itself rather than inside or above it.
+         Replace BOTH placeholders below with your real values from
+         your AdSense account — see the notes at the end of this
+         changeset for exactly where and how.
+         data-ad-client: ca-pub-6794299102016509 (same as the <head> script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:0 16px 12px;">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-6794299102016509"
+           data-ad-slot="2008953298"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
   </div>
 </div>
 <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
