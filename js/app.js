@@ -590,11 +590,11 @@ function renderLearnMore(route) {
   const faqHtml = (content.faq || []).map((f) => `
     <div style="margin-top:14px;">
       <div style="font-weight:600;color:var(--text);">${f.q}</div>
-      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;">${f.a}</div>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">${f.a}</div>
     </div>`).join('');
   const block = h(`<div class="card" style="margin-top:16px;">
     <div class="panel-title">About This Calculation</div>
-    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;">${content.about}</p>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">${content.about}</p>
     ${faqHtml ? `<div class="panel-title" style="margin-top:20px;">Frequently Asked Questions</div>${faqHtml}` : ''}
   </div>`);
   app.appendChild(block);
@@ -7617,7 +7617,7 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260906104426';
+const APP_BUILD = '20260906115044';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('buildTag')) {
@@ -7626,6 +7626,12 @@ const APP_BUILD = '20260906104426';
     s.style.cssText = 'margin-left:10px;color:var(--text-faint);font-family:var(--font-mono);font-size:.7rem;';
     s.textContent = 'build ' + APP_BUILD;
     foot.appendChild(s);
+
+    const cause = document.createElement('span');
+    cause.id = 'causeTag';
+    cause.style.cssText = 'margin-left:10px;color:var(--text-faint);font-size:.7rem;';
+    cause.textContent = 'Revenue generated from this site will be used to build a library in Bihar for children from very poor backgrounds.';
+    foot.appendChild(cause);
   }
 })();
 

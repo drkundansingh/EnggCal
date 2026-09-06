@@ -17,7 +17,7 @@
 //   - BUILD_ID is stamped at build time, so every deploy gets a fresh cache
 //     and the previous one is deleted on activate.
 
-const BUILD_ID = '20260906104426';           // replaced during build
+const BUILD_ID = '20260906115044';           // replaced during build
 const CACHE_NAME = 'enghub-' + BUILD_ID;
 
 const SHELL_FILES = [
@@ -42,9 +42,16 @@ self.addEventListener('install', (event) => {
         // partial offline support beats none.
       })
   );
-  // Activate immediately rather than waiting for every old tab to close,
-  // so an update isn't stuck behind a long-lived tab.
-  self.skipWaiting();
+  // Deliberately NOT calling self.skipWaiting() here. For a genuinely new
+  // installation (no existing worker controlling the page) this changes
+  // nothing — the browser activates it immediately regardless, since
+  // there's nothing to wait for. But when an OLD worker is already
+  // controlling the page, skipping here means the new one activates and
+  // claims every open tab within a fraction of a second, wiping out the
+  // "update available" banner (see app.js) before a person can even read
+  // it, let alone click it. The page's "Update now" button sends a
+  // SKIP_WAITING message (handled below) once the person actually chooses
+  // to update — that is the only path that should trigger it.
 });
 
 self.addEventListener('activate', (event) => {
