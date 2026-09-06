@@ -237,7 +237,7 @@ export function powerFactorCorrection({ loadKW, existingPF, targetPF, voltageKV,
   if (!(loadKW > 0)) throw new Error('Load (kW) must be greater than zero.');
   if (!(existingPF > 0 && existingPF < 1)) throw new Error('Existing power factor must be greater than 0 and less than 1.');
   if (!(targetPF > 0 && targetPF <= 1)) throw new Error('Target power factor must be greater than 0 and no more than 1.');
-  if (targetPF <= existingPF) throw new Error('Target power factor must be higher than the existing power factor.');
+  if (!(targetPF > existingPF)) throw new Error('Target power factor must be higher than the existing power factor.');
 
   const phi1 = Math.acos(existingPF);
   const phi2 = Math.acos(targetPF);

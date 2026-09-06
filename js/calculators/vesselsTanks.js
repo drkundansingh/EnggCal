@@ -16,7 +16,7 @@ export function horizontalTankVolume({ diameterM, lengthM, fillDepthM }) {
   if (!(lengthM > 0)) throw new Error('Tank (shell) length must be greater than zero.');
   if (!(fillDepthM >= 0)) throw new Error('Fill depth cannot be negative.');
   const r = diameterM / 2;
-  if (fillDepthM > diameterM) throw new Error('Fill depth cannot exceed the tank diameter.');
+  if (!(fillDepthM <= diameterM)) throw new Error('Fill depth cannot exceed the tank diameter.');
 
   const totalVolumeM3 = Math.PI * r ** 2 * lengthM;
   let filledVolumeM3;
@@ -89,7 +89,7 @@ export function vesselWallThickness({ designPressureMPa, insideRadiusMm, allowab
   if (!(corrosionAllowanceMm >= 0)) throw new Error('Corrosion allowance cannot be negative.');
 
   const denom = allowableStressMPa * jointEfficiencyE - 0.6 * designPressureMPa;
-  if (denom <= 0) throw new Error('Design pressure is too high relative to allowable stress and joint efficiency \u2014 the circumferential stress equation has no valid (positive) solution here. This usually means a higher stress material, thicker starting assumption, or a different vessel category is needed.');
+  if (!(denom > 0)) throw new Error('Design pressure is too high relative to allowable stress and joint efficiency \u2014 the circumferential stress equation has no valid (positive) solution here. This usually means a higher stress material, thicker starting assumption, or a different vessel category is needed.');
 
   const tCircumferentialMm = (designPressureMPa * insideRadiusMm) / denom;
   const tLongitudinalMm = (designPressureMPa * insideRadiusMm) / (2 * allowableStressMPa * jointEfficiencyE + 0.4 * designPressureMPa);

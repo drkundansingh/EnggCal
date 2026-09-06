@@ -107,21 +107,27 @@ export function convertPower(value, from, to) {
 
 // Mass <-> volumetric flow needs density (kg/m3)
 export function massFlowToVolumetric(massFlowKgH, densityKgM3) {
-  if (densityKgM3 <= 0) throw new Error('Density must be > 0');
+  if (!(densityKgM3 > 0)) throw new Error('Density must be > 0');
   return massFlowKgH / densityKgM3; // m3/h
 }
 export function volumetricFlowToMass(volFlowM3H, densityKgM3) {
-  if (densityKgM3 <= 0) throw new Error('Density must be > 0');
+  if (!(densityKgM3 > 0)) throw new Error('Density must be > 0');
   return volFlowM3H * densityKgM3; // kg/h
 }
 
 // Normal (Nm3/h, 0C/1atm) <-> Actual (m3/h) gas flow correction
 export function normalToActualFlow(nm3h, actualTempC, actualPressureKPa, refPressureKPa = 101.325) {
+  if (!Number.isFinite(nm3h)) throw new Error('Flow must be a number.');
+  if (!Number.isFinite(actualTempC) || actualTempC <= -273.15) throw new Error('Temperature must be above absolute zero.');
+  if (!(actualPressureKPa > 0) || !(refPressureKPa > 0)) throw new Error('Pressures must be greater than zero.');
   const T0 = 273.15;
   const T1 = actualTempC + 273.15;
   return nm3h * (T1 / T0) * (refPressureKPa / actualPressureKPa);
 }
 export function actualToNormalFlow(actualM3h, actualTempC, actualPressureKPa, refPressureKPa = 101.325) {
+  if (!Number.isFinite(actualM3h)) throw new Error('Flow must be a number.');
+  if (!Number.isFinite(actualTempC) || actualTempC <= -273.15) throw new Error('Temperature must be above absolute zero.');
+  if (!(actualPressureKPa > 0) || !(refPressureKPa > 0)) throw new Error('Pressures must be greater than zero.');
   const T0 = 273.15;
   const T1 = actualTempC + 273.15;
   return actualM3h * (T0 / T1) * (actualPressureKPa / refPressureKPa);

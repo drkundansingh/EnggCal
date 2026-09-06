@@ -5,8 +5,8 @@
 
 /** Liquid Cv (US units): Cv = Q(gpm) / sqrt(dP(psi) / SG) */
 export function liquidCv(flowGpm, dpPsi, sg) {
-  if (dpPsi <= 0) throw new Error('Pressure drop must be > 0');
-  if (sg <= 0) throw new Error('Specific gravity must be > 0');
+  if (!(dpPsi > 0)) throw new Error('Pressure drop must be > 0');
+  if (!(sg > 0)) throw new Error('Specific gravity must be > 0');
   return flowGpm / Math.sqrt(dpPsi / sg);
 }
 
@@ -14,14 +14,16 @@ export function liquidCv(flowGpm, dpPsi, sg) {
  * Kv = Q(m3/h) * sqrt(SG / dP(bar));  Cv = 1.156 * Kv
  */
 export function liquidKv(flowM3h, dpBar, sg) {
-  if (dpBar <= 0) throw new Error('Pressure drop must be > 0');
-  if (sg <= 0) throw new Error('Specific gravity must be > 0');
+  if (!(dpBar > 0)) throw new Error('Pressure drop must be > 0');
+  if (!(sg > 0)) throw new Error('Specific gravity must be > 0');
   return flowM3h * Math.sqrt(sg / dpBar);
 }
 export function kvToCv(kv) {
+  if (!Number.isFinite(kv)) throw new Error('Kv must be a number.');
   return kv * 1.156;
 }
 export function cvToKv(cv) {
+  if (!Number.isFinite(cv)) throw new Error('Cv must be a number.');
   return cv / 1.156;
 }
 
@@ -31,7 +33,8 @@ export function cvToKv(cv) {
  * Use only for preliminary sizing; verify choked-flow (P2 < ~0.5*P1) separately.
  */
 export function gasCv(flowScfh, p1Psia, p2Psia, sgGas, tempR = 520) {
-  if (p1Psia <= p2Psia) throw new Error('Upstream pressure must exceed downstream pressure');
+  if (!Number.isFinite(flowScfh) || !(sgGas > 0) || !(tempR > 0)) throw new Error('Flow, specific gravity and temperature must all be valid numbers, with specific gravity and temperature greater than zero.');
+  if (!(p1Psia > p2Psia)) throw new Error('Upstream pressure must exceed downstream pressure');
   const dp = p1Psia - p2Psia;
   const denom = 1360 * Math.sqrt((dp * (p1Psia + p2Psia)) / (sgGas * tempR / 520));
   return flowScfh / denom;
@@ -41,7 +44,8 @@ export function gasCv(flowScfh, p1Psia, p2Psia, sgGas, tempR = 520) {
  * Cv = W / (2.1 * sqrt(dP*(P1+P2)))   [approx., W in lb/h, P in psia]
  */
 export function steamCv(flowLbH, p1Psia, p2Psia) {
-  if (p1Psia <= p2Psia) throw new Error('Upstream pressure must exceed downstream pressure');
+  if (!Number.isFinite(flowLbH)) throw new Error('Flow must be a number.');
+  if (!(p1Psia > p2Psia)) throw new Error('Upstream pressure must exceed downstream pressure');
   const dp = p1Psia - p2Psia;
   return flowLbH / (2.1 * Math.sqrt(dp * (p1Psia + p2Psia)));
 }

@@ -61,6 +61,9 @@ const KCAL_PER_KWH = 860.42; // thermodynamic equivalent, 1 kWh = 860.42 kcal
  * IAPWS-IF97 steam tables — see README "Engineering accuracy notes".
  */
 export function estimateEnthalpyRiseKcalKg(mainSteamPressureBar, mainSteamTempC, feedwaterTempC) {
+  if (!Number.isFinite(mainSteamPressureBar) || !Number.isFinite(mainSteamTempC) || !Number.isFinite(feedwaterTempC)) {
+    throw new Error('Main steam pressure, main steam temperature and feedwater temperature must all be numbers.');
+  }
   const REF_FEEDWATER_TEMP_C = 240;
   const CP_WATER_KCAL_PER_KG_C = 1.0;
   const baseEnthalpyRiseKcalKg = 620 + (mainSteamTempC - 500) * 0.35 + (mainSteamPressureBar - 150) * 0.05;
@@ -90,7 +93,7 @@ export function fromGeneratedMW(grossMW, assumptions) {
 
   // Overall plant (cycle) efficiency = boiler * turbine * generator
   const plantEfficiency = boilerEff * turbineEff * genEff;
-  if (plantEfficiency <= 0) throw new Error('Combined efficiency must be > 0');
+  if (!(plantEfficiency > 0)) throw new Error('Combined efficiency must be > 0');
 
   // Heat rate (gross), kcal/kWh = 860.42 / overall efficiency
   const grossHeatRateKcalKwh = KCAL_PER_KWH / plantEfficiency;
@@ -194,6 +197,7 @@ export function fromFuel({ fuelFlowKgH, fuelGcvKcalKg, boilerEfficiencyPct, turb
  * efficiency gain from capacity flattens out at the high end.
  */
 export function sizeAdjustmentFactor(mw) {
+  if (!Number.isFinite(mw)) throw new Error('MW rating must be a number.');
   const REF_MW = 300;
   const clamped = Math.max(25, Math.min(1000, mw));
   return Math.log(clamped / REF_MW) / Math.log(1000 / 25);

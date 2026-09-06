@@ -243,7 +243,7 @@ const RULES = [
     formula: 'Antoine equation (water, 1-100°C range): T = B/(A − log₁₀(P_mmHg)) − C,  A=8.07131, B=1730.63, C=233.426',
     compute: (v) => {
       const pMmHg = v.condenserPressureKPa * 7.50062;
-      if (pMmHg <= 0) throw new Error('Condenser pressure must be > 0');
+      if (!(pMmHg > 0)) throw new Error('Condenser pressure must be > 0');
       return 1730.63 / (8.07131 - Math.log10(pMmHg)) - 233.426;
     } },
   { out: 'carnotEfficiencyLimitPct', inputs: ['mainSteamTempC', 'condenserSaturationTempC'], kind: 'law',

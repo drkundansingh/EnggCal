@@ -56,3 +56,14 @@ files, never saved calculations (those live in IndexedDB).
 it does nothing** — GitHub sets its own cache headers. If you serve the site
 from GitHub Pages, rely on the stamped build ID and `reset.html` instead;
 both work regardless of host.
+
+## Note on the service worker's own network fetches
+
+`service-worker.js`'s "network-first" fetches now explicitly pass
+`{ cache: 'no-store' }`. Without it, a plain `fetch()` inside a service
+worker is still subject to the *browser's own* HTTP cache — so "network
+first" in the code didn't necessarily mean an actual network round-trip
+happened, since GitHub Pages' cache headers could let the browser satisfy
+that fetch from its own cache instead. This was a real, silent cause of
+"pushed but the browser still shows the old version" even when the stamped
+build ID and committed files were both correct.

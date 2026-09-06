@@ -24,9 +24,9 @@ function nearestStep(steps, target) {
  */
 export function autoGenerate(opts) {
   const { frameRatingA, loadCurrentA, faultCurrentKA, availableFunctions = { L: true, S: true, I: true, G: true } } = opts;
-  if (frameRatingA <= 0) throw new Error('Breaker frame rating must be > 0');
-  if (loadCurrentA <= 0) throw new Error('Load current must be > 0');
-  if (loadCurrentA > frameRatingA) throw new Error('Load current exceeds the breaker frame rating — select a larger frame or check the input');
+  if (!(frameRatingA > 0)) throw new Error('Breaker frame rating must be > 0');
+  if (!(loadCurrentA > 0)) throw new Error('Load current must be > 0');
+  if (!(loadCurrentA <= frameRatingA)) throw new Error('Load current exceeds the breaker frame rating — select a larger frame or check the input');
 
   const result = {};
 

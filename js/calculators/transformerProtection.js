@@ -43,9 +43,9 @@ export function autoGenerate(basic, philosophy = {}) {
     sourceFaultMVA, groundingType = 'solid', ngrLetThroughA,
   } = basic;
 
-  if (ratingMVA <= 0) throw new Error('Transformer rating (MVA) must be > 0');
-  if (hvKV <= 0 || lvKV <= 0) throw new Error('HV and LV voltages must be > 0');
-  if (impedancePct <= 0) throw new Error('Transformer impedance % must be > 0');
+  if (!(ratingMVA > 0)) throw new Error('Transformer rating (MVA) must be > 0');
+  if (!(hvKV > 0 && lvKV > 0)) throw new Error('HV and LV voltages must be > 0');
+  if (!(impedancePct > 0)) throw new Error('Transformer impedance % must be > 0');
 
   // ---- Step 4: basic electrical parameters ----
   const hvFLC = (ratingMVA * 1e6) / (sqrt3() * hvKV * 1e3);

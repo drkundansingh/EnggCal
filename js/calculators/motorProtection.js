@@ -37,8 +37,8 @@ export function autoGenerate(basic, philosophy = {}) {
     ctPrimary, ctSecondary = 1, sourceFaultMVA, groundingType = 'solid', ngrLetThroughA,
   } = basic;
 
-  if (ratingKW <= 0) throw new Error('Motor rating (kW) must be > 0');
-  if (voltageKV <= 0) throw new Error('Motor voltage must be > 0');
+  if (!(ratingKW > 0)) throw new Error('Motor rating (kW) must be > 0');
+  if (!(voltageKV > 0)) throw new Error('Motor voltage must be > 0');
   if (!(powerFactor > 0 && powerFactor <= 1)) throw new Error('Power factor must be between 0 and 1');
   if (!(efficiencyPct > 0 && efficiencyPct <= 100)) throw new Error('Efficiency % must be between 0 and 100');
 

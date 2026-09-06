@@ -30,12 +30,14 @@ function assertRange(rangeKey) {
 
 /** Engineering value -> percent of span, given LRV/URV */
 export function pvToPercent(pv, lrv, urv) {
+  if (!Number.isFinite(pv) || !Number.isFinite(lrv) || !Number.isFinite(urv)) throw new Error('PV, LRV and URV must all be numbers.');
   if (urv === lrv) throw new Error('URV and LRV cannot be equal');
   return ((pv - lrv) / (urv - lrv)) * 100;
 }
 
 /** Percent -> engineering value */
 export function percentToPv(pct, lrv, urv) {
+  if (!Number.isFinite(pct) || !Number.isFinite(lrv) || !Number.isFinite(urv)) throw new Error('Percent, LRV and URV must all be numbers.');
   return lrv + (pct / 100) * (urv - lrv);
 }
 
@@ -47,6 +49,7 @@ export function percentToSignal(pct, rangeKey = '4-20mA') {
 
 /** Signal -> percent */
 export function signalToPercent(signal, rangeKey = '4-20mA') {
+  if (!Number.isFinite(signal)) throw new Error('Signal must be a number.');
   const { lo, hi } = assertRange(rangeKey);
   if (hi === lo) throw new Error('Invalid signal range');
   return ((signal - lo) / (hi - lo)) * 100;

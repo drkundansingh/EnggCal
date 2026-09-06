@@ -50,7 +50,7 @@ export function weirFlow({ crestLengthM, headM, contracted = false }) {
   if (!(crestLengthM > 0)) throw new Error('Weir crest length must be greater than zero.');
   if (!(headM > 0)) throw new Error('Head over the weir must be greater than zero.');
   const effectiveLengthM = contracted ? crestLengthM - 0.2 * headM : crestLengthM;
-  if (effectiveLengthM <= 0) throw new Error('Effective crest length is zero or negative \u2014 the head is too large relative to the crest length for the end-contraction correction.');
+  if (!(effectiveLengthM > 0)) throw new Error('Effective crest length is zero or negative \u2014 the head is too large relative to the crest length for the end-contraction correction.');
   const flowM3s = 1.84 * effectiveLengthM * headM ** 1.5;
   return {
     effectiveLengthM, flowM3s, flowLs: flowM3s * 1000,

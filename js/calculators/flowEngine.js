@@ -45,8 +45,8 @@ const R_STEAM = 461.5; // J/(kg·K) specific gas constant, water vapor — stand
  */
 export function idealGasDensity(pressurePa, tempC, gasConstant = R_AIR) {
   const T = tempC + 273.15;
-  if (T <= 0) throw new Error('Temperature must be above absolute zero');
-  if (pressurePa <= 0) throw new Error('Pressure must be > 0');
+  if (!(T > 0)) throw new Error('Temperature must be above absolute zero');
+  if (!(pressurePa > 0)) throw new Error('Pressure must be > 0');
   return pressurePa / (gasConstant * T);
 }
 export function airDensity(pressurePa, tempC) { return idealGasDensity(pressurePa, tempC, R_AIR); }
@@ -64,7 +64,7 @@ const WATER_DENSITY_TABLE = [
   [200, 865.0], [250, 799.0], [300, 712.0],
 ];
 export function approxWaterDensity(tempC) {
-  if (tempC < 0 || tempC > 300) throw new Error('approxWaterDensity is only valid 0-300°C — supply density directly outside this range');
+  if (!(tempC >= 0 && tempC <= 300)) throw new Error('approxWaterDensity is only valid 0-300°C — supply density directly outside this range');
   for (let i = 0; i < WATER_DENSITY_TABLE.length - 1; i++) {
     const [t0, r0] = WATER_DENSITY_TABLE[i];
     const [t1, r1] = WATER_DENSITY_TABLE[i + 1];
@@ -83,8 +83,8 @@ export function approxWaterDensity(tempC) {
  * superheated steam, ≈ 1.4 for air, both standard textbook values.
  */
 export function expansionFactor(beta, dpPa, upstreamPressurePa, kappa = 1.4) {
-  if (upstreamPressurePa <= 0) throw new Error('Upstream pressure must be > 0');
-  if (dpPa < 0) throw new Error('DP cannot be negative');
+  if (!(upstreamPressurePa > 0)) throw new Error('Upstream pressure must be > 0');
+  if (!(dpPa >= 0)) throw new Error('DP cannot be negative');
   if (dpPa >= upstreamPressurePa) {
     throw new Error('Differential pressure cannot equal or exceed the upstream absolute pressure — the downstream pressure would be zero or negative.');
   }
@@ -117,9 +117,9 @@ export function calculateDPFlow(opts) {
     densityKgM3, cd, viscosityPaS, kappa = fluidClass === 'steam' ? 1.3 : 1.4,
   } = opts;
   if (!FLOW_ELEMENT_TYPES.includes(elementType)) throw new Error(`Unknown flow element type: ${elementType}`);
-  if (dpPa < 0) throw new Error('DP cannot be negative');
-  if (pipeIdM <= 0) throw new Error('Pipe ID must be > 0');
-  if (upstreamPressurePa <= 0) throw new Error('Upstream pressure must be > 0');
+  if (!(dpPa >= 0)) throw new Error('DP cannot be negative');
+  if (!(pipeIdM > 0)) throw new Error('Pipe ID must be > 0');
+  if (!(upstreamPressurePa > 0)) throw new Error('Upstream pressure must be > 0');
   if (dpPa >= upstreamPressurePa) {
     throw new Error('Differential pressure cannot equal or exceed the upstream absolute pressure — the downstream pressure would be zero or negative. Check for a units mix-up (e.g. DP in kPa but pressure in Pa) or a pressure reference error.');
   }
@@ -222,6 +222,8 @@ export function feedwaterMassBalance({ steamFlowTh, blowdownPctOfSteam = 1.5, sp
  * calculation-trace clarity.
  */
 export function theoreticalCombustionAir({ carbonPct, hydrogenPct, oxygenPct = 0, sulfurPct = 0, airO2MassFraction = 0.232 }) {
+  if (![carbonPct, hydrogenPct, oxygenPct, sulfurPct].every(Number.isFinite)) throw new Error('Fuel composition percentages must all be numbers.');
+  if (!(airO2MassFraction > 0)) throw new Error('Air O2 mass fraction must be greater than zero.');
   const C = carbonPct / 100, H = hydrogenPct / 100, O = oxygenPct / 100, S = sulfurPct / 100;
   const o2RequiredKgPerKgFuel = 2.667 * C + 8 * H + S - O;
   const airTheoreticalKgPerKgFuel = o2RequiredKgPerKgFuel / airO2MassFraction;
@@ -229,6 +231,8 @@ export function theoreticalCombustionAir({ carbonPct, hydrogenPct, oxygenPct = 0
 }
 
 export function actualAirFromExcess(airTheoreticalKgPerKgFuel, excessAirPct) {
+  if (!(airTheoreticalKgPerKgFuel > 0)) throw new Error('Theoretical air requirement must be greater than zero.');
+  if (!Number.isFinite(excessAirPct)) throw new Error('Excess air percentage must be a number.');
   return airTheoreticalKgPerKgFuel * (1 + excessAirPct / 100);
 }
 
@@ -237,8 +241,14 @@ export function actualAirFromExcess(airTheoreticalKgPerKgFuel, excessAirPct) {
  * not universal across all fuels/combustion bases without accounting for
  * fuel composition — this is the standard general-purpose approximation,
  * shown with that caveat in the UI rather than silently presented as exact. */
-export function excessAirFromO2(o2Pct) { return (o2Pct / (21 - o2Pct)) * 100; }
-export function o2FromExcessAir(excessAirPct) { return (21 * excessAirPct) / (100 + excessAirPct); }
+export function excessAirFromO2(o2Pct) {
+  if (!Number.isFinite(o2Pct) || o2Pct >= 21) throw new Error('O2 percentage must be a number less than 21.');
+  return (o2Pct / (21 - o2Pct)) * 100;
+}
+export function o2FromExcessAir(excessAirPct) {
+  if (!Number.isFinite(excessAirPct) || excessAirPct <= -100) throw new Error('Excess air percentage must be a number greater than -100.');
+  return (21 * excessAirPct) / (100 + excessAirPct);
+}
 
 // ---------------- Method C: MW-based estimation ----------------
 
@@ -258,6 +268,8 @@ const DEFAULT_FUEL_GCV_KCAL_KG = { coal: 4200, oil: 10200, gas: 9000, biomass: 3
  * 12, MW alone must never be presented as if exact flows are "known".
  */
 export function mwBasedFlowEstimate(grossMW, config, userProvidedKeys = []) {
+  if (!Number.isFinite(grossMW)) throw new Error('Gross MW must be a number.');
+  if (!Array.isArray(userProvidedKeys)) throw new Error('userProvidedKeys must be an array.');
   const inputs = { grossMW, ...Object.fromEntries(userProvidedKeys.map((k) => [k, config[k]])) };
   if (!userProvidedKeys.includes('fuelGcvKcalKg') && inputs.fuelGcvKcalKg === undefined) {
     inputs.fuelGcvKcalKg = DEFAULT_FUEL_GCV_KCAL_KG[config.fuelType] ?? DEFAULT_FUEL_GCV_KCAL_KG.coal;
@@ -295,6 +307,7 @@ export function compareFlowMethods(entries) {
  * declares an instrument faulty — lists possible causes instead (spec
  * section 14). */
 export function consistencyCheck(measuredValue, estimatedValue, tolerancePct = 5) {
+  if (!Number.isFinite(measuredValue) || !Number.isFinite(estimatedValue)) throw new Error('Measured and estimated values must both be numbers.');
   const deviationPct = measuredValue !== 0 ? ((estimatedValue - measuredValue) / measuredValue) * 100 : 0;
   const withinTolerance = Math.abs(deviationPct) <= tolerancePct;
   return {
@@ -339,6 +352,8 @@ export function validateDPFlowInputs({ beta, reynolds, cd, dpPa, densityKgM3 }) 
  * true; this function throws if more than one stage claims to extract.
  */
 export function dpTransmitterModel({ lrv, urv, actualDP, sqrtInTransmitter = false, sqrtInDcs = false, sqrtInCalculator = false }) {
+  if (!Number.isFinite(lrv) || !Number.isFinite(urv) || !Number.isFinite(actualDP)) throw new Error('LRV, URV and actual DP must all be numbers.');
+  if (urv === lrv) throw new Error('URV and LRV cannot be equal.');
   const extractionStages = [sqrtInTransmitter, sqrtInDcs, sqrtInCalculator].filter(Boolean).length;
   if (extractionStages > 1) {
     throw new Error('Double (or triple) square-root extraction detected — exactly one stage (transmitter, DCS, or calculator) should extract the square root, not more than one.');
@@ -389,15 +404,15 @@ export function convertVolFlow(value, from, to) {
 export function actualToReferenceFlow(actualM3h, actualTempC, actualPressureKPa, refTempC, refPressureKPa = 101.325) {
   const Tactual = actualTempC + 273.15;
   const Tref = refTempC + 273.15;
-  if (Tactual <= 0 || Tref <= 0) throw new Error('Temperatures must be above absolute zero');
-  if (actualPressureKPa <= 0 || refPressureKPa <= 0) throw new Error('Pressures must be > 0');
+  if (!(Tactual > 0 && Tref > 0)) throw new Error('Temperatures must be above absolute zero');
+  if (!(actualPressureKPa > 0 && refPressureKPa > 0)) throw new Error('Pressures must be > 0');
   return actualM3h * (actualPressureKPa / refPressureKPa) * (Tref / Tactual);
 }
 export function referenceToActualFlow(refM3h, actualTempC, actualPressureKPa, refTempC, refPressureKPa = 101.325) {
   const Tactual = actualTempC + 273.15;
   const Tref = refTempC + 273.15;
-  if (Tactual <= 0 || Tref <= 0) throw new Error('Temperatures must be above absolute zero');
-  if (actualPressureKPa <= 0 || refPressureKPa <= 0) throw new Error('Pressures must be > 0');
+  if (!(Tactual > 0 && Tref > 0)) throw new Error('Temperatures must be above absolute zero');
+  if (!(actualPressureKPa > 0 && refPressureKPa > 0)) throw new Error('Pressures must be > 0');
   return refM3h * (refPressureKPa / actualPressureKPa) * (Tactual / Tref);
 }
 

@@ -3,18 +3,22 @@
 // or a stability check (transformer REF, motor, feeder, busbar protection).
 
 export function ctSecondaryCurrent(primaryCurrentA, ctPrimaryA, ctSecondaryA = 1) {
-  if (ctPrimaryA <= 0) throw new Error('CT primary rating must be > 0');
-  if (ctSecondaryA <= 0) throw new Error('CT secondary rating must be > 0');
+  if (!(ctPrimaryA > 0)) throw new Error('CT primary rating must be > 0');
+  if (!(ctSecondaryA > 0)) throw new Error('CT secondary rating must be > 0');
   return (primaryCurrentA / ctPrimaryA) * ctSecondaryA;
 }
 
 export function totalBurdenVA(relayBurdenVA = 0, cableBurdenVA = 0, otherBurdenVA = 0) {
+  if (![relayBurdenVA, cableBurdenVA, otherBurdenVA].every(Number.isFinite)) throw new Error('All burden values must be numbers.');
   return relayBurdenVA + cableBurdenVA + otherBurdenVA;
 }
 
 /** Cable (lead) burden from resistance and secondary current: P = I²R per lead,
  * doubled for the go-and-return path (standard single-phase burden loop). */
 export function cableBurdenVA(secondaryCurrentA, leadResistanceOhmPerLead, leadCount = 2) {
+  if (!(secondaryCurrentA >= 0)) throw new Error('Secondary current cannot be negative.');
+  if (!(leadResistanceOhmPerLead >= 0)) throw new Error('Lead resistance cannot be negative.');
+  if (!(leadCount > 0)) throw new Error('Lead count must be greater than zero.');
   return leadCount * secondaryCurrentA * secondaryCurrentA * leadResistanceOhmPerLead;
 }
 
@@ -28,7 +32,7 @@ export function cableBurdenVA(secondaryCurrentA, leadResistanceOhmPerLead, leadC
  * the actual relay instruction manual).
  */
 export function requiredKneePointVoltage(faultCurrentSecondaryA, ctResistanceOhm, leadResistanceOhm, stabilityFactorK = 2) {
-  if (faultCurrentSecondaryA <= 0) throw new Error('Secondary fault current must be > 0');
+  if (!(faultCurrentSecondaryA > 0)) throw new Error('Secondary fault current must be > 0');
   return stabilityFactorK * faultCurrentSecondaryA * (ctResistanceOhm + 2 * leadResistanceOhm);
 }
 

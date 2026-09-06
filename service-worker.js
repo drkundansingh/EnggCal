@@ -17,7 +17,7 @@
 //   - BUILD_ID is stamped at build time, so every deploy gets a fresh cache
 //     and the previous one is deleted on activate.
 
-const BUILD_ID = '20260905112703';           // replaced during build
+const BUILD_ID = '20260906104426';           // replaced during build
 const CACHE_NAME = 'enghub-' + BUILD_ID;
 
 const SHELL_FILES = [
@@ -88,8 +88,17 @@ self.addEventListener('fetch', (event) => {
 
   // NETWORK-FIRST for navigations, HTML, JS, CSS and JSON — this is what
   // makes a new deploy show up instead of the old cached copy.
+  //
+  // { cache: 'no-store' } here is deliberate and important: a plain
+  // fetch(req) is STILL subject to the browser's own HTTP cache (governed
+  // by whatever Cache-Control headers the host sends) even inside a
+  // service worker — "network-first" in the JS logic doesn't guarantee an
+  // actual network round-trip unless the browser's HTTP cache is
+  // explicitly bypassed too. Without this, a returning visitor within the
+  // host's cache window could still see stale content despite this
+  // strategy being correctly written.
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-store' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

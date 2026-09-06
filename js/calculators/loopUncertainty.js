@@ -179,7 +179,7 @@ export function scaleDrift(quotedDrift, quotedIntervalMonths, actualIntervalMont
 export function liquidCriticalPressureRatio(vapourPressure, criticalPressure) {
   if (!Number.isFinite(vapourPressure) || vapourPressure < 0) throw new Error('Vapour pressure must be a non-negative number.');
   if (!Number.isFinite(criticalPressure) || criticalPressure <= 0) throw new Error('Critical pressure must be greater than zero.');
-  if (vapourPressure > criticalPressure) throw new Error('Vapour pressure cannot exceed the fluid critical pressure.');
+  if (!(vapourPressure <= criticalPressure)) throw new Error('Vapour pressure cannot exceed the fluid critical pressure.');
   return 0.96 - 0.28 * Math.sqrt(vapourPressure / criticalPressure);
 }
 
@@ -201,10 +201,10 @@ export function liquidCriticalPressureRatio(vapourPressure, criticalPressure) {
 export function cavitationCheck({ p1, p2, pv, pc, fl, sigmaIncipient, sigmaDamage }) {
   if (!Number.isFinite(p1) || p1 <= 0) throw new Error('Inlet pressure P1 must be greater than zero (absolute).');
   if (!Number.isFinite(p2) || p2 < 0) throw new Error('Outlet pressure P2 must be a non-negative number (absolute).');
-  if (p2 >= p1) throw new Error('Outlet pressure P2 must be lower than inlet pressure P1.');
+  if (!(p2 < p1)) throw new Error('Outlet pressure P2 must be lower than inlet pressure P1.');
   if (!Number.isFinite(pv) || pv < 0) throw new Error('Vapour pressure must be a non-negative number (absolute).');
   if (!Number.isFinite(fl) || fl <= 0 || fl > 1) throw new Error('FL must be greater than zero and no more than 1.');
-  if (pv >= p1) throw new Error('Vapour pressure is at or above inlet pressure — the fluid is already boiling at the valve inlet, not a valid liquid sizing case.');
+  if (!(pv < p1)) throw new Error('Vapour pressure is at or above inlet pressure — the fluid is already boiling at the valve inlet, not a valid liquid sizing case.');
 
   const ff = liquidCriticalPressureRatio(pv, pc);
   const dpActual = p1 - p2;

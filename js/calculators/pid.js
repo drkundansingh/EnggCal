@@ -8,6 +8,7 @@
  * which is how a spreadsheet-style "what would the output be" calc works.
  */
 export function pidOutput({ sp, pv, kp, ki, kd, integralError = 0, errorRate = 0, bias = 0 }) {
+  if (![sp, pv, kp, ki, kd, integralError, errorRate, bias].every(Number.isFinite)) throw new Error('All PID inputs must be numbers.');
   const error = sp - pv;
   const pTerm = kp * error;
   const iTerm = ki * integralError;
@@ -18,26 +19,31 @@ export function pidOutput({ sp, pv, kp, ki, kd, integralError = 0, errorRate = 0
 
 /** Convert Ki (1/s) <-> Integral time Ti (s): Ki = Kp / Ti */
 export function kiFromTi(kp, tiSeconds) {
-  if (tiSeconds <= 0) throw new Error('Integral time must be > 0');
+  if (!Number.isFinite(kp)) throw new Error('Kp must be a number.');
+  if (!(tiSeconds > 0)) throw new Error('Integral time must be > 0');
   return kp / tiSeconds;
 }
 export function tiFromKi(kp, ki) {
-  if (ki <= 0) throw new Error('Ki must be > 0');
+  if (!Number.isFinite(kp)) throw new Error('Kp must be a number.');
+  if (!(ki > 0)) throw new Error('Ki must be > 0');
   return kp / ki;
 }
 /** Kd (s) <-> Derivative time Td (s): Kd = Kp * Td */
 export function kdFromTd(kp, tdSeconds) {
+  if (!Number.isFinite(kp)) throw new Error('Kp must be a number.');
+  if (!Number.isFinite(tdSeconds)) throw new Error('Derivative time must be a number.');
   return kp * tdSeconds;
 }
 export function tdFromKd(kp, kd) {
-  if (kp === 0) throw new Error('Kp must be nonzero');
+  if (!Number.isFinite(kp) || kp === 0) throw new Error('Kp must be nonzero');
+  if (!Number.isFinite(kd)) throw new Error('Kd must be a number.');
   return kd / kp;
 }
 
 /** Ziegler-Nichols open-loop (reaction curve) tuning.
  * Inputs: processGain K, timeConstant T (s), deadTime L (s). */
 export function zieglerNicholsOpenLoop(K, T, L) {
-  if (L <= 0) throw new Error('Dead time L must be > 0 for ZN open-loop method');
+  if (!(L > 0)) throw new Error('Dead time L must be > 0 for ZN open-loop method');
   return {
     P: { kp: T / (K * L) },
     PI: { kp: 0.9 * (T / (K * L)), ti: L / 0.3 },
@@ -48,6 +54,8 @@ export function zieglerNicholsOpenLoop(K, T, L) {
 /** Ziegler-Nichols closed-loop (ultimate gain) tuning.
  * Inputs: ultimate gain Ku, ultimate period Pu (s). */
 export function zieglerNicholsClosedLoop(Ku, Pu) {
+  if (!(Ku > 0)) throw new Error('Ultimate gain Ku must be greater than zero.');
+  if (!(Pu > 0)) throw new Error('Ultimate period Pu must be greater than zero.');
   return {
     P: { kp: 0.5 * Ku },
     PI: { kp: 0.45 * Ku, ti: Pu / 1.2 },
@@ -57,7 +65,7 @@ export function zieglerNicholsClosedLoop(Ku, Pu) {
 
 /** Cohen-Coon tuning. Inputs: process gain K, time constant T (s), dead time L (s). */
 export function cohenCoon(K, T, L) {
-  if (L <= 0) throw new Error('Dead time L must be > 0 for Cohen-Coon method');
+  if (!(L > 0)) throw new Error('Dead time L must be > 0 for Cohen-Coon method');
   const r = L / T;
   const kp = (1 / (K * r)) * (1.35 + 0.25 * r);
   const ti = L * ((2.5 + 2 * r) / (1 + 0.6 * r));
@@ -68,7 +76,7 @@ export function cohenCoon(K, T, L) {
 /** IMC / Lambda tuning. Inputs: process gain K, time constant T (s),
  * dead time L (s), closed-loop time constant Lambda (s, tuning aggressiveness). */
 export function imcLambda(K, T, L, lambda) {
-  if (lambda <= 0) throw new Error('Lambda must be > 0');
+  if (!(lambda > 0)) throw new Error('Lambda must be > 0');
   const kp = T / (K * (lambda + L));
   const ti = T;
   const td = (T * L) / (2 * T + L);
@@ -84,6 +92,8 @@ export function imcLambda(K, T, L, lambda) {
  * Reference: Tyreus & Luyben, Ind. Eng. Chem. Res., 1992.
  */
 export function tyreusLuyben(Ku, Pu) {
+  if (!(Ku > 0)) throw new Error('Ultimate gain Ku must be greater than zero.');
+  if (!(Pu > 0)) throw new Error('Ultimate period Pu must be greater than zero.');
   return {
     PI: { kp: Ku / 3.2, ti: 2.2 * Pu },
     PID: { kp: Ku / 2.2, ti: 2.2 * Pu, td: Pu / 6.3 },
@@ -101,7 +111,7 @@ export function tyreusLuyben(Ku, Pu) {
  * @param {'0'|'20'} overshootPct
  */
 export function chienHronesReswick(K, T, L, response = 'disturbance', overshootPct = '0') {
-  if (L <= 0) throw new Error('Dead time L must be > 0 for CHR method');
+  if (!(L > 0)) throw new Error('Dead time L must be > 0 for CHR method');
   const base = T / (K * L);
   const table = {
     disturbance: {
@@ -147,7 +157,7 @@ export function chienHronesReswick(K, T, L, response = 'disturbance', overshootP
  * PID controller tuning," J. Process Control, 2003.
  */
 export function simcSkogestad(K, T, L, tauC) {
-  if (tauC + L <= 0) throw new Error('tauC + dead time must be > 0');
+  if (!(tauC + L > 0)) throw new Error('tauC + dead time must be > 0');
   const kp = (1 / K) * (T / (tauC + L));
   const ti = Math.min(T, 4 * (tauC + L));
   return { PI: { kp, ti } };
@@ -166,8 +176,8 @@ export function simcSkogestad(K, T, L, tauC) {
  * @param Pu measured oscillation period (s)
  */
 export function relayFeedbackUltimateGain(d, a, Pu) {
-  if (a <= 0) throw new Error('Measured PV oscillation amplitude must be > 0');
-  if (d <= 0) throw new Error('Relay amplitude must be > 0');
+  if (!(a > 0)) throw new Error('Measured PV oscillation amplitude must be > 0');
+  if (!(d > 0)) throw new Error('Relay amplitude must be > 0');
   const Ku = (4 * d) / (Math.PI * a);
   return { Ku, Pu };
 }

@@ -3,24 +3,26 @@
 /** Flow is proportional to sqrt(DP): flow% = sqrt(DP%) for a linear DP transmitter
  *  with square-root extraction, scaled against a reference max flow at max DP. */
 export function flowFromDP(dp, dpMax, flowMax) {
-  if (dpMax <= 0) throw new Error('dpMax must be > 0');
-  if (dp < 0) throw new Error('dp cannot be negative');
+  if (!(dpMax > 0)) throw new Error('dpMax must be > 0');
+  if (!(dp >= 0)) throw new Error('dp cannot be negative');
   return flowMax * Math.sqrt(dp / dpMax);
 }
 
 export function dpFromFlow(flow, flowMax, dpMax) {
-  if (flowMax <= 0) throw new Error('flowMax must be > 0');
+  if (!(flowMax > 0)) throw new Error('flowMax must be > 0');
   const ratio = flow / flowMax;
   return dpMax * ratio * ratio;
 }
 
 /** Hydrostatic pressure from a liquid column: P = rho * g * h */
 export function hydrostaticPressurePa(densityKgM3, heightM, g = 9.80665) {
+  if (!(densityKgM3 > 0)) throw new Error('Density must be greater than zero.');
+  if (!Number.isFinite(heightM)) throw new Error('Height must be a number.');
   return densityKgM3 * g * heightM;
 }
 
 export function levelFromHydrostaticPressure(pressurePa, densityKgM3, g = 9.80665) {
-  if (densityKgM3 <= 0) throw new Error('Density must be > 0');
+  if (!(densityKgM3 > 0)) throw new Error('Density must be > 0');
   return pressurePa / (densityKgM3 * g);
 }
 
@@ -28,6 +30,8 @@ export function levelFromHydrostaticPressure(pressurePa, densityKgM3, g = 9.8066
  * Level = DP / (rho * g)
  */
 export function openTankLevel(dpPa, densityKgM3, g = 9.80665) {
+  if (!Number.isFinite(dpPa)) throw new Error('DP must be a number.');
+  if (!(densityKgM3 > 0)) throw new Error('Density must be greater than zero.');
   return dpPa / (densityKgM3 * g);
 }
 
@@ -35,12 +39,19 @@ export function openTankLevel(dpPa, densityKgM3, g = 9.80665) {
  * transmitter case). Provide wet-leg height (fixed, fill height) and process density.
  */
 export function closedTankWetLegLevel(dpPa, processDensity, wetLegDensity, wetLegHeightM, g = 9.80665) {
+  if (!Number.isFinite(dpPa)) throw new Error('DP must be a number.');
+  if (!(processDensity > 0)) throw new Error('Process density must be greater than zero.');
+  if (!(wetLegDensity > 0)) throw new Error('Wet-leg density must be greater than zero.');
+  if (!Number.isFinite(wetLegHeightM)) throw new Error('Wet-leg height must be a number.');
   const wetLegPressure = wetLegDensity * g * wetLegHeightM;
   return (dpPa + wetLegPressure) / (processDensity * g);
 }
 
 /** Density-compensated interface level for two liquids of different density */
 export function interfaceLevel(dpPa, totalHeightM, densityLight, densityHeavy, g = 9.80665) {
+  if (!Number.isFinite(dpPa)) throw new Error('DP must be a number.');
+  if (!(totalHeightM > 0)) throw new Error('Total height must be greater than zero.');
+  if (!(densityLight > 0) || !(densityHeavy > 0)) throw new Error('Both densities must be greater than zero.');
   // Simplified two-liquid interface: DP = g*(densityHeavy*h_heavy + densityLight*(H-h_heavy))
   // Solve for h_heavy (height of heavy/lower liquid from the bottom tap)
   const num = dpPa - densityLight * g * totalHeightM;
@@ -50,6 +61,7 @@ export function interfaceLevel(dpPa, totalHeightM, densityLight, densityHeavy, g
 }
 
 export function levelPercent(levelValue, minLevel, maxLevel) {
+  if (!Number.isFinite(levelValue) || !Number.isFinite(minLevel) || !Number.isFinite(maxLevel)) throw new Error('Level value, min level and max level must all be numbers.');
   if (maxLevel === minLevel) throw new Error('maxLevel and minLevel cannot be equal');
   return ((levelValue - minLevel) / (maxLevel - minLevel)) * 100;
 }

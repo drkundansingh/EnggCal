@@ -6998,7 +6998,11 @@ function pageControlLoops() {
           <span class="badge" id="liveStatus" style="font-size:.8rem;padding:6px 12px;"></span>
         </div>
         <div id="zeroNote" style="display:none;font-size:.76rem;color:var(--text-faint);margin-top:4px;"></div>
-        <div id="trendChart" style="margin-top:10px;"></div>
+        <div style="display:flex;gap:16px;align-items:center;margin-top:10px;font-size:.72rem;color:var(--text-dim);">
+          <span style="display:inline-flex;align-items:center;gap:5px;"><span style="display:inline-block;width:16px;height:0;border-top:2px solid var(--cyan);"></span>Process Value (PV) &mdash; the live measured trend</span>
+          <span style="display:inline-flex;align-items:center;gap:5px;"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed var(--amber);"></span>Setpoint (SP) &mdash; the target</span>
+        </div>
+        <div id="trendChart" style="margin-top:6px;"></div>
 
         <div class="assumptions-note" id="simInsight" style="margin-top:14px;"></div>
 
@@ -7159,6 +7163,8 @@ function pageControlLoops() {
         <text x="3" y="${H - pad}" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">${lo.toFixed(1)}</text>
         ${sp}
         <path d="${path}" fill="none" stroke="var(--cyan)" stroke-width="1.8"/>
+        <circle cx="${x(hist.length - 1).toFixed(1)}" cy="${y(hist[hist.length - 1].v).toFixed(1)}" r="2.5" fill="var(--cyan)"/>
+        <text x="${(x(hist.length - 1) - 6).toFixed(1)}" y="${(y(hist[hist.length - 1].v) + 13).toFixed(1)}" fill="var(--cyan)" font-size="9" font-family="var(--font-mono)" text-anchor="end">PV ${fmt(hist[hist.length - 1].v, 1)}</text>
         <circle cx="${x(hist.length - 1).toFixed(1)}" cy="${y(hist[hist.length - 1].v).toFixed(1)}" r="3" fill="var(--cyan)"/>
         <text x="${pad + 4}" y="${H - 9}" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">${dyn.trendLabel}</text>
       </svg>`;
@@ -7611,7 +7617,7 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260905112703';
+const APP_BUILD = '20260906104426';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('buildTag')) {

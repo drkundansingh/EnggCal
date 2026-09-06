@@ -24,8 +24,8 @@ export const CURVES = {
 };
 
 export function psm(faultCurrentA, pickupCurrentA) {
-  if (pickupCurrentA <= 0) throw new Error('Pickup current must be > 0');
-  if (faultCurrentA <= 0) throw new Error('Fault current must be > 0');
+  if (!(pickupCurrentA > 0)) throw new Error('Pickup current must be > 0');
+  if (!(faultCurrentA > 0)) throw new Error('Fault current must be > 0');
   return faultCurrentA / pickupCurrentA;
 }
 
@@ -35,7 +35,7 @@ export function operatingTime(faultCurrentA, pickupCurrentA, tms, curveKey = 'SI
   if (!curve) throw new Error(`Unknown IDMT curve: ${curveKey}`);
   const m = psm(faultCurrentA, pickupCurrentA);
   if (m <= 1) throw new Error('Fault current must exceed pickup current (PSM must be > 1) for the relay to operate');
-  if (tms <= 0) throw new Error('TMS/TD must be > 0');
+  if (!(tms > 0)) throw new Error('TMS/TD must be > 0');
   if (curve.family === 'IEEE') {
     return tms * (curve.A / (Math.pow(m, curve.p) - 1) + curve.B);
   }
@@ -48,7 +48,7 @@ export function tmsForDesiredTime(faultCurrentA, pickupCurrentA, desiredTimeS, c
   if (!curve) throw new Error(`Unknown IDMT curve: ${curveKey}`);
   const m = psm(faultCurrentA, pickupCurrentA);
   if (m <= 1) throw new Error('Fault current must exceed pickup current (PSM must be > 1)');
-  if (desiredTimeS <= 0) throw new Error('Desired operating time must be > 0');
+  if (!(desiredTimeS > 0)) throw new Error('Desired operating time must be > 0');
   if (curve.family === 'IEEE') {
     return desiredTimeS / (curve.A / (Math.pow(m, curve.p) - 1) + curve.B);
   }

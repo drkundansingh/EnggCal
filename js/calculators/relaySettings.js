@@ -52,6 +52,8 @@ export function primaryToPu(primaryA, ctRatioPrimaryA, ctRatioSecondaryA, relayI
 
 export function puToPrimary(pu, ctRatioPrimaryA, ctRatioSecondaryA, relayInA) {
   if (!(pu >= 0)) throw new Error('Per-unit value cannot be negative.');
+  if (!(ctRatioPrimaryA > 0) || !(ctRatioSecondaryA > 0)) throw new Error('CT ratio values must be greater than zero.');
+  if (!(relayInA > 0)) throw new Error('Relay rated current In must be greater than zero.');
   const secondaryA = pu * relayInA;
   return secondaryA * (ctRatioPrimaryA / ctRatioSecondaryA);
 }

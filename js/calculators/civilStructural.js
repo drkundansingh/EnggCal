@@ -83,7 +83,7 @@ export function sectionProperties({ shape, widthM, heightM, diameterM, outerDiaM
     areaM2 = (Math.PI * diameterM ** 2) / 4;
   } else {
     if (!(outerDiaM > 0) || !(innerDiaM >= 0)) throw new Error('Outer diameter must be greater than zero; inner diameter cannot be negative.');
-    if (innerDiaM >= outerDiaM) throw new Error('Inner diameter must be less than outer diameter.');
+    if (!(innerDiaM < outerDiaM)) throw new Error('Inner diameter must be less than outer diameter.');
     I_m4 = (Math.PI * (outerDiaM ** 4 - innerDiaM ** 4)) / 64;
     S_m3 = I_m4 / (outerDiaM / 2);
     areaM2 = (Math.PI / 4) * (outerDiaM ** 2 - innerDiaM ** 2);
@@ -172,7 +172,7 @@ export function steelWeight({ shape, lengthM, diameterMm, widthMm, thicknessMm, 
     areaMm2 = widthMm * thicknessMm;
   } else if (shape === 'pipe') {
     if (!(outerDiaMm > 0) || !(wallThicknessMm > 0)) throw new Error('Outer diameter and wall thickness must both be greater than zero.');
-    if (wallThicknessMm * 2 >= outerDiaMm) throw new Error('Wall thickness is too large for the given outer diameter.');
+    if (!(wallThicknessMm * 2 < outerDiaMm)) throw new Error('Wall thickness is too large for the given outer diameter.');
     const innerDiaMm = outerDiaMm - 2 * wallThicknessMm;
     areaMm2 = (Math.PI / 4) * (outerDiaMm ** 2 - innerDiaMm ** 2);
   } else {

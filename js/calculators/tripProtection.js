@@ -629,6 +629,7 @@ export function parseVotingScheme(scheme) {
  * trip flags. Returns whether the vote confirms a trip, and the tally.
  */
 export function evaluateVoting(trippedFlags, scheme) {
+  if (!Array.isArray(trippedFlags)) throw new Error('Tripped flags must be an array of booleans.');
   const parsed = typeof scheme === 'string' ? parseVotingScheme(scheme) : scheme;
   if (!parsed) throw new Error(`Cannot evaluate non-standard voting scheme: ${scheme}`);
   const { k, n } = parsed;
@@ -679,7 +680,7 @@ export function simulateDisturbance(opts) {
     startValue, alarmSetpoint, tripSetpoint, direction, rampRatePerSec,
     timeDelaySec, durationSec = 120, stepSec = 1, recover = true,
   } = opts;
-  if (rampRatePerSec <= 0) throw new Error('rampRatePerSec must be > 0');
+  if (!(rampRatePerSec > 0)) throw new Error('rampRatePerSec must be > 0');
   const sign = direction === 'high' ? 1 : -1;
 
   const series = [];

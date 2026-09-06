@@ -15,7 +15,7 @@ import { sqrt3 } from './electricalCommon.js';
 
 /** Fault MVA contributed by a source given directly as a fault MVA (e.g. from a utility). */
 export function sourceFaultMVA(mva) {
-  if (mva <= 0) throw new Error('Source fault MVA must be > 0');
+  if (!(mva > 0)) throw new Error('Source fault MVA must be > 0');
   return mva;
 }
 
@@ -23,8 +23,8 @@ export function sourceFaultMVA(mva) {
  * MVA_fault = Rated_MVA / (%Z/100). A transformer with a lower %Z lets
  * through more fault current, hence a HIGHER contributed fault MVA. */
 export function transformerFaultMVA(ratedMVA, impedancePct) {
-  if (ratedMVA <= 0) throw new Error('Transformer MVA must be > 0');
-  if (impedancePct <= 0) throw new Error('Transformer impedance % must be > 0');
+  if (!(ratedMVA > 0)) throw new Error('Transformer MVA must be > 0');
+  if (!(impedancePct > 0)) throw new Error('Transformer impedance % must be > 0');
   return ratedMVA / (impedancePct / 100);
 }
 
@@ -33,7 +33,7 @@ export function transformerFaultMVA(ratedMVA, impedancePct) {
 export function combineSeriesFaultMVA(mvaContributions) {
   if (!mvaContributions.length) throw new Error('At least one contribution required');
   const sumReciprocal = mvaContributions.reduce((sum, mva) => {
-    if (mva <= 0) throw new Error('Each fault MVA contribution must be > 0');
+    if (!(mva > 0)) throw new Error('Each fault MVA contribution must be > 0');
     return sum + 1 / mva;
   }, 0);
   return 1 / sumReciprocal;
@@ -49,12 +49,14 @@ export function combineParallelFaultMVA(mvaContributions) {
 /** Three-phase symmetrical fault current (kA) at a bus of a given line voltage (kV),
  * from the fault MVA available at that bus. */
 export function threePhaseFaultCurrentKA(faultMVA, kV) {
-  if (faultMVA <= 0) throw new Error('Fault MVA must be > 0');
-  if (kV <= 0) throw new Error('Voltage must be > 0');
+  if (!(faultMVA > 0)) throw new Error('Fault MVA must be > 0');
+  if (!(kV > 0)) throw new Error('Voltage must be > 0');
   return faultMVA / (sqrt3() * kV);
 }
 
 export function faultMVAFromCurrent(faultCurrentKA, kV) {
+  if (!(faultCurrentKA > 0)) throw new Error('Fault current must be greater than zero.');
+  if (!(kV > 0)) throw new Error('Voltage must be greater than zero.');
   return sqrt3() * kV * faultCurrentKA;
 }
 
@@ -68,6 +70,7 @@ export function faultMVAFromCurrent(faultCurrentKA, kV) {
  * is the more accurate and common real-world input for those systems.
  */
 export function lineToGroundFaultCurrentKA(threePhaseFaultKA, groundingType, options = {}) {
+  if (!(threePhaseFaultKA > 0)) throw new Error('Three-phase fault current must be greater than zero.');
   if (groundingType === 'resistance' || groundingType === 'reactance') {
     if (!(options.ngrLetThroughA > 0)) {
       throw new Error('Resistance/reactance-grounded systems require the NGR (neutral grounding resistor/reactor) let-through current in amps');
