@@ -28,6 +28,7 @@ import * as cst from '../js/calculators/civilStructural.js';
 import * as ccon from '../js/calculators/civilConcrete.js';
 import * as cgeo from '../js/calculators/civilGeotech.js';
 import * as chyd from '../js/calculators/civilHydraulics.js';
+import * as cl from '../js/calculators/controlLoops.js';
 import * as csur from '../js/calculators/civilSurveying.js';
 import * as vt from '../js/calculators/vesselsTanks.js';
 import * as pt from '../js/calculators/processThermal.js';
@@ -1852,6 +1853,95 @@ test('relaySettings: a custom minSensitivityRatio changes the pass/fail threshol
   });
   assert.equal(strict.sensitivity.adequate, false);
   assert.equal(lenient.sensitivity.adequate, true);
+});
+
+console.log('\n--- controlLoops.js Coordinated Master Control (CMC) three-mode behavior ---');
+function settleThenStep(mode, loadBefore, loadAfter, steps) {
+  const dyn = cl.LOOP_DYNAMICS['coordinated-master'](mode);
+  let r;
+  for (let i = 0; i < 400; i++) r = dyn.step(0.5, loadBefore);
+  for (let i = 0; i < steps; i++) r = dyn.step(0.5, loadAfter);
+  return r;
+}
+test('CMC boiler-follow: turbine demand tracks load demand directly and immediately', () => {
+  const dyn = cl.LOOP_DYNAMICS['coordinated-master']('boiler-follow');
+  let r;
+  for (let i = 0; i < 400; i++) r = dyn.step(0.5, 75);
+  r = dyn.step(0.5, 90); // one step after the load change
+  approx(parseFloat(r.nodeValues['turb-dmd']), 90, 0.5);
+});
+test('CMC turbine-follow: boiler demand tracks load demand directly and immediately', () => {
+  const dyn = cl.LOOP_DYNAMICS['coordinated-master']('turbine-follow');
+  let r;
+  for (let i = 0; i < 400; i++) r = dyn.step(0.5, 75);
+  r = dyn.step(0.5, 90);
+  approx(parseFloat(r.nodeValues['boiler-dmd']), 90, 0.5);
+});
+test('CMC boiler-follow: fast turbine response causes a real, non-trivial pressure droop', () => {
+  const r = settleThenStep('boiler-follow', 75, 90, 400); // 200 simulated seconds in
+  assert.ok(r.trend < 169.3, `expected a real pressure droop below 169.3 bar, got ${r.trend}`);
+});
+test('CMC turbine-follow: pressure stays tight even while output lags demand', () => {
+  const r = settleThenStep('turbine-follow', 75, 90, 100);
+  assert.ok(Math.abs(r.trend - 170) < 1, `expected pressure within 1 bar of setpoint, got ${r.trend}`);
+  const turbDemand = parseFloat(r.nodeValues['turb-dmd']);
+  assert.ok(turbDemand < 85, `expected turbine output still lagging the 90% demand, got ${turbDemand}`);
+});
+test('CMC coordinated: converges toward setpoint without diverging over a long horizon', () => {
+  const r = settleThenStep('coordinated', 75, 90, 1200); // 600 simulated seconds
+  assert.ok(Math.abs(r.trend - 170) < 2, `expected convergence back near setpoint, got ${r.trend}`);
+});
+test('CMC: the three modes produce genuinely different pressure trajectories for an identical load step', () => {
+  const b = settleThenStep('boiler-follow', 75, 90, 40).trend;
+  const t = settleThenStep('turbine-follow', 75, 90, 40).trend;
+  const c = settleThenStep('coordinated', 75, 90, 40).trend;
+  assert.notEqual(b, t);
+  assert.notEqual(b, c);
+  assert.notEqual(t, c);
+});
+test('CMC: omitting the mode argument defaults to coordinated (backward compatible)', () => {
+  const withDefault = cl.LOOP_DYNAMICS['coordinated-master']();
+  const withExplicit = cl.LOOP_DYNAMICS['coordinated-master']('coordinated');
+  let r1, r2;
+  for (let i = 0; i < 100; i++) { r1 = withDefault.step(0.5, 80); r2 = withExplicit.step(0.5, 80); }
+  approx(r1.trend, r2.trend, 1e-9);
+});
+
+console.log('\n--- controlLoops.js Condenser Vacuum Control ---');
+test('condenser-vacuum: ejector correctly INCREASES capacity when pressure rises above setpoint', () => {
+  const dyn = cl.LOOP_DYNAMICS['condenser-vacuum']();
+  let r;
+  for (let i = 0; i < 400; i++) r = dyn.step(0.5, 25);
+  const capBefore = parseFloat(r.nodeValues['ejector']);
+  for (let i = 0; i < 100; i++) r = dyn.step(0.5, 35); // step CW temp up -> pressure rises
+  const capAfter = parseFloat(r.nodeValues['ejector']);
+  assert.ok(capAfter > capBefore, `expected ejector capacity to increase (was ${capBefore}, now ${capAfter})`);
+});
+test('condenser-vacuum: at maximum ejector capacity, pressure converges to the exact IAPWS-IF97 saturation floor', () => {
+  const dyn = cl.LOOP_DYNAMICS['condenser-vacuum']();
+  let r;
+  for (let i = 0; i < 400; i++) r = dyn.step(0.5, 25);
+  for (let i = 0; i < 900; i++) r = dyn.step(0.5, 35); // enough time to saturate the ejector and clear gas blanketing
+  const expectedFloor = steam.psat(35 + 8 + 4 + 273.15) * 1000; // CW temp + rise + TTD
+  approx(r.trend, expectedFloor, 0.05);
+  assert.equal(parseFloat(r.nodeValues['ejector']), 100);
+});
+test('condenser-vacuum: does not diverge or oscillate under a realistic disturbance', () => {
+  const dyn = cl.LOOP_DYNAMICS['condenser-vacuum']();
+  let r;
+  for (let i = 0; i < 400; i++) r = dyn.step(0.5, 25);
+  const series = [];
+  for (let i = 0; i < 600; i++) { r = dyn.step(0.5, 30); series.push(r.trend); }
+  const last50 = series.slice(-50);
+  const drift = Math.max(...last50) - Math.min(...last50);
+  assert.ok(drift < 0.01, `expected the trend to have settled by the end, got drift ${drift}`);
+});
+test('condenser-vacuum: appears in LOOP_IDS and has full metadata', () => {
+  assert.ok(cl.LOOP_IDS.includes('condenser-vacuum'));
+  const meta = cl.CONTROL_LOOPS['condenser-vacuum'];
+  assert.ok(meta.name && meta.why && meta.problem && meta.solution);
+  assert.ok(meta.nodes.length > 0 && meta.edges.length > 0);
+  assert.ok(meta.sources.length > 0);
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

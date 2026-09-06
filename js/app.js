@@ -841,20 +841,6 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMobil
 
 // ---------- Dashboard ----------
 function pageDashboard() {
-  const cards = [
-    ['thermal-plant', '⚡', 'Thermal Power Plant', 'MW ⇄ fuel ⇄ steam performance estimator, 0–1000 MW', 'free'],
-    ['transmitter', '↯', '4–20 mA Calculator', 'Signal ⇄ % ⇄ engineering value scaling', 'free'],
-    ['orifice', '◎', 'Orifice Plate', 'Flow, bore sizing, beta ratio, Reynolds number', 'free'],
-    ['control-valve', '⏛', 'Control Valve Sizing', 'Cv/Kv for liquid, gas, and steam service', 'free'],
-    ['dp-level', '≈', 'DP & Level', 'Hydrostatic, wet-leg, interface level, DP-flow', 'free'],
-    ['ip-converter', '⇄', 'I/P Converter', '4–20 mA ⇄ 3–15 psi and custom ranges', 'free'],
-    ['rtd', 'Ω', 'RTD Calculator', 'Pt100 / Pt1000 / Ni100 / Cu100, IEC 60751', 'free'],
-    ['thermocouple', 'μV', 'Thermocouple', 'Type J/K/T/E/N/R/S/B with CJC', 'free'],
-    ['pid', '∫', 'PID Controller', 'P/I/D terms + Ziegler-Nichols, Cohen-Coon, IMC', 'free'],
-    ['converter', '⇌', 'Unit Converter', 'Pressure, temperature, flow, length, mass, power', 'free'],
-    ['formula-library', '𝑓', 'Formula Library', 'Searchable reference formulas by discipline', 'free'],
-    ['history', '🕘', 'Calculation History', 'Saved calculations, export to PDF', 'free'],
-  ];
   app.appendChild(h(`
     <div class="page-head">
       <div class="eyebrow">Engineering Calculator Hub</div>
@@ -862,21 +848,33 @@ function pageDashboard() {
       <p class="lead">Modular calculators built on transparent, unit-consistent engineering equations. Every estimate shows its formula and assumptions — nothing is a hardcoded lookup.</p>
     </div>
   `));
-  const grid = h('<div class="grid cols-4"></div>');
-  for (const [id, icon, title, desc, tier] of cards) {
-    const card = h(`
-      <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;">
-        <span class="tag ${tier}">${tier}</span>
-        <div class="card-icon">${icon}</div>
-        <h4>${title}</h4>
-        <p>${desc}</p>
-      </div>
-    `);
-    card.addEventListener('click', () => navigate(id));
-    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(id); } });
-    grid.appendChild(card);
+
+  // Cards are generated directly from NAV (the same data that builds the
+  // sidebar) and SEO_META (which already has a one-line description for
+  // every route). A hand-maintained card list here previously drifted out
+  // of sync as calculators were added — this can't drift, because there's
+  // only one list of calculators in the whole app, not two.
+  for (const g of NAV) {
+    if (g.group === 'Overview') continue; // just the Dashboard link to this page itself
+    app.appendChild(h(`<div class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">${g.group}</div>`));
+    const grid = h('<div class="grid cols-4"></div>');
+    for (const item of g.items) {
+      const meta = SEO_META[item.id];
+      const desc = meta ? meta.description : '';
+      const card = h(`
+        <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;">
+          <span class="tag free">free</span>
+          <div class="card-icon">${item.icon}</div>
+          <h4>${item.label}</h4>
+          <p>${desc}</p>
+        </div>
+      `);
+      card.addEventListener('click', () => navigate(item.id));
+      card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(item.id); } });
+      grid.appendChild(card);
+    }
+    app.appendChild(grid);
   }
-  app.appendChild(grid);
   app.appendChild(h(`<div style="margin-top:22px;">${disclaimerHTML()}</div>`));
 }
 
@@ -6897,7 +6895,7 @@ function pageControlLoops() {
         const midStraightX = (p1.x + p2.x) / 2, midStraightY = (p1.y + p2.y) / 2;
         const towardCollider = (collider.ncx - midStraightX) * px + (collider.ncy - midStraightY) * py;
         if (towardCollider > 0) { px = -px; py = -py; }
-        const bow = 34;
+        const bow = 55;
         const ctrlX = midStraightX + px * bow, ctrlY = midStraightY + py * bow;
         pathD = `M ${p1.x} ${p1.y} Q ${ctrlX} ${ctrlY} ${p2.x} ${p2.y}`;
         // Actual midpoint of a quadratic bezier at t=0.5.
@@ -6976,6 +6974,12 @@ function pageControlLoops() {
           </div>
         </div>
         <p style="color:var(--text-dim);font-size:.86rem;margin-top:10px;">${loop.why}</p>
+
+        ${loop.modes ? `<div class="field" style="margin-top:12px;max-width:320px;">
+          <label>Control strategy</label>
+          <select id="modeSelect">${loop.modes.map((m) => `<option value="${m.id}">${m.label}</option>`).join('')}</select>
+        </div>
+        <div style="font-size:.76rem;color:var(--text-faint);margin-top:-4px;">Switch strategy and re-run the same load change to compare the trade-offs directly \u2014 the underlying boiler and turbine are identical, only the control logic changes.</div>` : ''}
 
         <div class="input-row" style="margin-top:14px;align-items:center;flex-wrap:nowrap;gap:12px;">
           <div class="field" style="flex:1;min-width:0;margin-bottom:0;">
@@ -7076,7 +7080,8 @@ function pageControlLoops() {
     const DT = 0.1;        // simulation timestep, seconds
     const SPEED = 4;       // simulated seconds per real second
     const FRAME_MS = 50;
-    let dyn = cl.LOOP_DYNAMICS[loopId] ? cl.LOOP_DYNAMICS[loopId]() : null;
+    let currentMode = loop.modes ? loop.modes[0].id : undefined;
+    let dyn = cl.LOOP_DYNAMICS[loopId] ? cl.LOOP_DYNAMICS[loopId](currentMode) : null;
     const trendEl = body.querySelector('#trendChart');
     const clockEl = body.querySelector('#simClock');
     let simTime = 0, hist = [], running = true;
@@ -7239,10 +7244,23 @@ function pageControlLoops() {
       prevInput = loop.sim.inputDefault; simInput = loop.sim.inputDefault;
       slider.value = simInput; valEl.textContent = simInput;
       if (dyn) {
-        dyn = cl.LOOP_DYNAMICS[loopId]();
+        dyn = cl.LOOP_DYNAMICS[loopId](currentMode);
         for (let i = 0; i < 1500; i++) dyn.step(DT, simInput);
         simTime = 0; hist = [];
       } else refresh();
+    });
+
+    const modeSelect = body.querySelector('#modeSelect');
+    if (modeSelect) modeSelect.addEventListener('change', () => {
+      currentMode = modeSelect.value;
+      // Switching strategy mid-transient would show a confusing hybrid
+      // response that belongs to neither mode -- reset to steady state so
+      // the comparison between strategies is always a fair, clean one.
+      prevInput = loop.sim.inputDefault; simInput = loop.sim.inputDefault;
+      slider.value = simInput; valEl.textContent = simInput;
+      dyn = cl.LOOP_DYNAMICS[loopId](currentMode);
+      for (let i = 0; i < 1500; i++) dyn.step(DT, simInput);
+      simTime = 0; hist = [];
     });
 
     const detailsToggle = body.querySelector('#detailsToggle');
@@ -7617,7 +7635,7 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260906115044';
+const APP_BUILD = '20260906191700';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('buildTag')) {

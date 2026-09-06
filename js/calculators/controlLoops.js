@@ -17,6 +17,7 @@
 //   demand      — an external demand/setpoint input
 
 import { Lag, DeadTime, Integrator, RateLimit, PID, InverseResponse, clamp } from './loopDynamics.js';
+import * as steam from './steamTable.js';
 
 export const LOOP_IDS = [
   'drum-level-3e',
@@ -32,6 +33,7 @@ export const LOOP_IDS = [
   'avr-excitation',
   'firewater-ratio',
   'sliding-pressure',
+  'condenser-vacuum',
 ];
 
 export const CONTROL_LOOPS = {
@@ -126,7 +128,7 @@ export const CONTROL_LOOPS = {
       { id: 'hs', type: 'compute', label: 'HIGH<br/>SELECT', sub: 'Air demand', x: 250, y: 70 },
       { id: 'ls', type: 'compute', label: 'LOW<br/>SELECT', sub: 'Fuel demand', x: 250, y: 240 },
       { id: 'ratio', type: 'compute', label: '×', sub: 'Air/fuel ratio', x: 400, y: 70 },
-      { id: 'o2', type: 'controller', label: 'O₂ TRIM', sub: 'Excess air PID', x: 400, y: 155 },
+      { id: 'o2', type: 'controller', label: 'O₂ TRIM', sub: 'Excess air PID', x: 400, y: 300 },
       { id: 'aic', type: 'controller', label: 'AIC', sub: 'Air flow PID', x: 555, y: 70 },
       { id: 'fic', type: 'controller', label: 'FIC', sub: 'Fuel flow PID', x: 555, y: 240 },
       { id: 'damper', type: 'actuator', label: 'FD FAN', sub: 'Damper / IGV', x: 710, y: 70 },
@@ -316,9 +318,14 @@ export const CONTROL_LOOPS = {
 
   // ------------------------------------------------------------------
   'coordinated-master': {
-    name: 'Coordinated Master Control (Unit Load)',
+    name: 'Coordinated Master Control (CMC) \u2014 Unit Load',
     system: 'Unit',
     difficulty: 'Advanced',
+    modes: [
+      { id: 'coordinated', label: 'Coordinated (CMC)' },
+      { id: 'boiler-follow', label: 'Boiler Follow' },
+      { id: 'turbine-follow', label: 'Turbine Follow' },
+    ],
     why: 'The boiler and turbine must be commanded together. This is the loop that decides whether the boiler follows the turbine, the turbine follows the boiler, or both move as one.',
     problem: 'The turbine responds in seconds; the boiler responds in minutes. Command them independently and either main steam pressure collapses (turbine opened too fast) or load response is uselessly slow (waiting for the boiler).',
     solution: 'Coordinated control. A unit master takes the load demand and splits it into a boiler demand and a turbine demand, with main steam pressure error trimming BOTH so the two stay matched. The mode selector determines which side leads.',
@@ -958,6 +965,45 @@ export const CONTROL_LOOPS = {
     ],
   },
 
+  'condenser-vacuum': {
+    name: 'Condenser Vacuum (Backpressure) Control',
+    system: 'Condensate',
+    difficulty: 'Advanced',
+    why: 'Every degree of condenser backpressure costs turbine output directly \u2014 unlike almost every other loop in the plant, this one is a straight line to lost MW and lost efficiency, not just a stability concern.',
+    problem: 'Two very different things raise condenser pressure, and only one of them is fixable by this loop. Warmer cooling water raises the achievable vacuum floor \u2014 pure thermodynamics, no valve can undo it. Air in-leakage (worn seals, packing, valve glands) blankets the tube bundle with non-condensable gas on top of that floor \u2014 and THAT part the ejectors can and must remove.',
+    solution: 'A pressure controller trims air ejector or vacuum pump capacity to keep the non-condensable gas load from ever accumulating. It cannot lower the cooling-water-set floor \u2014 no controller can \u2014 but it keeps the plant sitting AT that floor instead of drifting above it.',
+    elements: [
+      'PIC trims ejector/vacuum pump capacity, not the water side',
+      'Base pressure set by cooling water temperature \u2014 outside this loop\u2019s authority',
+      'Gas blanketing is the part the ejector actually controls',
+    ],
+    nodes: [
+      { id: 'cwtemp', type: 'demand', label: 'CW INLET<br/>TEMP', sub: 'Cooling water', x: 55, y: 260 },
+      { id: 'condenser', type: 'process', label: 'CONDENSER', sub: 'Steam-side vacuum', x: 630, y: 190 },
+      { id: 'pt', type: 'sensor', label: 'PT', sub: 'Condenser pressure', x: 55, y: 90 },
+      { id: 'pic', type: 'controller', label: 'PIC', sub: 'Vacuum PID', x: 250, y: 90 },
+      { id: 'ejector', type: 'actuator', label: 'EJECTOR', sub: 'Air ejector / vac. pump', x: 445, y: 90 },
+    ],
+    edges: [
+      { from: 'cwtemp', to: 'condenser', label: 'sets pressure floor' },
+      { from: 'condenser', to: 'pt', label: 'PV', style: 'feedback' },
+      { from: 'pt', to: 'pic', label: 'PV' },
+      { from: 'pic', to: 'ejector', label: 'MV' },
+      { from: 'ejector', to: 'condenser', label: 'removes gas' },
+    ],
+    sim: {
+      inputLabel: 'Cooling water inlet temperature (\u00b0C)',
+      inputMin: 15, inputMax: 35, inputDefault: 25,
+      run(cwTempC) {
+        return { nodeValues: { 'cwtemp': `${cwTempC.toFixed(0)} \u00b0C` }, insight: '' };
+      },
+    },
+    sources: [
+      'Standard surface condenser design practice \u2014 backpressure set by CW temperature and terminal temperature difference (TTD), non-condensable gas removal by air ejectors or liquid-ring vacuum pumps',
+      'IAPWS-IF97 \u2014 saturation pressure/temperature relationship used directly for the achievable-vacuum floor in this simulation',
+    ],
+  },
+
 };
 
 /** Node type -> display colour token and shape hint, used by the renderer. */
@@ -1295,40 +1341,87 @@ export const LOOP_DYNAMICS = {
   },
 
   // Coordinated master: fast turbine against a slow boiler.
-  'coordinated-master': () => {
+  'coordinated-master': (mode = 'coordinated') => {
     const boiler = new Lag(180, 75);   // boiler energy release: minutes
     const turbine = new Lag(4, 75);    // governor valves: seconds
     const pressInt = new Integrator(0.055, 170, 120, 220);
+    // Trim controller for coordinated mode (small authority, applied to
+    // BOTH demands in opposite directions) — unchanged from before.
     const pic = new PID({ kp: 2.0, ki: 0.10, outMin: -25, outMax: 25, initialOutput: 0, reverse: true });
+    // Full-authority pressure controllers for the two single-variable
+    // modes, where one side is dedicated ENTIRELY to holding pressure
+    // rather than sharing a small trim. Sign conventions independently
+    // derived, not copied: the boiler controller is DIRECT acting (low
+    // pressure -> more firing, reverse:false) and the turbine controller
+    // is REVERSE acting (low pressure -> close valves to conserve steam,
+    // reverse:true) — the opposite pairing from what you might guess at
+    // first, and worth checking against a real plant's logic diagram
+    // rather than assuming.
+    const boilerPressPid = new PID({ kp: 3.0, ki: 0.12, outMin: 0, outMax: 110, initialOutput: 75, reverse: false });
+    const turbPressPid = new PID({ kp: 3.0, ki: 0.12, outMin: 0, outMax: 110, initialOutput: 75, reverse: true });
+
+    const MODE_LABEL = {
+      'boiler-follow': 'BOILER FOLLOW (turbine leads load, boiler holds pressure)',
+      'turbine-follow': 'TURBINE FOLLOW (boiler leads load, turbine holds pressure)',
+      'coordinated': 'COORDINATED (pressure trims both demands)',
+    };
+
     return {
       trendLabel: 'Main steam pressure (bar)', setpoint: 170,
       step(dt, loadDemand) {
         const press = pressInt.y;
-        const pTrim = pic.step(170, press, dt);
-        // Low pressure (negative pTrim) must RAISE firing and EASE the
-        // governor valves; getting these two signs the wrong way round
-        // turns the loop into positive feedback and the pressure runs away.
-        const boilerDemand = clamp(loadDemand - pTrim, 0, 110);
-        const turbDemand = clamp(loadDemand + pTrim * 0.6, 0, 110);
+        let boilerDemand, turbDemand, pTrim = null;
+
+        if (mode === 'boiler-follow') {
+          // Turbine takes the load demand directly and immediately — this
+          // is the fast path a real operator sees as instant MW response.
+          // The boiler has no idea load changed; it only ever reacts to
+          // the pressure droop that shows up once the turbine has already
+          // drawn more steam than the boiler was making.
+          turbDemand = clamp(loadDemand, 0, 110);
+          boilerDemand = boilerPressPid.step(170, press, dt);
+        } else if (mode === 'turbine-follow') {
+          // Boiler takes the load demand directly (but the boiler itself
+          // is slow, so the ACTUAL firing rate still ramps over minutes).
+          // The turbine's only job is to hold pressure — it will only let
+          // more steam through once the boiler has actually made it.
+          boilerDemand = clamp(loadDemand, 0, 110);
+          turbDemand = turbPressPid.step(170, press, dt);
+        } else {
+          const trim = pic.step(170, press, dt);
+          pTrim = trim;
+          // Low pressure (negative pTrim) must RAISE firing and EASE the
+          // governor valves; getting these two signs the wrong way round
+          // turns the loop into positive feedback and the pressure runs away.
+          boilerDemand = clamp(loadDemand - trim, 0, 110);
+          turbDemand = clamp(loadDemand + trim * 0.6, 0, 110);
+        }
+
         const b = boiler.step(boilerDemand, dt);
         const tb = turbine.step(turbDemand, dt);
         pressInt.step((b - tb) / 100, dt);
+
+        const pressErr = 170 - press;
         return {
           trend: press,
           nodeValues: {
             'demand': `${loadDemand.toFixed(0)} %`,
             'pt-steam': `${press.toFixed(2)} bar`,
             'master': `${loadDemand.toFixed(0)} %`,
-            'pic': `err ${(170 - press).toFixed(2)} bar${pic.saturated ? ' SAT' : ''}`,
+            'pic': `err ${pressErr.toFixed(2)} bar`,
             'boiler-dmd': `${boilerDemand.toFixed(1)} %`,
             'turb-dmd': `${turbDemand.toFixed(1)} %`,
             'firing': `${b.toFixed(1)} %`,
             'gv': `${tb.toFixed(1)} %`,
           },
-          strategy: 'COORDINATED (pressure trims both demands)',
-          controllers: { 'pic': ctrl(pic, { unit: 'bar', outUnit: '% trim', role: 'Main steam pressure' }) },
+          strategy: MODE_LABEL[mode],
+          controllers: mode === 'coordinated'
+            ? { 'pic': ctrl(pic, { unit: 'bar', outUnit: '% trim', role: 'Main steam pressure (trim)' }) }
+            : mode === 'boiler-follow'
+              ? { 'pic': ctrl(boilerPressPid, { unit: 'bar', outUnit: '% firing', role: 'Main steam pressure (boiler holds it)' }) }
+              : { 'pic': ctrl(turbPressPid, { unit: 'bar', outUnit: '% valve', role: 'Main steam pressure (turbine holds it)' }) },
           elements: { 'firing': elem(b, { label: 'Firing rate' }), 'gv': elem(tb, { label: 'Governor valves' }) },
-          chain: [
+          chain: mode === 'coordinated' ? [
             { step: 'Unit load demand', value: loadDemand.toFixed(1) + ' %', why: 'Goes to BOTH boiler and turbine.' },
             { step: 'Pressure error', value: (press - 170).toFixed(2) + ' bar',
               why: 'Steam pressure is the integral of the mismatch between energy in and energy out.' },
@@ -1338,10 +1431,28 @@ export const LOOP_DYNAMICS = {
               why: 'load ' + loadDemand.toFixed(1) + ' \u2212 trim = ' + boilerDemand.toFixed(1) + '. Low pressure raises firing.' },
             { step: 'Turbine demand', value: turbDemand.toFixed(1) + ' %',
               why: 'load ' + loadDemand.toFixed(1) + ' + trim\u00d70.6 = ' + turbDemand.toFixed(1) + '. Low pressure eases the valves.' },
+          ] : mode === 'boiler-follow' ? [
+            { step: 'Unit load demand', value: loadDemand.toFixed(1) + ' %', why: 'Goes STRAIGHT to the governor valves \u2014 nothing slows it down.' },
+            { step: 'Turbine demand', value: turbDemand.toFixed(1) + ' %', why: 'Turbine demand = load demand, directly. Fast.' },
+            { step: 'Pressure error', value: pressErr.toFixed(2) + ' bar', why: 'The turbine just took steam the boiler wasn\u2019t ready to give.' },
+            { step: 'Boiler demand', value: boilerDemand.toFixed(1) + ' %', why: 'The boiler\u2019s ENTIRE job is closing this pressure error \u2014 it never sees load demand directly.' },
+          ] : [
+            { step: 'Unit load demand', value: loadDemand.toFixed(1) + ' %', why: 'Goes STRAIGHT to the boiler firing demand.' },
+            { step: 'Boiler demand', value: boilerDemand.toFixed(1) + ' %', why: 'Boiler demand = load demand, directly \u2014 but the boiler itself still takes minutes to respond.' },
+            { step: 'Pressure error', value: pressErr.toFixed(2) + ' bar', why: 'Tiny, because the turbine is defending it in real time.' },
+            { step: 'Turbine demand', value: turbDemand.toFixed(1) + ' %', why: 'The turbine\u2019s ENTIRE job is holding pressure \u2014 it only lets more steam through once the boiler has actually made it.' },
           ],
-          insight: Math.abs(press - 170) > 1.5
-            ? `Main steam pressure is ${Math.abs(press - 170).toFixed(1)} bar ${press > 170 ? 'ABOVE' : 'BELOW'} setpoint. The turbine (4 s) moves far faster than the boiler (180 s), so energy in and energy out are mismatched \u2014 and steam pressure is the integral of that mismatch. The pressure PI is trimming both demands to close the gap.`
-            : `Load ${loadDemand.toFixed(0)}%, firing ${b.toFixed(0)}%, valves ${tb.toFixed(0)}%, pressure ${press.toFixed(1)} bar. Boiler and turbine matched \u2014 coordinated control working as intended.`,
+          insight: mode === 'boiler-follow'
+            ? (Math.abs(pressErr) > 1.5
+              ? `Fast load response (valves already at ${tb.toFixed(0)}%) but pressure is ${Math.abs(pressErr).toFixed(1)} bar ${press < 170 ? 'below' : 'above'} setpoint \u2014 the classic Boiler Follow trade-off. The boiler (180 s) is still catching up to steam the turbine already took.`
+              : `Load ${loadDemand.toFixed(0)}%, pressure recovered to ${press.toFixed(1)} bar. Boiler has caught up with what the turbine already took.`)
+            : mode === 'turbine-follow'
+              ? (Math.abs(loadDemand - tb) > 3
+                ? `Pressure is rock-steady (${press.toFixed(1)} bar) but actual output (valves at ${tb.toFixed(0)}%) is still far from the ${loadDemand.toFixed(0)}% demanded \u2014 the classic Turbine Follow trade-off. The turbine won\u2019t take more steam than the boiler (180 s) has actually made.`
+                : `Load ${loadDemand.toFixed(0)}%, pressure held at ${press.toFixed(1)} bar throughout. Boiler has caught up \u2014 output now matches demand.`)
+              : (Math.abs(press - 170) > 1.5
+                ? `Main steam pressure is ${Math.abs(press - 170).toFixed(1)} bar ${press > 170 ? 'ABOVE' : 'BELOW'} setpoint. The turbine (4 s) moves far faster than the boiler (180 s), so energy in and energy out are mismatched \u2014 and steam pressure is the integral of that mismatch. The pressure PI is trimming both demands to close the gap.`
+                : `Load ${loadDemand.toFixed(0)}%, firing ${b.toFixed(0)}%, valves ${tb.toFixed(0)}%, pressure ${press.toFixed(1)} bar. Boiler and turbine matched \u2014 coordinated control working as intended.`),
         };
       },
     };
@@ -1713,6 +1824,64 @@ export const LOOP_DYNAMICS = {
             : load < 70
               ? `Below the sliding band. Pressure held at its fixed minimum (${pMin} bar); valves modulate more to control load here.`
               : `Above the sliding band \u2014 pressure deliberately fixed at ${pRated} bar again. This is a genuine reserve: if load jumps right now, the valves can open further and deliver more steam instantly, without waiting for the boiler to raise pressure.`,
+        };
+      },
+    };
+  },
+
+  // Condenser vacuum: base pressure is a hard physical floor set by cooling
+  // water temperature (via real IAPWS-IF97 saturation pressure -- not an
+  // approximation), plus a gas-blanketing term that accumulates from a
+  // constant background air in-leakage and is removed by ejector capacity.
+  // The controller can only ever manage the second term.
+  'condenser-vacuum': () => {
+    const ejectorPid = new PID({ kp: 1.8, ki: 0.12, outMin: 20, outMax: 100, initialOutput: 55, reverse: true });
+    const gasBlanket = new Integrator(0.018, 1.5, 0, 6); // kPa of extra pressure from uncleared gas
+    const AIR_INLEAK_RATE = 1.0; // kPa/min-equivalent worth of gas arriving, constant background leakage
+    const TTD_C = 4; // terminal temperature difference, clean condenser
+    const CW_RISE_C = 8; // typical CW temperature rise across the tube bundle
+
+    function basePressureKPa(cwTempC) {
+      const condensingTempC = cwTempC + CW_RISE_C + TTD_C;
+      return steam.psat(condensingTempC + 273.15) * 1000;
+    }
+
+    return {
+      trendLabel: 'Condenser pressure (kPa abs)', setpoint: null,
+      step(dt, cwTempC) {
+        const base = basePressureKPa(cwTempC);
+        const setpointKPa = basePressureKPa(25) + 0.3; // realistic target: the clean, minimal-gas floor at a normal CW temp, plus a small margin
+        const press = base + gasBlanket.y;
+        const ejectorPct = ejectorPid.step(setpointKPa, press, dt);
+        // Ejector removal scales with its capacity; a fixed background
+        // leak keeps arriving regardless of what the ejector is doing.
+        const removalRate = (ejectorPct / 100) * 1.6;
+        gasBlanket.step(AIR_INLEAK_RATE - removalRate, dt);
+
+        const achievableFloor = base; // what the plant COULD reach with zero gas blanketing
+        const excessOverFloor = press - achievableFloor;
+
+        return {
+          trend: press,
+          nodeValues: {
+            'cwtemp': `${cwTempC.toFixed(0)} \u00b0C`,
+            'condenser': `${press.toFixed(2)} kPa`,
+            'pt': `${press.toFixed(2)} kPa`,
+            'pic': `SP ${setpointKPa.toFixed(2)} kPa`,
+            'ejector': `${ejectorPct.toFixed(0)} % capacity`,
+          },
+          controllers: { 'pic': ctrl(ejectorPid, { unit: 'kPa', outUnit: '% capacity', role: 'Condenser pressure (ejector)' }) },
+          elements: { 'ejector': elem(ejectorPct, { label: 'Ejector capacity' }) },
+          chain: [
+            { step: 'Cooling water inlet temperature', value: cwTempC.toFixed(1) + ' \u00b0C', why: 'Sets the condensing temperature, and with it, the pressure FLOOR \u2014 no controller can move this.' },
+            { step: 'Achievable pressure floor', value: achievableFloor.toFixed(2) + ' kPa', why: 'IAPWS-IF97 saturation pressure at condensing temperature. The best this condenser could ever do at this CW temperature, with zero non-condensable gas.' },
+            { step: 'Gas blanketing', value: '+' + gasBlanket.y.toFixed(2) + ' kPa', why: 'Non-condensable gas the ejector has not yet cleared \u2014 arrives at a steady background rate, removed only by ejector capacity.' },
+            { step: 'Actual condenser pressure', value: press.toFixed(2) + ' kPa', why: 'Floor + gas blanketing. This is what the plant actually sees.' },
+            { step: 'Ejector capacity', value: ejectorPct.toFixed(0) + ' %', why: 'The PIC\u2019s entire authority is over this term \u2014 it cannot touch the floor itself.' },
+          ],
+          insight: excessOverFloor > 0.8
+            ? `Pressure is ${excessOverFloor.toFixed(1)} kPa ABOVE the achievable floor for this cooling water temperature \u2014 gas blanketing has built up faster than the ejector (at ${ejectorPct.toFixed(0)}%) can clear it. This is the failure mode a real ejector/vacuum-pump capacity check exists to catch.`
+            : `Pressure ${press.toFixed(2)} kPa, within ${excessOverFloor.toFixed(2)} kPa of the achievable floor for ${cwTempC.toFixed(0)}\u00b0C cooling water. Ejector holding gas blanketing to a minimum \u2014 the plant is sitting at the floor, not above it.`,
         };
       },
     };
