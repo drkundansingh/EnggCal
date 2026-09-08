@@ -335,7 +335,7 @@ export function validateDPFlowInputs({ beta, reynolds, cd, dpPa, densityKgM3 }) 
   return dataQualityScore({
     'Beta ratio in valid range (0.1-0.75)': beta === null || (beta >= 0.1 && beta <= 0.75),
     'Reynolds number turbulent (>4000)': reynolds === null || reynolds > 4000,
-    'Discharge coefficient plausible (0.5-1.0)': cd >= 0.5 && cd <= 1.0,
+    'Discharge coefficient plausible (0.5-1.0)': cd === null || (cd >= 0.5 && cd <= 1.0),
     'DP non-negative': dpPa >= 0,
     'Density positive': densityKgM3 > 0,
     'No impossible (NaN/Infinite) values': [beta, reynolds, cd, dpPa, densityKgM3].every((v) => v === null || Number.isFinite(v)),

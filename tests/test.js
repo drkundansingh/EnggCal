@@ -29,6 +29,9 @@ import * as ccon from '../js/calculators/civilConcrete.js';
 import * as cgeo from '../js/calculators/civilGeotech.js';
 import * as chyd from '../js/calculators/civilHydraulics.js';
 import * as cl from '../js/calculators/controlLoops.js';
+import * as hvac from '../js/calculators/hvac.js';
+import * as mech from '../js/calculators/mechDesign.js';
+import * as sama from '../js/calculators/samaLogic.js';
 import * as csur from '../js/calculators/civilSurveying.js';
 import * as vt from '../js/calculators/vesselsTanks.js';
 import * as pt from '../js/calculators/processThermal.js';
@@ -1942,6 +1945,159 @@ test('condenser-vacuum: appears in LOOP_IDS and has full metadata', () => {
   assert.ok(meta.name && meta.why && meta.problem && meta.solution);
   assert.ok(meta.nodes.length > 0 && meta.edges.length > 0);
   assert.ok(meta.sources.length > 0);
+});
+
+console.log('\n--- hvac.js (sensible heat load, duct sizing, refrigeration tons) ---');
+test('sensibleHeatLoadImperial: matches the standard Q=1.08*CFM*dT formula exactly', () => {
+  const r = hvac.sensibleHeatLoadImperial({ cfm: 2000, deltaTF: 20 });
+  approx(r.btuPerHr, 1.08 * 2000 * 20, 1e-9);
+  approx(r.tons, r.btuPerHr / 12000, 1e-9);
+});
+test('sensibleHeatLoadMetric: correctly converts L/s to m3/s before applying the constant', () => {
+  const r = hvac.sensibleHeatLoadMetric({ litersPerSec: 1000, deltaTC: 10 });
+  approx(r.kW, 1.2 * 1 * 10, 1e-9); // 1000 L/s = 1 m3/s
+});
+test('sensibleHeatLoadMetric and sensibleHeatLoadImperial agree on an equivalent load within rounding', () => {
+  const metric = hvac.sensibleHeatLoadMetric({ litersPerSec: 1000, deltaTC: 10 });
+  const imperial = hvac.sensibleHeatLoadImperial({ cfm: 1000 / 0.4719, deltaTF: 18 });
+  assert.ok(Math.abs(metric.kW - imperial.kW) / metric.kW < 0.01);
+});
+test('tonsToKW and kWToTons are exact inverses using the defined ton constant', () => {
+  approx(hvac.tonsToKW(5), 5 * 3.51685, 1e-9);
+  approx(hvac.kWToTons(hvac.tonsToKW(5)), 5, 1e-9);
+});
+test('ductSizeImperial: matches hand calculation for a standard duct sizing example', () => {
+  const r = hvac.ductSizeImperial({ cfm: 2000, velocityFpm: 1000 });
+  approx(r.areaFt2, 2, 1e-9);
+  approx(r.roundDiameterIn, Math.sqrt(4 * 2 / Math.PI) * 12, 1e-9);
+});
+test('ductSizeMetric: correctly converts L/s to m3/s (this path was correct from the start)', () => {
+  const r = hvac.ductSizeMetric({ litersPerSec: 1000, velocityMs: 5 });
+  approx(r.areaM2, 0.2, 1e-9);
+  approx(r.roundDiameterMm, Math.sqrt(4 * 0.2 / Math.PI) * 1000, 1e-6);
+});
+
+console.log('\n--- mechDesign.js (bolt torque, gears, belts) ---');
+test('boltTorque: matches the standard T=K*D*F relationship exactly', () => {
+  const r = mech.boltTorque({ nutFactorK: 0.2, diameterM: 0.012, clampForceN: 20000 });
+  approx(r.torqueNm, 0.2 * 0.012 * 20000, 1e-9);
+});
+test('boltClampForceFromGrade: M12 grade 8.8 proof load matches ISO 724/898-1 reference values', () => {
+  const r = mech.boltClampForceFromGrade({ size: 'M12', propertyClass: '8.8', targetPctOfProof: 100 });
+  approx(r.areaMm2, 84.3, 1e-9);
+  approx(r.proofMpa, 660, 1e-9);
+  approx(r.proofLoadN, 84.3 * 660, 1e-9);
+});
+test('boltClampForceFromGrade: rejects an unknown bolt size or property class', () => {
+  assert.throws(() => mech.boltClampForceFromGrade({ size: 'M99', propertyClass: '8.8' }));
+  assert.throws(() => mech.boltClampForceFromGrade({ size: 'M12', propertyClass: '99.9' }));
+});
+test('gearOutputSpeed: 3:1 reduction matches hand calculation', () => {
+  const r = mech.gearOutputSpeed({ inputRpm: 1800, teethDriving: 20, teethDriven: 60 });
+  approx(r.ratio, 3, 1e-9);
+  approx(r.outputRpm, 600, 1e-9);
+});
+test('gearOutputTorque: ideal torque scales exactly with ratio, actual torque reduced by mesh efficiency', () => {
+  const r = mech.gearOutputTorque({ inputTorqueNm: 50, teethDriving: 20, teethDriven: 60, meshEfficiencyPct: 95 });
+  approx(r.idealOutputTorqueNm, 150, 1e-9);
+  approx(r.actualOutputTorqueNm, 150 * 0.95, 1e-9);
+});
+test('beltPulleySpeed: matches hand calculation for a standard 2.5:1 belt reduction', () => {
+  const r = mech.beltPulleySpeed({ inputRpm: 1450, drivingDiameterMm: 100, drivenDiameterMm: 250 });
+  approx(r.outputRpm, 580, 1e-9);
+});
+
+console.log('\n--- Orifice Plate: steam-table density integration (regression lock) ---');
+test('orifice mass flow with steam-table density matches direct hand calculation', () => {
+  const state = steam.steamState(10, 180);
+  const massKgS = orf.massFlow(0.05, 0.1, 5000, state.densityKgM3, 0.6);
+  approx(massKgS * 3.6, 0.993, 0.001);
+});
+test('orifice mass flow with water density (steam table, subcooled) matches the already-verified value', () => {
+  const state = steam.steamState(20, 150);
+  approx(state.densityKgM3, 917.8705212152012, 1e-6); // same value verified earlier for this exact P/T
+});
+test('DP unit conversion: an equivalent DP in kPa and mmH2O produce identical mass flow', () => {
+  const dpKPaInPa = units.convertPressure(5, 'kPa', 'Pa');
+  const equivalentMmH2O = units.convertPressure(5, 'kPa', 'mmH2O'); // exact equivalent, not a rounded approximation
+  const dpMmH2OInPa = units.convertPressure(equivalentMmH2O, 'mmH2O', 'Pa');
+  const m1 = orf.massFlow(0.05, 0.1, dpKPaInPa, 1000, 0.6);
+  const m2 = orf.massFlow(0.05, 0.1, dpMmH2OInPa, 1000, 0.6);
+  approx(m1, m2, 1e-9);
+});
+
+console.log('\n--- DP → Flow Wizard: calibrated-range path (no geometry needed) ---');
+test('calibratedRangeFlow: matches hand calculation when design equals actual condition (no correction)', () => {
+  const r = flow.calibratedRangeFlow({ dp: 15, dpMax: 25, flowMax: 100, designDensity: 5.1436, actualDensity: 5.1436 });
+  approx(r.massFlow, 100 * Math.sqrt(15 / 25), 1e-6);
+  approx(r.densityCorrectionPct, 0, 1e-9);
+});
+test('calibratedRangeFlow: density correction reduces reported flow when actual density is lower than design', () => {
+  const uncorrected = 100 * Math.sqrt(15 / 25);
+  const r = flow.calibratedRangeFlow({ dp: 15, dpMax: 25, flowMax: 100, designDensity: 5.1436, actualDensity: 4.0456 });
+  assert.ok(r.massFlow < uncorrected, 'expected lower actual density to reduce the corrected flow below the uncorrected value');
+  approx(r.densityRatio, 4.0456 / 5.1436, 1e-9);
+});
+test('validateDPFlowInputs: treats a null discharge coefficient as not-applicable, not as a failed check (calibrated-range path has no Cd)', () => {
+  const dq = flow.validateDPFlowInputs({ beta: null, reynolds: null, cd: null, dpPa: 15000, densityKgM3: 5.1436 });
+  assert.equal(dq.score, 100);
+});
+test('validateDPFlowInputs: still correctly flags an implausible Cd for the geometry-based path (regression check)', () => {
+  const dq = flow.validateDPFlowInputs({ beta: 0.5, reynolds: 5000, cd: 1.5, dpPa: 5000, densityKgM3: 1000 });
+  assert.ok(dq.score < 100, 'expected an out-of-range Cd to still reduce the score');
+});
+
+console.log('\n--- samaLogic.js (SAMA-standard logic block simulator) ---');
+test('summer: weighted sum plus bias, matching the standard SAMA summing junction', () => {
+  approx(sama.SAMA_BLOCK_TYPES.summer.compute([10, 20], { bias: 5 }), 35, 1e-9);
+  approx(sama.SAMA_BLOCK_TYPES.summer.compute([10, 20], { bias: 0 }, [1, -1]), -10, 1e-9);
+});
+test('highSelect / lowSelect: exact max/min of the inputs', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.highSelect.compute([3, 7, 2]), 7);
+  assert.equal(sama.SAMA_BLOCK_TYPES.lowSelect.compute([3, 7, 2]), 2);
+});
+test('highLimit / lowLimit: correctly clamp only on the intended side', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.highLimit.compute([150], { limit: 100 }), 100);
+  assert.equal(sama.SAMA_BLOCK_TYPES.highLimit.compute([50], { limit: 100 }), 50);
+  assert.equal(sama.SAMA_BLOCK_TYPES.lowLimit.compute([-10], { limit: 0 }), 0);
+  assert.equal(sama.SAMA_BLOCK_TYPES.lowLimit.compute([10], { limit: 0 }), 10);
+});
+test('AND/OR/NOT: correct boolean truth tables treating >=0.5 as TRUE', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.and.compute([1, 1, 0]), 0);
+  assert.equal(sama.SAMA_BLOCK_TYPES.and.compute([1, 1, 1]), 1);
+  assert.equal(sama.SAMA_BLOCK_TYPES.or.compute([0, 0, 1]), 1);
+  assert.equal(sama.SAMA_BLOCK_TYPES.or.compute([0, 0, 0]), 0);
+  assert.equal(sama.SAMA_BLOCK_TYPES.not.compute([1]), 0);
+  assert.equal(sama.SAMA_BLOCK_TYPES.not.compute([0]), 1);
+});
+test('divide: rejects a zero divisor with a clear error rather than returning Infinity', () => {
+  assert.throws(() => sama.SAMA_BLOCK_TYPES.divide.compute([10, 0]));
+});
+test('evaluateChain: a realistic multi-block combustion-logic chain evaluates correctly end to end', () => {
+  const blocks = [
+    { id: 'fuelDemand', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 70 }] },
+    { id: 'airFF', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 65 }] },
+    { id: 'airFloor', type: 'highSelect', params: {}, inputs: [{ source: 'block', blockId: 'fuelDemand' }, { source: 'block', blockId: 'airFF' }] },
+    { id: 'trip', type: 'comparator', params: {}, inputs: [{ source: 'block', blockId: 'airFloor' }, { source: 'const', value: 100 }] },
+  ];
+  const r = sama.evaluateChain(blocks);
+  assert.equal(r.get('airFloor').value, 70);
+  assert.equal(r.get('trip').value, 0);
+});
+test('evaluateChain: rejects a forward reference to a block that has not been evaluated yet', () => {
+  const blocks = [
+    { id: 'a', type: 'gain', params: { k: 1 }, inputs: [{ source: 'block', blockId: 'b' }] },
+    { id: 'b', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 5 }] },
+  ];
+  const r = sama.evaluateChain(blocks);
+  assert.ok(r.get('a').error && r.get('a').error.includes('has not been evaluated'));
+});
+test('evaluateChain: rejects duplicate block ids', () => {
+  const blocks = [
+    { id: 'x', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 1 }] },
+    { id: 'x', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 2 }] },
+  ];
+  assert.throws(() => sama.evaluateChain(blocks));
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

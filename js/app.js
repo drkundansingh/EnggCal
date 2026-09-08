@@ -24,6 +24,9 @@ import * as rot from './calculators/rotatingEquipment.js';
 import * as hx from './calculators/heatExchanger.js';
 import * as vt from './calculators/vesselsTanks.js';
 import * as pt from './calculators/processThermal.js';
+import * as hvac from './calculators/hvac.js';
+import * as mech from './calculators/mechDesign.js';
+import * as sama from './calculators/samaLogic.js';
 import * as cst from './calculators/civilStructural.js';
 import * as ccon from './calculators/civilConcrete.js';
 import * as cgeo from './calculators/civilGeotech.js';
@@ -95,6 +98,7 @@ const NAV = [
       { id: 'thermal-plant', label: 'Thermal Plant Estimator', icon: '⚡' },
       { id: 'protection', label: 'Turbine & Boiler Protection', icon: '🛡' },
       { id: 'control-loops', label: 'Control Loops', icon: '↻' },
+      { id: 'sama-logic', label: 'SAMA Logic Simulator', icon: '⌗' },
     ]
   },
   {
@@ -153,6 +157,16 @@ const NAV = [
       { id: 'insulation-loss', label: 'Pipe Insulation Heat Loss', icon: '≋' },
       { id: 'thermal-expansion', label: 'Thermal (Linear) Expansion', icon: '↔' },
       { id: 'gas-compression', label: 'Gas Compression Work', icon: '⇑' },
+      { id: 'bolt-torque', label: 'Bolt Torque & Preload', icon: '⚙' },
+      { id: 'gear-ratio', label: 'Gear Ratio & Speed/Torque', icon: '⊙' },
+      { id: 'belt-pulley', label: 'Belt / Pulley Speed Ratio', icon: '◐' },
+    ],
+  },
+  {
+    group: 'HVAC & Refrigeration', items: [
+      { id: 'hvac-load', label: 'Sensible Heat Load', icon: '❄' },
+      { id: 'duct-sizing', label: 'Duct Sizing (Velocity Method)', icon: '▤' },
+      { id: 'refrigeration-tons', label: 'Refrigeration Tons ⇌ kW/BTU', icon: '≈' },
     ],
   },
   {
@@ -321,6 +335,13 @@ const SEO_META = {
   'insulation-loss': { title: 'Pipe & Vessel Insulation Heat Loss Calculator', description: 'Calculate steady-state heat loss through cylindrical pipe or vessel insulation from thickness, conductivity and surface conditions.' },
   'thermal-expansion': { title: 'Thermal (Linear) Expansion Calculator', description: 'Calculate linear thermal expansion of pipe or equipment from length, material coefficient, and temperature change.' },
   'gas-compression': { title: 'Gas Compression Work Calculator', description: 'Calculate ideal-gas isothermal and adiabatic compression work and power for compressor sizing estimates.' },
+  'bolt-torque': { title: 'Bolt Torque & Preload Calculator', description: 'Calculate bolt tightening torque from target clamp force and nut factor (T=K\u00d7D\u00d7F), or clamp force from ISO 898-1 bolt grade and ISO 724 stress area.' },
+  'gear-ratio': { title: 'Gear Ratio & Speed/Torque Calculator', description: 'Calculate gear ratio, output speed and output torque from tooth counts and mesh efficiency.' },
+  'belt-pulley': { title: 'Belt & Pulley Speed Ratio Calculator', description: 'Calculate driven pulley speed and belt speed from pulley diameters and driving speed.' },
+  'hvac-load': { title: 'Sensible Heat Load Calculator (HVAC)', description: 'Calculate HVAC sensible cooling or heating load from airflow and temperature difference, in imperial or metric units.' },
+  'duct-sizing': { title: 'Duct Sizing Calculator (Velocity Method)', description: 'Calculate required duct cross-sectional area and round-duct diameter from airflow and design velocity.' },
+  'refrigeration-tons': { title: 'Refrigeration Tons to kW/BTU Converter', description: 'Convert refrigeration capacity between tons, kW and BTU/hr using the standard 1 ton = 3.5168 kW definition.' },
+  'sama-logic': { title: 'SAMA Logic Diagram Simulator', description: 'Build and simulate control logic from standard SAMA function blocks — summers, high/low select, limiters, AND/OR/NOT, comparators — chained together with live output values.' },
   'civil-beam': { title: 'Beam Deflection, Bending Moment & Shear Force Calculator', description: 'Calculate beam deflection, maximum bending moment and shear force for simply-supported and cantilever beams, point load or UDL.' },
   'civil-section': { title: 'Section Properties Calculator (Moment of Inertia & Section Modulus)', description: 'Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.' },
   'civil-column': { title: 'Column Buckling Calculator (Euler)', description: 'Calculate Euler critical buckling load and slenderness ratio for a column with any standard end-support condition.' },
@@ -565,6 +586,42 @@ const PAGE_CONTENT = {
       { q: 'What happens if I also enter pipe and orifice dimensions?', a: 'The calculator runs the full geometric flow model alongside the calibrated-range result and compares the two \u2014 useful as a sanity check, but entering geometry is always optional here; the calibrated-range method works completely on its own without it.' },
     ],
   },
+  'bolt-torque': {
+    about: 'Bolt tightening torque and clamp force are related by one simple, universal formula (T = K\u00d7D\u00d7F) \u2014 but the K in that formula (the "nut factor") is not a universal constant. It genuinely depends on whether the threads are dry, lubricated, or plated, and can easily vary by 30-50% between conditions. Getting the formula right is easy; the real engineering judgment is choosing the correct K for your actual bolt and lubrication condition, which is why this calculator treats K as a direct input rather than a hidden assumption.',
+    faq: [
+      { q: 'What K value should I use if I don\u2019t know it?', a: '0.2 is the widely-used default for dry, as-received (non-lubricated, non-plated) steel fasteners. Lubricated or plated fasteners commonly run lower, around 0.12\u20130.15 \u2014 if the bolt manufacturer specifies a K factor, use theirs instead of a generic default.' },
+      { q: 'Why does the same bolt need less torque when lubricated?', a: 'Most of the tightening torque (typically 80-90%) goes into overcoming friction, not into actually stretching the bolt to create clamp force. Lubrication reduces that friction, so a lubricated bolt reaches the same clamp force at a noticeably lower torque \u2014 which is exactly why using a dry-condition torque spec on a lubricated bolt under-tightens it.' },
+      { q: 'What is "proof load" and why does the grade calculator use a percentage of it?', a: 'Proof load is the load a bolt can withstand without permanent (plastic) deformation, defined by its property class (e.g. 8.8, 10.9) in ISO 898-1. Real bolted joints are commonly tightened to 65-90% of proof load \u2014 tightening to 100% leaves no margin for the joint to be re-torqued or for minor overload before yielding.' },
+      { q: 'Are the bolt sizes and grades in this calculator standard values?', a: 'Yes \u2014 the tensile stress areas come from ISO 724 and the proof stresses from ISO 898-1, both published, tabulated standards, not estimates. A size or grade outside this table should be looked up from its own governing standard.' },
+    ],
+  },
+  'hvac-load': {
+    about: 'The sensible heat load formula (Q=1.08\u00d7CFM\u00d7\u0394T in imperial units, or the metric equivalent) is the fundamental relationship behind every HVAC cooling and heating load calculation \u2014 it\u2019s literally how much heat a given airflow carries away (or delivers) for a given temperature change. A full building load calculation (Manual J, Manual D, or equivalent) layers solar gain, occupancy, infiltration and latent (humidity) load on top of this same core relationship.',
+    faq: [
+      { q: 'What does "sensible" heat mean, as opposed to "latent"?', a: 'Sensible heat changes temperature (what a thermometer reads); latent heat changes moisture content (humidity) without necessarily changing temperature \u2014 think of the difference between cooling dry air versus removing humidity from muggy air. This calculator covers sensible load only; a full comfort cooling load also needs the latent component, which requires psychrometric (humidity) data this tool doesn\u2019t take as input.' },
+      { q: 'Where does the 1.08 constant actually come from?', a: 'It\u2019s derived directly from air\u2019s physical properties: 60 minutes/hour \u00d7 0.075 lb/ft\u00b3 (standard air density) \u00d7 0.24 BTU/(lb\u00b7\u00b0F) (specific heat of air) = 1.08. It\u2019s not an empirical fudge factor \u2014 it falls straight out of Q = mass flow \u00d7 specific heat \u00d7 \u0394T.' },
+      { q: 'Can I use this to size an air conditioner?', a: 'It gives you the sensible portion of the load, which is useful context, but sizing a real AC/chiller needs the TOTAL load (sensible + latent) plus safety margin \u2014 undersizing on sensible load alone risks an undersized system once real-world humidity load is added.' },
+      { q: 'Why do the imperial and metric results not match exactly for an equivalent case?', a: 'Both use independently-rounded standard constants (1.08 vs 1.2, drawn from slightly rounded air density/specific heat figures common in each unit system\u2019s own reference tables) \u2014 they agree to within about 1%, which is well inside the accuracy of a sensible-load estimate itself.' },
+    ],
+  },
+  'duct-sizing': {
+    about: 'Duct sizing by the velocity method is the simplest, most direct approach: pick a target air velocity appropriate for the duct\u2019s location and noise sensitivity, then size the duct\u2019s cross-section so the actual airflow achieves that velocity. It\u2019s the starting point every more detailed method (equal-friction, static regain) builds on.',
+    faq: [
+      { q: 'What velocity should I actually design for?', a: 'It depends entirely on where the duct runs. Main trunk ducts in mechanical rooms commonly run 1000\u20131500+ fpm (5\u20137.5 m/s) where noise matters less; branch ducts near occupied, noise-sensitive spaces are usually kept lower, often 600\u2013900 fpm (3\u20134.5 m/s), to avoid audible airflow noise. There is no single universal number \u2014 it\u2019s a design trade-off between duct size (cost, space) and noise/pressure drop.' },
+      { q: 'Why does a round duct diameter come out of an area calculation?', a: 'The velocity method only tells you the required cross-sectional AREA (Area = Flow \u00f7 Velocity) \u2014 converting that to a round duct diameter is just solving the circle-area formula backwards. If you need a rectangular duct instead, the required area is the same; you just choose a width and height whose product matches it.' },
+      { q: 'Does a higher velocity always mean a smaller, cheaper duct?', a: 'A smaller duct, yes \u2014 cheaper isn\u2019t guaranteed, since higher velocity also means more pressure drop (bigger fan, more energy) and more noise. Real duct design balances all three, not just minimizing duct size.' },
+      { q: 'Is this the same as a full ASHRAE duct design (equal friction or static regain method)?', a: 'No \u2014 those methods size an entire duct SYSTEM (multiple branches) to a consistent friction rate or pressure profile across the whole network. This calculator sizes one duct section for one target velocity, which is the underlying building block those fuller methods use repeatedly.' },
+    ],
+  },
+  'sama-logic': {
+    about: 'SAMA (Scientific Apparatus Makers Association) symbols are the standard notation for control and interlock logic diagrams across the power industry \u2014 the same summing junctions, high/low selects, and limiters that appear throughout real combustion control and permissive logic. This tool lets you wire your own chain of standard blocks and watch every output update live, rather than only viewing pre-built loops.',
+    faq: [
+      { q: 'What\u2019s the difference between this and the Control Loops page?', a: 'Control Loops shows complete, pre-built, time-stepped simulations of real plant control loops (drum level, combustion control, and so on) \u2014 you move a disturbance slider and watch dynamic behavior unfold over simulated seconds. This tool is for building your OWN static logic from individual SAMA blocks \u2014 summers, selects, AND/OR gates \u2014 to check how a specific piece of interlock or permissive logic behaves for a given set of inputs.' },
+      { q: 'Why can a block only reference an earlier block, not a later one?', a: 'A real SAMA diagram is read left to right \u2014 signals flow forward, never backward into an earlier summing junction on the same sheet. Enforcing that here means the chain evaluates in one deterministic pass with no risk of a circular reference, exactly matching how the diagram would actually be drawn and read.' },
+      { q: 'What happens if I remove a block that another block depends on?', a: 'The dependent block\u2019s input automatically falls back to a constant value (0) instead of being left broken \u2014 you\u2019ll see it change and can re-wire it to a different source if needed.' },
+      { q: 'Are dynamic blocks like lag, integrator, or timers included?', a: 'Not in this tool \u2014 those need genuine time-stepped simulation to mean anything, which is exactly what the Control Loops section already provides for real, complete control loops. This tool covers the static/algebraic SAMA blocks (summers, selects, limiters, AND/OR/NOT, comparators) that make up the majority of interlock and permissive logic.' },
+    ],
+  },
 };
 
 function faqJsonLd(route) {
@@ -581,6 +638,28 @@ function faqJsonLd(route) {
   };
 }
 
+/** BreadcrumbList structured data: Home > [calculator]. Helps search
+ * results show a breadcrumb trail instead of a bare URL. Kept to two
+ * levels deliberately -- this site has no separate category landing
+ * pages, so a fabricated middle "category" level would point at a URL
+ * that isn't actually a distinct page, which is the kind of inaccurate
+ * structured data Google's own guidelines advise against. Returns null
+ * for the homepage itself (no breadcrumb needed) or a route that isn't
+ * found in any nav group (e.g. the admin page). */
+function breadcrumbJsonLd(route) {
+  if (route === '') return null;
+  const group = NAV.find((g) => g.items.some((it) => it.id === route));
+  if (!group) return null;
+  const item = group.items.find((it) => it.id === route);
+  const meta = SEO_META[route];
+  const url = `${SITE_URL}/?page=${encodeURIComponent(route)}`;
+  const items = [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE_URL}/` },
+    { '@type': 'ListItem', position: 2, name: (meta && meta.title) || item.label, item: url },
+  ];
+  return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items };
+}
+
 /** Renders the About + FAQ block for a page, or an empty string if the
  * route has no authored content. Call at the end of a page function, after
  * the calc-layout has been appended. */
@@ -589,13 +668,13 @@ function renderLearnMore(route) {
   if (!content) return;
   const faqHtml = (content.faq || []).map((f) => `
     <div style="margin-top:14px;">
-      <div style="font-weight:600;color:var(--text);">${f.q}</div>
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">${f.q}</h3>
       <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">${f.a}</div>
     </div>`).join('');
   const block = h(`<div class="card" style="margin-top:16px;">
-    <div class="panel-title">About This Calculation</div>
+    <h2 class="panel-title" style="margin-top:0;">About This Calculation</h2>
     <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">${content.about}</p>
-    ${faqHtml ? `<div class="panel-title" style="margin-top:20px;">Frequently Asked Questions</div>${faqHtml}` : ''}
+    ${faqHtml ? `<h2 class="panel-title" style="margin-top:20px;">Frequently Asked Questions</h2>${faqHtml}` : ''}
   </div>`);
   app.appendChild(block);
 }
@@ -642,6 +721,9 @@ const ROUTE_TIER = {
   'thermocouple': 'scoped', 'pid': 'scoped', 'loop-uncertainty': 'scoped',
   'horizontal-tank': 'scoped', 'vertical-tank': 'scoped', 'vessel-wall': 'scoped',
   'insulation-loss': 'scoped', 'thermal-expansion': 'scoped', 'gas-compression': 'scoped',
+  'bolt-torque': 'scoped', 'gear-ratio': 'scoped', 'belt-pulley': 'scoped',
+  'hvac-load': 'scoped', 'duct-sizing': 'scoped', 'refrigeration-tons': 'verified',
+  'sama-logic': 'verified',
   'civil-beam': 'scoped', 'civil-section': 'scoped', 'civil-column': 'scoped',
   'civil-combined-stress': 'scoped', 'civil-steel-weight': 'scoped',
   'civil-concrete-volume': 'scoped', 'civil-water-cement': 'scoped',
@@ -698,6 +780,18 @@ function applySeo(route) {
     script.id = 'faqSchema';
     script.textContent = JSON.stringify(faq);
     document.head.appendChild(script);
+  }
+
+  // Breadcrumb structured data: same inject/remove-on-navigate pattern.
+  const existingBc = document.getElementById('breadcrumbSchema');
+  if (existingBc) existingBc.remove();
+  const bc = breadcrumbJsonLd(route);
+  if (bc) {
+    const bcScript = document.createElement('script');
+    bcScript.type = 'application/ld+json';
+    bcScript.id = 'breadcrumbSchema';
+    bcScript.textContent = JSON.stringify(bc);
+    document.head.appendChild(bcScript);
   }
 }
 
@@ -758,6 +852,13 @@ const ROUTES = {
   'insulation-loss': pageInsulationLoss,
   'thermal-expansion': pageThermalExpansion,
   'gas-compression': pageGasCompression,
+  'bolt-torque': pageBoltTorque,
+  'gear-ratio': pageGearRatio,
+  'belt-pulley': pageBeltPulley,
+  'hvac-load': pageHvacLoad,
+  'duct-sizing': pageDuctSizing,
+  'refrigeration-tons': pageRefrigerationTons,
+  'sama-logic': pageSamaLogic,
   'civil-beam': pageCivilBeam,
   'civil-section': pageCivilSection,
   'civil-column': pageCivilColumn,
@@ -856,7 +957,7 @@ function pageDashboard() {
   // only one list of calculators in the whole app, not two.
   for (const g of NAV) {
     if (g.group === 'Overview') continue; // just the Dashboard link to this page itself
-    app.appendChild(h(`<div class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">${g.group}</div>`));
+    app.appendChild(h(`<h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">${g.group}</h2>`));
     const grid = h('<div class="grid cols-4"></div>');
     for (const item of g.items) {
       const meta = SEO_META[item.id];
@@ -865,7 +966,7 @@ function pageDashboard() {
         <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;">
           <span class="tag free">free</span>
           <div class="card-icon">${item.icon}</div>
-          <h4>${item.label}</h4>
+          <h3>${item.label}</h3>
           <p>${desc}</p>
         </div>
       `);
@@ -1848,48 +1949,90 @@ function pageOrifice() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>Orifice Plate Calculator</h1>
     <p class="lead">Square-edged concentric orifice, simplified ISO 5167 form. Verify against full ISO 5167 for custody-transfer accuracy.</p></div>`));
   const layout = h('<div class="calc-layout"></div>');
+  const pUnits = Object.keys(units.PRESSURE_TO_PA);
   const left = h(`<div class="card">
-    <div class="panel-title">Inputs</div>
+    <div class="panel-title">Geometry (Fixed \u2014 From Datasheet/Nameplate)</div>
     <div class="field"><label>Pipe internal diameter (mm)</label><input type="number" id="pipeD" value="100"></div>
     <div class="field"><label>Orifice bore (mm)</label><input type="number" id="bore" value="50"></div>
-    <div class="field"><label>Differential pressure (kPa)</label><input type="number" id="dpv" value="5"></div>
-    <div class="field"><label>Fluid density (kg/m³)</label><input type="number" id="rho" value="1000"></div>
     <div class="field"><label>Discharge coefficient Cd</label><input type="number" id="cd" value="0.6" step="0.01"></div>
-    <div class="field"><label>Dynamic viscosity (Pa·s, for Re)</label><input type="number" id="visc" value="0.001" step="0.0001"></div>
+    <div class="field"><label>Dynamic viscosity (Pa\u00b7s, for Re)</label><input type="number" id="visc" value="0.001" step="0.0001"></div>
+
+    <div class="panel-title" style="margin-top:16px;">Live Process Readings</div>
+    <div class="input-row">
+      <div class="field" style="flex:2;"><label>Differential pressure</label><input type="number" id="dpv" value="5"></div>
+      <div class="field"><label>DP unit</label><select id="dpUnit">${pUnits.map((u) => `<option value="${u}" ${u === 'kPa' ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
+    </div>
+
+    <div class="field"><label>Density source</label><select id="densitySource">
+      <option value="manual">Manual entry</option>
+      <option value="steam">Steam / water (IAPWS-IF97, from pressure &amp; temperature)</option>
+    </select></div>
+    <div id="manualDensityField" class="field"><label>Fluid density (kg/m\u00b3)</label><input type="number" id="rho" value="1000"></div>
+    <div id="steamFields" style="display:none;">
+      <div class="input-row">
+        <div class="field" style="flex:2;"><label>Upstream pressure</label><input type="number" id="upP" value="10"></div>
+        <div class="field"><label>Unit</label><select id="pUnit">${pUnits.map((u) => `<option value="${u}" ${u === 'bar' ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
+      </div>
+      <div class="input-row">
+        <div class="field" style="flex:2;"><label>Upstream temperature</label><input type="number" id="upT" value="180"></div>
+        <div class="field"><label>Unit</label><select id="tUnit"><option value="C" selected>\u00b0C</option><option value="F">\u00b0F</option><option value="K">K</option></select></div>
+      </div>
+      <div class="hint">Works for both steam and liquid water \u2014 IAPWS-IF97 covers both phases and this reports which one you're actually in.</div>
+    </div>
+
     <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
   </div>`);
   const right = h('<div class="card"><div class="empty-state">Enter values and calculate.</div></div>');
   layout.append(left, right);
   app.appendChild(layout);
 
+  left.querySelector('#densitySource').addEventListener('change', () => {
+    const isSteam = left.querySelector('#densitySource').value === 'steam';
+    left.querySelector('#manualDensityField').style.display = isSteam ? 'none' : '';
+    left.querySelector('#steamFields').style.display = isSteam ? '' : 'none';
+  });
+
   left.querySelector('#calc').addEventListener('click', () => {
     const pipeDm = (+left.querySelector('#pipeD').value) / 1000;
     const boreM = (+left.querySelector('#bore').value) / 1000;
-    const dpPa = (+left.querySelector('#dpv').value) * 1000;
-    const rho = +left.querySelector('#rho').value;
+    const dpPa = units.convertPressure(+left.querySelector('#dpv').value, left.querySelector('#dpUnit').value, 'Pa');
     const cd = +left.querySelector('#cd').value;
     const visc = +left.querySelector('#visc').value;
+    const isSteamSource = left.querySelector('#densitySource').value === 'steam';
     try {
+      let rho, steamNote = '';
+      if (isSteamSource) {
+        const pBarA = units.convertPressure(+left.querySelector('#upP').value, left.querySelector('#pUnit').value, 'bar');
+        const tC = units.convertTemperature(+left.querySelector('#upT').value, left.querySelector('#tUnit').value, 'C');
+        const state = steam.steamState(pBarA, tC);
+        rho = state.densityKgM3;
+        steamNote = `<div class="assumptions-note" style="margin-top:12px;">Density ${fmt(rho, 4)} kg/m\u00b3 from IAPWS-IF97 at ${fmt(pBarA, 3)} bar a / ${fmt(tC, 1)} \u00b0C \u2014 phase: <b>${state.phase}</b>. ${state.note}</div>`;
+      } else {
+        rho = +left.querySelector('#rho').value;
+      }
       const qM3s = orf.volumetricFlow(boreM, pipeDm, dpPa, rho, cd);
       const massKgS = orf.massFlow(boreM, pipeDm, dpPa, rho, cd);
       const beta = orf.betaRatio(boreM, pipeDm);
       const re = orf.reynoldsNumber(massKgS, pipeDm, visc);
-      const result = { qM3s, qM3h: qM3s * 3600, massKgS, massTh: massKgS * 3.6, beta, re };
+      const result = { qM3s, qM3h: qM3s * 3600, massKgS, massTh: massKgS * 3.6, beta, re, rho };
       right.innerHTML = `
         <div class="panel-title">Result</div>
-        <div class="readout"><span class="value">${fmt(result.qM3h,2)}</span><span class="unit">m³/h</span><div class="label">Volumetric Flow</div></div>
+        <div class="readout"><span class="value">${fmt(result.massTh,3)}</span><span class="unit">t/h</span><div class="label">Mass Flow (TPH)</div></div>
         <div class="formula-box">${orf.formula()}</div>
         <div class="result-grid">
           ${resultRow('Mass flow', fmt(result.massTh,3) + ' t/h')}
-          ${resultRow('Beta ratio (β)', fmt(beta,4))}
+          ${resultRow('Volumetric flow', fmt(result.qM3h,2) + ' m\u00b3/h')}
+          ${resultRow('Density used', fmt(rho, 3) + ' kg/m\u00b3')}
+          ${resultRow('Beta ratio (\u03b2)', fmt(beta,4))}
           ${resultRow('Reynolds number', fmt(re,0) + ' ' + badgeFor(re, { normalLow: 4000 }))}
         </div>
-        <div class="btn-row">
+        ${steamNote}
+        <div class="btn-row" style="margin-top:12px;">
           <button class="btn secondary" id="saveBtn">Save to history</button>
           <button class="btn secondary" id="pdfBtn">Export PDF</button>
         </div>`;
-      const inputs = { pipeDmm: +left.querySelector('#pipeD').value, boreMm: +left.querySelector('#bore').value, dpKPa: +left.querySelector('#dpv').value, rho, cd, visc };
-      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('orifice', `Orifice — β=${fmt(beta,3)}`, inputs, result));
+      const inputs = { pipeDmm: +left.querySelector('#pipeD').value, boreMm: +left.querySelector('#bore').value, dpPa, rho, cd, visc };
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('orifice', `Orifice \u2014 ${fmt(result.massTh,2)} t/h`, inputs, result));
       right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({ calculatorName: 'Orifice Plate Calculator', inputs, result, formula: orf.formula() }));
     } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
   });
@@ -3313,11 +3456,12 @@ function pageDPFlowWizard() {
   const card = h('<div class="card" style="max-width:720px;"></div>');
   app.appendChild(card);
 
-  const STEP_LABELS = ['Fluid', 'Element', 'DP', 'P & T', 'Dimensions', 'Properties', 'Flow', 'Units', 'Compare', 'Trace'];
+  const STEP_LABELS = ['Fluid', 'Element', 'DP', 'P & T', 'Dimensions / Calibration', 'Properties', 'Flow', 'Units', 'Compare', 'Trace'];
   const wizard = {
     step: 1, fluidChoice: null, elementType: null, elementLabel: null,
     dpKPa: null, pressureKPa: null, tempC: null, pipeIdMm: null, boreMm: null, viscosityPaS: null,
-    density: null, flowResult: null, dcsFlowTh: null,
+    dpAtMaxFlowKPa: null, maxCalibratedFlowTh: null, designPressureKPa: null, designTempC: null,
+    density: null, designDensity: null, flowResult: null, dcsFlowTh: null,
   };
 
   function progressHTML() {
@@ -3370,9 +3514,9 @@ function pageDPFlowWizard() {
   }
 
   function renderStep2(body) {
-    const elements = [['Orifice', 'orifice'], ['Venturi', 'venturi'], ['Nozzle', 'nozzle'], ['Annubar', 'pitot']];
+    const elements = [['Orifice', 'orifice'], ['Venturi', 'venturi'], ['Nozzle', 'nozzle'], ['Annubar', 'pitot'], ['Calibrated Range (no geometry)', 'calibrated']];
     body.innerHTML = `
-      <p style="color:var(--text-dim);">Which primary flow element is installed?</p>
+      <p style="color:var(--text-dim);">Which primary flow element is installed? If you don't know (or don't have) the bore/pipe dimensions, choose Calibrated Range \u2014 it works from the transmitter's own calibrated span instead.</p>
       <div class="wizard-choice-grid">
         ${elements.map(([label, val]) => `<div class="wizard-choice-card ${wizard.elementType === val ? 'selected' : ''}" data-el="${val}" data-label="${label}">${label}</div>`).join('')}
       </div>
@@ -3419,11 +3563,43 @@ function pageDPFlowWizard() {
 
   function renderStep5(body) {
     const isPitot = wizard.elementType === 'pitot';
+    const isCalibrated = wizard.elementType === 'calibrated';
+    if (isCalibrated) {
+      body.innerHTML = `
+        <p style="color:var(--text-dim);">The calibrated span already has the geometry built in \u2014 the transmitter (or its DCS point) was ranged against a known flow at a known DP, at some reference (design) condition. Enter that calibration data here.</p>
+        <div class="input-row">
+          <div class="field"><label>DP at max flow (kPa)</label><input type="number" id="wizDpMax" value="${wizard.dpAtMaxFlowKPa ?? 25}" step="any"></div>
+          <div class="field"><label>Max calibrated flow (t/h)</label><input type="number" id="wizFlowMax" value="${wizard.maxCalibratedFlowTh ?? 100}" step="any"></div>
+        </div>
+        <div class="panel-title" style="margin-top:14px;">Design (Calibration) Condition</div>
+        <div class="input-row">
+          <div class="field"><label>Design pressure (kPa a)</label><input type="number" id="wizDesignP" value="${wizard.designPressureKPa ?? wizard.pressureKPa ?? 101.325}" step="any"></div>
+          <div class="field"><label>Design temperature (\u00b0C)</label><input type="number" id="wizDesignT" value="${wizard.designTempC ?? wizard.tempC ?? 20}" step="any"></div>
+        </div>
+        <div class="hint">The conditions the element was originally sized/calibrated at \u2014 from the datasheet. If you don't know these, leave them equal to the actual condition from the previous step and no density correction will be applied.</div>
+        <div class="btn-row"><button class="btn" id="wizNext">Next \u2192</button></div>
+        ${backBtn(4)}
+      `;
+      body.querySelector('#wizNext').addEventListener('click', () => {
+        const dpMax = +body.querySelector('#wizDpMax').value;
+        const flowMax = +body.querySelector('#wizFlowMax').value;
+        const designP = +body.querySelector('#wizDesignP').value;
+        const designT = +body.querySelector('#wizDesignT').value;
+        if (!(dpMax > 0)) { toast('Enter a valid DP at max flow > 0'); return; }
+        if (!(flowMax > 0)) { toast('Enter a valid max calibrated flow > 0'); return; }
+        if (!(designP > 0)) { toast('Enter a valid design pressure > 0'); return; }
+        wizard.dpAtMaxFlowKPa = dpMax; wizard.maxCalibratedFlowTh = flowMax;
+        wizard.designPressureKPa = designP; wizard.designTempC = designT;
+        goTo(6);
+      });
+      wireBack(body, 4);
+      return;
+    }
     body.innerHTML = `
       <div class="field"><label>Pipe internal diameter (mm)</label><input type="number" id="wizPipe" value="${wizard.pipeIdMm ?? 200}" step="any"></div>
       ${isPitot ? '<p style="color:var(--text-faint);font-size:.8rem;">Annubar/averaging pitot uses the full pipe bore — no separate throat diameter needed.</p>' :
         `<div class="field"><label>${wizard.elementType === 'orifice' ? 'Orifice bore' : 'Throat'} diameter (mm)</label><input type="number" id="wizBore" value="${wizard.boreMm ?? 100}" step="any"></div>`}
-      <div class="field"><label>Dynamic viscosity (Pa·s, optional — for Reynolds number)</label><input type="number" id="wizVisc" value="${wizard.viscosityPaS ?? ''}" placeholder="optional" step="any"></div>
+      <div class="field"><label>Dynamic viscosity (Pa\u00b7s, optional — for Reynolds number)</label><input type="number" id="wizVisc" value="${wizard.viscosityPaS ?? ''}" placeholder="optional" step="any"></div>
       <div class="btn-row"><button class="btn" id="wizNext">Next →</button></div>
       ${backBtn(4)}
     `;
@@ -3441,23 +3617,41 @@ function pageDPFlowWizard() {
   }
 
   function renderStep6(body) {
+    const isCalibrated = wizard.elementType === 'calibrated';
     body.innerHTML = `
-      <p style="color:var(--text-dim);">Calculating fluid density from your fluid choice, pressure, and temperature.</p>
+      <p style="color:var(--text-dim);">${isCalibrated
+        ? 'Calculating fluid density at both the actual (current) condition and the design (calibration) condition — the ratio between them is what corrects the calibrated-range reading.'
+        : 'Calculating fluid density from your fluid choice, pressure, and temperature.'}</p>
       <div class="btn-row"><button class="btn" id="wizCalcProps">Calculate fluid properties</button></div>
       <div id="wizPropsResult" style="margin-top:16px;"></div>
       ${backBtn(5)}
     `;
     body.querySelector('#wizCalcProps').addEventListener('click', () => {
-      const pPa = wizard.pressureKPa * 1000;
       try {
-        let density, note;
-        if (wizard.fluidChoice === 'Water') { density = flow.approxWaterDensity(wizard.tempC); note = 'Standard reference-table density for liquid water (0-300°C), not pressure-corrected — override if you have a precise value.'; }
-        else if (wizard.fluidChoice === 'Steam') { density = flow.steamDensityApprox(pPa, wizard.tempC); note = 'Ideal-gas approximation — steam deviates from ideal-gas behavior at high pressure; use for planning estimates.'; }
-        else { density = flow.airDensity(pPa, wizard.tempC); note = wizard.fluidChoice === 'Gas' ? 'Generic gas approximated with air\'s properties (ideal gas law) — override if your gas differs significantly (e.g. natural gas, CO2).' : 'Ideal gas law — accurate for combustion air at typical duct conditions.'; }
-        wizard.density = density;
+        function densityAt(pKPa, tC) {
+          if (wizard.fluidChoice === 'Water' || wizard.fluidChoice === 'Steam') {
+            const state = steam.steamState(pKPa / 100, tC); // kPa -> bar a
+            return { density: state.densityKgM3, note: `IAPWS-IF97 real steam table — phase: ${state.phase}. ${state.note}` };
+          }
+          const density = flow.airDensity(pKPa * 1000, tC);
+          return { density, note: wizard.fluidChoice === 'Gas' ? 'Generic gas approximated with air\'s properties (ideal gas law) — override if your gas differs significantly (e.g. natural gas, CO2).' : 'Ideal gas law — accurate for combustion air at typical duct conditions.' };
+        }
+        const actual = densityAt(wizard.pressureKPa, wizard.tempC);
+        wizard.density = actual.density;
+        let extraHTML = '';
+        if (isCalibrated) {
+          const design = densityAt(wizard.designPressureKPa, wizard.designTempC);
+          wizard.designDensity = design.density;
+          extraHTML = `
+            <div class="result-grid" style="margin-top:10px;">
+              ${resultRow('Design (calibration) density', fmt(design.density, 4) + ' kg/m³')}
+              ${resultRow('Actual (current) density', fmt(actual.density, 4) + ' kg/m³')}
+            </div>`;
+        }
         body.querySelector('#wizPropsResult').innerHTML = `
-          <div class="readout"><span class="value">${fmt(density,4)}</span><span class="unit">kg/m³</span><div class="label">Calculated Density</div></div>
-          <p style="color:var(--text-faint);font-size:.78rem;">${note}</p>
+          <div class="readout"><span class="value">${fmt(actual.density,4)}</span><span class="unit">kg/m³</span><div class="label">${isCalibrated ? 'Actual Density' : 'Calculated Density'}</div></div>
+          ${extraHTML}
+          <p style="color:var(--text-faint);font-size:.78rem;margin-top:10px;">${actual.note}</p>
           <div class="btn-row"><button class="btn" id="wizToFlow">Next → Calculate Flow</button></div>
         `;
         body.querySelector('#wizToFlow').addEventListener('click', () => goTo(7));
@@ -3467,8 +3661,9 @@ function pageDPFlowWizard() {
   }
 
   function renderStep7(body) {
+    const isCalibrated = wizard.elementType === 'calibrated';
     body.innerHTML = `
-      <p style="color:var(--text-dim);">Applying the ${wizard.elementLabel} flow equation with the calculated density.</p>
+      <p style="color:var(--text-dim);">${isCalibrated ? 'Applying the calibrated-range square-root relationship, density-corrected between design and actual conditions.' : `Applying the ${wizard.elementLabel} flow equation with the calculated density.`}</p>
       <div class="btn-row"><button class="btn" id="wizCalcFlow">Calculate flow</button></div>
       <div id="wizFlowResult" style="margin-top:16px;"></div>
       ${backBtn(6)}
@@ -3476,22 +3671,52 @@ function pageDPFlowWizard() {
     body.querySelector('#wizCalcFlow').addEventListener('click', () => {
       const fluidClass = wizard.fluidChoice === 'Water' ? 'liquid' : wizard.fluidChoice === 'Steam' ? 'steam' : 'gas';
       try {
-        const r = flow.calculateDPFlow({
-          elementType: wizard.elementType, fluidClass,
-          dpPa: wizard.dpKPa * 1000, upstreamPressurePa: wizard.pressureKPa * 1000, tempC: wizard.tempC,
-          pipeIdM: wizard.pipeIdMm / 1000, boreM: wizard.boreMm / 1000,
-          densityKgM3: wizard.density, viscosityPaS: wizard.viscosityPaS || undefined,
-        });
-        wizard.flowResult = r;
-        body.querySelector('#wizFlowResult').innerHTML = `
-          <div class="readout"><span class="value">${fmt(r.massFlowTh,3)}</span><span class="unit">t/h</span><div class="label">Mass Flow — CALCULATED</div></div>
-          <div class="result-grid">
+        let r, extraResultHTML;
+        if (isCalibrated) {
+          const c = flow.calibratedRangeFlow({
+            dp: wizard.dpKPa, dpMax: wizard.dpAtMaxFlowKPa, flowMax: wizard.maxCalibratedFlowTh,
+            designDensity: wizard.designDensity, actualDensity: wizard.density,
+          });
+          const massFlowTh = c.massFlow;
+          const massFlowKgS = massFlowTh * 1000 / 3600;
+          const volumetricFlowM3h = (massFlowTh * 1000) / wizard.density;
+          r = {
+            elementType: 'calibrated', beta: null, cd: null, expansionFactor: null, velocityMs: null,
+            reynolds: null, density: wizard.density, massFlowKgS, volumetricFlowM3s: volumetricFlowM3h / 3600,
+            massFlowTh, volumetricFlowM3h,
+            trace: [
+              { step: 'DP', value: wizard.dpKPa * 1000, unit: 'Pa' },
+              { step: 'DP at max flow', value: wizard.dpAtMaxFlowKPa * 1000, unit: 'Pa' },
+              { step: 'DP ratio', value: c.dpPct / 100, unit: '-' },
+              { step: 'Uncorrected flow (\u221a(DP ratio) \u00d7 max flow)', value: c.uncorrectedFlow, unit: 't/h' },
+              { step: 'Design density', value: wizard.designDensity, unit: 'kg/m\u00b3' },
+              { step: 'Actual density', value: wizard.density, unit: 'kg/m\u00b3' },
+              { step: 'Density correction', value: c.densityCorrectionPct / 100, unit: '(fractional)' },
+              { step: 'Mass flow', value: massFlowKgS, unit: 'kg/s' },
+            ],
+          };
+          extraResultHTML = `
+            ${resultRow('Reading vs. calibrated span', fmt(c.flowPct, 1) + ' %')}
+            ${resultRow('Density correction applied', (c.densityCorrectionPct >= 0 ? '+' : '') + fmt(c.densityCorrectionPct, 2) + ' %')}
+            ${c.belowCutoff ? `<div class="assumptions-note" style="margin-top:10px;">${c.note}</div>` : ''}`;
+        } else {
+          r = flow.calculateDPFlow({
+            elementType: wizard.elementType, fluidClass,
+            dpPa: wizard.dpKPa * 1000, upstreamPressurePa: wizard.pressureKPa * 1000, tempC: wizard.tempC,
+            pipeIdM: wizard.pipeIdMm / 1000, boreM: wizard.boreMm / 1000,
+            densityKgM3: wizard.density, viscosityPaS: wizard.viscosityPaS || undefined,
+          });
+          extraResultHTML = `
             ${resultRow('Beta ratio', r.beta !== null ? fmt(r.beta,4) : '— (Annubar: full bore)')}
             ${resultRow('Discharge coefficient', fmt(r.cd,4))}
             ${resultRow('Expansion factor', fmt(r.expansionFactor,4))}
             ${resultRow('Velocity', fmt(r.velocityMs,3) + ' m/s')}
-            ${resultRow('Reynolds number', r.reynolds !== null ? fmt(r.reynolds,0) : '— (no viscosity entered)')}
-          </div>
+            ${resultRow('Reynolds number', r.reynolds !== null ? fmt(r.reynolds,0) : '— (no viscosity entered)')}`;
+        }
+        wizard.flowResult = r;
+        body.querySelector('#wizFlowResult').innerHTML = `
+          <div class="readout"><span class="value">${fmt(r.massFlowTh,3)}</span><span class="unit">t/h</span><div class="label">Mass Flow — CALCULATED</div></div>
+          <div class="result-grid">${extraResultHTML}</div>
           <div class="btn-row"><button class="btn" id="wizToUnits">Next → Unit Conversions</button></div>
         `;
         body.querySelector('#wizToUnits').addEventListener('click', () => goTo(8));
@@ -3574,7 +3799,7 @@ function pageDPFlowWizard() {
       { massFlowTh: r.massFlowTh, volumetricFlowM3h: r.volumetricFlowM3h, dataQualityScore: dq.score }
     ));
     body.querySelector('#wizRestart').addEventListener('click', () => {
-      Object.assign(wizard, { step: 1, fluidChoice: null, elementType: null, elementLabel: null, dpKPa: null, pressureKPa: null, tempC: null, pipeIdMm: null, boreMm: null, viscosityPaS: null, density: null, flowResult: null, dcsFlowTh: null });
+      Object.assign(wizard, { step: 1, fluidChoice: null, elementType: null, elementLabel: null, dpKPa: null, pressureKPa: null, tempC: null, pipeIdMm: null, boreMm: null, viscosityPaS: null, dpAtMaxFlowKPa: null, maxCalibratedFlowTh: null, designPressureKPa: null, designTempC: null, density: null, designDensity: null, flowResult: null, dcsFlowTh: null });
       render();
     });
     wireBack(body, 9);
@@ -5428,9 +5653,496 @@ function pageGasCompression() {
   });
 }
 
+// ---------- Bolt Torque & Preload ----------
+function pageBoltTorque() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Bolt Torque &amp; Preload</h1>
+    <p class="lead">Tightening torque from target clamp force and nut factor (T = K\u00d7D\u00d7F) \u2014 the standard fastener relationship. The nut factor K genuinely varies with lubrication and thread condition, so it's a direct input here, not a hidden assumption.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Direct Torque Calculation</div>
+    <div class="input-row">
+      <div class="field"><label>Nut factor K</label><input type="number" id="k" step="any" value="0.2"></div>
+      <div class="field"><label>Bolt diameter (mm)</label><input type="number" id="dia" step="any" value="12"></div>
+    </div>
+    <div class="field"><label>Target clamp force (N)</label><input type="number" id="force" step="any" value="20000"></div>
+    <div class="hint">K \u2248 0.2 for dry, as-received steel; \u2248 0.12\u20130.15 well-lubricated/plated \u2014 use the bolt's own datasheet if you have one.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate Torque</button></div>
+
+    <div class="panel-title" style="margin-top:20px;">Or: Estimate Clamp Force from Bolt Grade</div>
+    <div class="input-row">
+      <div class="field"><label>Size</label><select id="size">${Object.keys(mech.ISO_BOLT_STRESS_AREA_MM2).map((s) => `<option value="${s}">${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Property class</label><select id="grade">${Object.keys(mech.ISO_PROPERTY_CLASS_PROOF_MPA).map((g) => `<option value="${g}">${g}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Target % of proof load</label><input type="number" id="pct" step="any" value="75"></div>
+    <div class="btn-row"><button class="btn secondary" id="calcGrade">Estimate Clamp Force</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter values and calculate.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = mech.boltTorque({
+        nutFactorK: +left.querySelector('#k').value,
+        diameterM: (+left.querySelector('#dia').value) / 1000,
+        clampForceN: +left.querySelector('#force').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.torqueNm, 1)}</span><span class="unit">N\u00b7m tightening torque</span></div>
+        <div class="formula-box" style="margin-top:12px;">T = K \u00d7 D \u00d7 F</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('bolt-torque',
+        `Bolt torque \u2014 ${fmt(r.torqueNm, 1)} N\u00b7m`, {}, { torqueNm: r.torqueNm }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  left.querySelector('#calcGrade').addEventListener('click', () => {
+    try {
+      const r = mech.boltClampForceFromGrade({
+        size: left.querySelector('#size').value,
+        propertyClass: left.querySelector('#grade').value,
+        targetPctOfProof: +left.querySelector('#pct').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.clampForceN, 0)}</span><span class="unit">N target clamp force</span></div>
+        <div class="result-grid">
+          ${resultRow('Tensile stress area (ISO 724)', fmt(r.areaMm2, 1) + ' mm\u00b2')}
+          ${resultRow('Proof stress (ISO 898-1)', fmt(r.proofMpa, 0) + ' MPa')}
+          ${resultRow('Full proof load (100%)', fmt(r.proofLoadN, 0) + ' N')}
+          ${resultRow('Target clamp force', fmt(r.clampForceN, 0) + ' N')}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">Paste this clamp force into the torque calculation above (with your bolt's actual K factor) to get a full torque spec.</div>`;
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Gear Ratio & Speed/Torque ----------
+function pageGearRatio() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Gear Ratio &amp; Speed/Torque</h1>
+    <p class="lead">Output speed and torque from tooth counts \u2014 the ideal kinematic relationship (N\u2081/N\u2082 = D\u2082/D\u2081 = T\u2082/T\u2081), plus mesh efficiency if you want actual delivered torque rather than the theoretical ideal.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Gears &amp; Input</div>
+    <div class="input-row">
+      <div class="field"><label>Driving gear teeth</label><input type="number" id="t1" step="any" value="20"></div>
+      <div class="field"><label>Driven gear teeth</label><input type="number" id="t2" step="any" value="60"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Input speed (rpm)</label><input type="number" id="rpm" step="any" value="1800"></div>
+      <div class="field"><label>Input torque (N\u00b7m)</label><input type="number" id="torque" step="any" value="50"></div>
+    </div>
+    <div class="field"><label>Mesh efficiency (%)</label><input type="number" id="eff" step="any" value="95"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter tooth counts, input speed and torque.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const teethDriving = +left.querySelector('#t1').value, teethDriven = +left.querySelector('#t2').value;
+      const speed = mech.gearOutputSpeed({ inputRpm: +left.querySelector('#rpm').value, teethDriving, teethDriven });
+      const torque = mech.gearOutputTorque({
+        inputTorqueNm: +left.querySelector('#torque').value, teethDriving, teethDriven,
+        meshEfficiencyPct: +left.querySelector('#eff').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(speed.outputRpm, 1)}</span><span class="unit">rpm output speed</span></div>
+        <div class="result-grid">
+          ${resultRow('Gear ratio', fmt(speed.ratio, 3) + ' : 1')}
+          ${resultRow('Output speed', fmt(speed.outputRpm, 2) + ' rpm')}
+          ${resultRow('Ideal output torque', fmt(torque.idealOutputTorqueNm, 2) + ' N\u00b7m')}
+          ${resultRow('Actual output torque', fmt(torque.actualOutputTorqueNm, 2) + ' N\u00b7m (with mesh losses)')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">N\u2081/N\u2082 = D\u2082/D\u2081 = T\u2082/T\u2081</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('gear-ratio',
+        `Gear ratio ${fmt(speed.ratio, 2)}:1 \u2014 ${fmt(speed.outputRpm, 0)} rpm`, {}, { ratio: speed.ratio, outputRpm: speed.outputRpm }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Belt / Pulley Speed Ratio ----------
+function pageBeltPulley() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Belt &amp; Pulley Speed Ratio</h1>
+    <p class="lead">Driven pulley speed and belt surface speed from pulley diameters \u2014 exact kinematic relationship (N\u2081D\u2081 = N\u2082D\u2082), assuming no belt slip.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Pulleys &amp; Speed</div>
+    <div class="input-row">
+      <div class="field"><label>Driving pulley diameter (mm)</label><input type="number" id="d1" step="any" value="100"></div>
+      <div class="field"><label>Driven pulley diameter (mm)</label><input type="number" id="d2" step="any" value="250"></div>
+    </div>
+    <div class="field"><label>Driving (input) speed (rpm)</label><input type="number" id="rpm" step="any" value="1450"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter pulley diameters and input speed.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const r = mech.beltPulleySpeed({
+        inputRpm: +left.querySelector('#rpm').value,
+        drivingDiameterMm: +left.querySelector('#d1').value,
+        drivenDiameterMm: +left.querySelector('#d2').value,
+      });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.outputRpm, 1)}</span><span class="unit">rpm driven pulley speed</span></div>
+        <div class="result-grid">
+          ${resultRow('Speed ratio', fmt(r.ratio, 3) + ' : 1')}
+          ${resultRow('Driven pulley speed', fmt(r.outputRpm, 2) + ' rpm')}
+          ${resultRow('Belt surface speed', fmt(r.beltSpeedMPerMin, 1) + ' m/min')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">N\u2081 \u00d7 D\u2081 = N\u2082 \u00d7 D\u2082</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('belt-pulley',
+        `Belt drive \u2014 ${fmt(r.outputRpm, 0)} rpm`, {}, { outputRpm: r.outputRpm }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- HVAC Sensible Heat Load ----------
+function pageHvacLoad() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">HVAC &amp; Refrigeration</div><h1>Sensible Heat Load</h1>
+    <p class="lead">Standard ASHRAE air-side sensible heat formula. Sensible (temperature) load only \u2014 this does not include latent (moisture/humidity) load, solar gain, occupancy or infiltration, which a full Manual J/Manual D style load calculation also accounts for.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Units</div>
+    <div class="field"><label>Unit system</label><select id="units"><option value="imperial">Imperial (CFM, \u00b0F)</option><option value="metric">Metric (L/s, \u00b0C)</option></select></div>
+    <div id="imperialFields" class="input-row">
+      <div class="field"><label>Airflow (CFM)</label><input type="number" id="cfm" step="any" value="2000"></div>
+      <div class="field"><label>Temperature difference (\u00b0F)</label><input type="number" id="dtF" step="any" value="20"></div>
+    </div>
+    <div id="metricFields" class="input-row" style="display:none;">
+      <div class="field"><label>Airflow (L/s)</label><input type="number" id="ls" step="any" value="1000"></div>
+      <div class="field"><label>Temperature difference (\u00b0C)</label><input type="number" id="dtC" step="any" value="10"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter airflow and temperature difference.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#units').addEventListener('change', () => {
+    const isMetric = left.querySelector('#units').value === 'metric';
+    left.querySelector('#imperialFields').style.display = isMetric ? 'none' : '';
+    left.querySelector('#metricFields').style.display = isMetric ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const isMetric = left.querySelector('#units').value === 'metric';
+      const r = isMetric
+        ? hvac.sensibleHeatLoadMetric({ litersPerSec: +left.querySelector('#ls').value, deltaTC: +left.querySelector('#dtC').value })
+        : hvac.sensibleHeatLoadImperial({ cfm: +left.querySelector('#cfm').value, deltaTF: +left.querySelector('#dtF').value });
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(r.kW, 2)}</span><span class="unit">kW sensible load</span></div>
+        <div class="result-grid">
+          ${resultRow('Load', fmt(r.kW, 3) + ' kW')}
+          ${resultRow('Load', fmt(r.btuPerHr, 0) + ' BTU/hr')}
+          ${resultRow('Load', fmt(r.tons, 3) + ' tons of refrigeration')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">${isMetric ? 'Q(kW) = 1.2 \u00d7 (L/s) \u00d7 \u0394T(\u00b0C)' : 'Q(BTU/hr) = 1.08 \u00d7 CFM \u00d7 \u0394T(\u00b0F)'}</div>
+        <div class="assumptions-note" style="margin-top:12px;">Sensible heat only \u2014 does not include latent (humidity) load, solar gain, occupancy or infiltration.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('hvac-load',
+        `Sensible load \u2014 ${fmt(r.kW, 2)} kW`, {}, { kW: r.kW }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Duct Sizing ----------
+function pageDuctSizing() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">HVAC &amp; Refrigeration</div><h1>Duct Sizing (Velocity Method)</h1>
+    <p class="lead">Required duct area and round-duct diameter from airflow and a target design velocity. Target velocity is a design choice driven by noise and pressure-drop limits, not a fixed law \u2014 typical guidance is roughly 700\u20131200 fpm (3.5\u20136 m/s) for main trunk ducts and lower for branches near occupied, noise-sensitive spaces.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Units &amp; Flow</div>
+    <div class="field"><label>Unit system</label><select id="units"><option value="imperial">Imperial (CFM, fpm)</option><option value="metric">Metric (L/s, m/s)</option></select></div>
+    <div id="imperialFields" class="input-row">
+      <div class="field"><label>Airflow (CFM)</label><input type="number" id="cfm" step="any" value="2000"></div>
+      <div class="field"><label>Design velocity (fpm)</label><input type="number" id="velFpm" step="any" value="1000"></div>
+    </div>
+    <div id="metricFields" class="input-row" style="display:none;">
+      <div class="field"><label>Airflow (L/s)</label><input type="number" id="ls" step="any" value="1000"></div>
+      <div class="field"><label>Design velocity (m/s)</label><input type="number" id="velMs" step="any" value="5"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter airflow and target velocity.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  left.querySelector('#units').addEventListener('change', () => {
+    const isMetric = left.querySelector('#units').value === 'metric';
+    left.querySelector('#imperialFields').style.display = isMetric ? 'none' : '';
+    left.querySelector('#metricFields').style.display = isMetric ? '' : 'none';
+  });
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const isMetric = left.querySelector('#units').value === 'metric';
+      const r = isMetric
+        ? hvac.ductSizeMetric({ litersPerSec: +left.querySelector('#ls').value, velocityMs: +left.querySelector('#velMs').value })
+        : hvac.ductSizeImperial({ cfm: +left.querySelector('#cfm').value, velocityFpm: +left.querySelector('#velFpm').value });
+      const dia = isMetric ? r.roundDiameterMm : r.roundDiameterIn;
+      const diaUnit = isMetric ? 'mm' : 'in';
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(dia, 1)}</span><span class="unit">${diaUnit} round-duct diameter</span></div>
+        <div class="result-grid">
+          ${resultRow('Required area', isMetric ? fmt(r.areaM2, 4) + ' m\u00b2' : fmt(r.areaFt2, 3) + ' ft\u00b2')}
+          ${resultRow('Round duct diameter', fmt(dia, 1) + ' ' + diaUnit)}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Area = Flow / Velocity</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('duct-sizing',
+        `Duct \u2014 ${fmt(dia, 1)} ${diaUnit} dia`, {}, { diameter: dia }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Refrigeration Tons Converter ----------
+function pageRefrigerationTons() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">HVAC &amp; Refrigeration</div><h1>Refrigeration Tons \u21cc kW / BTU</h1>
+    <p class="lead">Convert refrigeration capacity between tons, kW and BTU/hr using the standard, exact definition: 1 ton of refrigeration = 12,000 BTU/hr = 3.5168 kW.</p></div>`));
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Convert</div>
+    <div class="input-row">
+      <div class="field"><label>Refrigeration tons</label><input type="number" id="tons" step="any" value="5"></div>
+      <div class="field"><label>&nbsp;</label><button class="btn" id="calcFromTons" style="width:100%;">Convert from Tons</button></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Capacity (kW)</label><input type="number" id="kw" step="any" value="17.58"></div>
+      <div class="field"><label>&nbsp;</label><button class="btn secondary" id="calcFromKw" style="width:100%;">Convert from kW</button></div>
+    </div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter a value and convert.</div></div>');
+  layout.append(left, right); app.appendChild(layout);
+
+  function showResult(tons, kW) {
+    const btuPerHr = tons * 12000;
+    right.innerHTML = `
+      <div class="readout"><span class="value">${fmt(kW, 3)}</span><span class="unit">kW</span></div>
+      <div class="result-grid">
+        ${resultRow('Tons of refrigeration', fmt(tons, 4))}
+        ${resultRow('kW', fmt(kW, 3))}
+        ${resultRow('BTU/hr', fmt(btuPerHr, 0))}
+      </div>
+      <div class="formula-box" style="margin-top:12px;">1 ton = 12,000 BTU/hr = 3.5168 kW</div>`;
+  }
+
+  left.querySelector('#calcFromTons').addEventListener('click', () => {
+    try {
+      const tons = +left.querySelector('#tons').value;
+      showResult(tons, hvac.tonsToKW(tons));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+  left.querySelector('#calcFromKw').addEventListener('click', () => {
+    try {
+      const kW = +left.querySelector('#kw').value;
+      showResult(hvac.kWToTons(kW), kW);
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- SAMA Logic Diagram Simulator ----------
+function pageSamaLogic() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>SAMA Logic Diagram Simulator</h1>
+    <p class="lead">Build control logic from standard SAMA function blocks — summers, high/low select, limiters, AND/OR/NOT, comparators — and see every block's output update live as you change inputs. Covers the static/algebraic blocks used in interlock and permissive logic; for full time-stepped dynamic loops (lag, integrator), see Control Loops.</p></div>`));
+
+  let blocks = [];
+  let counter = 0;
+
+  const addRow = h(`<div class="card">
+    <div class="panel-title">Add a Block</div>
+    <div class="input-row">
+      <div class="field" style="flex:2;"><label>Block type</label>
+        <select id="newBlockType">
+          <optgroup label="Analog">
+            ${Object.entries(sama.SAMA_BLOCK_TYPES).filter(([, d]) => d.category === 'analog').map(([id, d]) => `<option value="${id}">${d.label}</option>`).join('')}
+          </optgroup>
+          <optgroup label="Logic">
+            ${Object.entries(sama.SAMA_BLOCK_TYPES).filter(([, d]) => d.category === 'logic').map(([id, d]) => `<option value="${id}">${d.label}</option>`).join('')}
+          </optgroup>
+        </select>
+      </div>
+      <div class="field"><label>&nbsp;</label><button class="btn" id="addBlockBtn" style="width:100%;">+ Add Block</button></div>
+    </div>
+    <div id="blockTypeDesc" style="color:var(--text-faint);font-size:.78rem;"></div>
+  </div>`);
+  app.appendChild(addRow);
+
+  const listWrap = h('<div id="samaBlockList" style="margin-top:16px;"></div>');
+  app.appendChild(listWrap);
+  const diagramWrap = h('<div class="card" style="margin-top:16px;"><div class="panel-title">Diagram</div><div id="samaDiagram" style="overflow-x:auto;"></div></div>');
+  app.appendChild(diagramWrap);
+
+  function updateDesc() {
+    const type = addRow.querySelector('#newBlockType').value;
+    addRow.querySelector('#blockTypeDesc').textContent = sama.SAMA_BLOCK_TYPES[type].description;
+  }
+  addRow.querySelector('#newBlockType').addEventListener('change', updateDesc);
+  updateDesc();
+
+  addRow.querySelector('#addBlockBtn').addEventListener('click', () => {
+    const type = addRow.querySelector('#newBlockType').value;
+    const def = sama.SAMA_BLOCK_TYPES[type];
+    counter += 1;
+    const id = 'b' + counter;
+    const params = {};
+    def.params.forEach((p) => { params[p.id] = p.default; });
+    const inputs = Array.from({ length: def.inputs.min }, () => ({ source: 'const', value: 0 }));
+    blocks.push({ id, type, params, inputs });
+    renderAll();
+  });
+
+  function boxShapeStyle(category) {
+    return category === 'logic'
+      ? 'border-radius:4px;border-style:solid;'
+      : 'border-radius:50%/60%;border-style:solid;'; // rounded/oval hint at the SAMA analog-function circle
+  }
+
+  function renderAll() {
+    // ---- Recompute the whole chain ----
+    let results;
+    try { results = sama.evaluateChain(blocks); } catch (e) { results = new Map(); toast(e.message); }
+
+    // ---- Block list ----
+    listWrap.innerHTML = '';
+    blocks.forEach((block, idx) => {
+      const def = sama.SAMA_BLOCK_TYPES[block.type];
+      const r = results.get(block.id) || { value: null, error: 'not evaluated' };
+      const priorBlocks = blocks.slice(0, idx);
+      const card = h(`<div class="card" style="margin-bottom:12px;border-color:${r.error ? 'var(--red)' : 'var(--line)'};">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--text-faint);">#${idx + 1} \u00b7 ${block.id}</div>
+            <div style="font-weight:600;font-size:1.05rem;">${def.label}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="readout" style="margin:0;"><span class="value" style="font-size:1.6rem;color:${r.error ? 'var(--red)' : 'var(--cyan)'};">${r.error ? 'ERR' : fmt(r.value, 4)}</span></div>
+            <button class="btn secondary" data-remove="${block.id}" style="margin-top:6px;padding:4px 10px;font-size:.75rem;">Remove</button>
+          </div>
+        </div>
+        ${r.error ? `<div class="assumptions-note" style="margin-top:8px;">${r.error}</div>` : ''}
+        <div style="margin-top:10px;">
+          ${block.inputs.map((inp, i) => `
+            <div class="input-row" data-input-idx="${i}" style="align-items:flex-end;">
+              <div class="field"><label>Input ${i + 1} source</label>
+                <select data-input-source="${i}">
+                  <option value="const" ${inp.source === 'const' ? 'selected' : ''}>Constant value</option>
+                  ${priorBlocks.map((pb) => `<option value="${pb.id}" ${inp.source === 'block' && inp.blockId === pb.id ? 'selected' : ''}>Output of ${pb.id} (${sama.SAMA_BLOCK_TYPES[pb.type].label})</option>`).join('')}
+                </select>
+              </div>
+              ${inp.source === 'const' ? `<div class="field"><label>Value</label><input type="number" step="any" data-input-value="${i}" value="${inp.value}"></div>` : ''}
+              ${def.inputs.min !== def.inputs.max && block.inputs.length > def.inputs.min ? `<div class="field" style="flex:0;"><button class="btn secondary" data-remove-input="${i}" style="padding:6px 10px;">\u2212</button></div>` : ''}
+            </div>`).join('')}
+          ${def.inputs.min !== def.inputs.max && block.inputs.length < def.inputs.max ? `<button class="btn secondary" data-add-input style="font-size:.78rem;">+ Add input</button>` : ''}
+        </div>
+        ${def.params.length ? `<div class="input-row" style="margin-top:8px;">
+          ${def.params.map((p) => `<div class="field"><label>${p.label}</label><input type="number" step="any" data-param="${p.id}" value="${block.params[p.id]}"></div>`).join('')}
+        </div>` : ''}
+      </div>`);
+      listWrap.appendChild(card);
+
+      card.querySelectorAll('[data-input-source]').forEach((sel) => sel.addEventListener('change', () => {
+        const i = +sel.dataset.inputSource;
+        const val = sel.value;
+        block.inputs[i] = val === 'const' ? { source: 'const', value: 0 } : { source: 'block', blockId: val };
+        renderAll();
+      }));
+      card.querySelectorAll('[data-input-value]').forEach((inp) => inp.addEventListener('input', () => {
+        const i = +inp.dataset.inputValue;
+        block.inputs[i].value = +inp.value;
+        renderAll();
+      }));
+      card.querySelectorAll('[data-param]').forEach((inp) => inp.addEventListener('input', () => {
+        block.params[inp.dataset.param] = +inp.value;
+        renderAll();
+      }));
+      const addInputBtn = card.querySelector('[data-add-input]');
+      if (addInputBtn) addInputBtn.addEventListener('click', () => { block.inputs.push({ source: 'const', value: 0 }); renderAll(); });
+      card.querySelectorAll('[data-remove-input]').forEach((btn) => btn.addEventListener('click', () => {
+        block.inputs.splice(+btn.dataset.removeInput, 1); renderAll();
+      }));
+      card.querySelector(`[data-remove="${block.id}"]`).addEventListener('click', () => {
+        // Removing a block that something downstream references would leave
+        // a dangling reference -- fall back that input to a constant instead
+        // of leaving the chain broken.
+        blocks.forEach((b) => b.inputs.forEach((inp) => { if (inp.source === 'block' && inp.blockId === block.id) { inp.source = 'const'; inp.value = 0; } }));
+        blocks = blocks.filter((b) => b.id !== block.id);
+        renderAll();
+      });
+    });
+
+    if (!blocks.length) listWrap.innerHTML = '<div class="card"><div class="empty-state">Add your first block above to start building the logic chain.</div></div>';
+
+    // ---- Diagram: simple top-to-bottom flow, boxes + arrows for
+    // block-sourced inputs. Arrows only ever point from an earlier block
+    // to a later one -- the chain's evaluation order guarantees that.
+    // A connection to the IMMEDIATELY preceding block draws as a simple
+    // top-to-bottom curve. A connection that SKIPS over one or more
+    // blocks in between routes out to a side lane instead of a straight
+    // line down the shared center column -- straight through would pass
+    // directly behind the skipped block's own box and become invisible. ----
+    const bw = 190, bh = 64, gapY = 60, padX = 20, padY = 20, laneW = 26;
+    const positions = {};
+    blocks.forEach((block, idx) => {
+      positions[block.id] = { x: padX, y: padY + idx * (bh + gapY), idx };
+    });
+    // Assign each skip-connection its own lane so simultaneous skips don't overlap each other.
+    let laneCount = 0;
+    const laneFor = new Map();
+    blocks.forEach((block) => {
+      block.inputs.forEach((inp) => {
+        if (inp.source === 'block' && positions[inp.blockId]) {
+          const skip = positions[block.id].idx - positions[inp.blockId].idx > 1;
+          if (skip) { laneFor.set(inp.blockId + '>' + block.id, laneCount); laneCount += 1; }
+        }
+      });
+    });
+    const svgW = 640 + laneCount * laneW;
+    const svgH = blocks.length * (bh + gapY) + padY * 2;
+    let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" width="${svgW}" height="${svgH}" style="font-family:var(--font-mono);">`;
+    // arrows first (so boxes draw on top)
+    blocks.forEach((block, idx) => {
+      block.inputs.forEach((inp) => {
+        if (inp.source === 'block' && positions[inp.blockId]) {
+          const from = positions[inp.blockId], to = positions[block.id];
+          const laneKey = inp.blockId + '>' + block.id;
+          if (laneFor.has(laneKey)) {
+            const laneX = padX + bw + 16 + laneFor.get(laneKey) * laneW;
+            const x1 = from.x + bw, y1 = from.y + bh / 2;
+            const x2 = to.x + bw, y2 = to.y + bh / 2;
+            svg += `<path d="M ${x1} ${y1} L ${laneX} ${y1} L ${laneX} ${y2} L ${x2} ${y2}" fill="none" stroke="var(--cyan)" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>`;
+          } else {
+            const x1 = from.x + bw / 2, y1 = from.y + bh;
+            const x2 = to.x + bw / 2, y2 = to.y;
+            const midY = (y1 + y2) / 2;
+            svg += `<path d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}" fill="none" stroke="var(--cyan)" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>`;
+          }
+        }
+      });
+    });
+    svg += `<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>`;
+    blocks.forEach((block, idx) => {
+      const def = sama.SAMA_BLOCK_TYPES[block.type];
+      const r = results.get(block.id) || { value: null, error: null };
+      const pos = positions[block.id];
+      const color = r.error ? 'var(--red)' : (def.category === 'logic' ? 'var(--amber)' : 'var(--cyan)');
+      svg += `<g>
+        <rect x="${pos.x}" y="${pos.y}" width="${bw}" height="${bh}" rx="${def.category === 'logic' ? 6 : 28}" fill="var(--bg-panel)" stroke="${color}" stroke-width="1.5"/>
+        <text x="${pos.x + bw / 2}" y="${pos.y + 22}" text-anchor="middle" font-size="11" fill="${color}" font-weight="600">${def.label}</text>
+        <text x="${pos.x + bw / 2}" y="${pos.y + 38}" text-anchor="middle" font-size="9" fill="var(--text-faint)">${block.id}</text>
+        <text x="${pos.x + bw / 2}" y="${pos.y + 54}" text-anchor="middle" font-size="13" fill="var(--text)" font-weight="700">${r.error ? 'ERR' : fmt(r.value, 3)}</text>
+      </g>`;
+    });
+    svg += '</svg>';
+    document.getElementById('samaDiagram').innerHTML = blocks.length ? svg : '<div class="empty-state">Diagram appears once you add blocks.</div>';
+  }
+
+  renderAll();
+}// ---------- Beam Analysis ----------
+
 // ================= CIVIL ENGINEERING SECTION =================
 
-// ---------- Beam Analysis ----------
 function pageCivilBeam() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Civil Engineering \u00b7 Structural</div><h1>Beam Analysis</h1>
     <p class="lead">Deflection, maximum bending moment, and maximum shear force for a simply-supported or cantilever beam under a point load or uniformly distributed load. Classical Euler-Bernoulli beam theory \u2014 linear elastic, small-deflection.</p></div>`));
@@ -7635,19 +8347,28 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260906191700';
+const APP_BUILD = '20260908125111';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('buildTag')) {
+    // Deliberately NOT using margin-left for spacing here (as this used
+    // to) -- a fixed CSS margin is a rigid, unstretchable gap that
+    // text-align:justify cannot absorb the way it absorbs a normal space
+    // character, and having one in the middle of the footer's text flow
+    // was silently preventing that whole line from justifying correctly.
+    // Real space text nodes keep the footer as one uniform, justifiable
+    // run of text.
+    foot.appendChild(document.createTextNode(' '));
     const s = document.createElement('span');
     s.id = 'buildTag';
-    s.style.cssText = 'margin-left:10px;color:var(--text-faint);font-family:var(--font-mono);font-size:.7rem;';
+    s.style.cssText = 'color:var(--text-faint);font-family:var(--font-mono);font-size:.7rem;';
     s.textContent = 'build ' + APP_BUILD;
     foot.appendChild(s);
 
+    foot.appendChild(document.createTextNode(' '));
     const cause = document.createElement('span');
     cause.id = 'causeTag';
-    cause.style.cssText = 'margin-left:10px;color:var(--text-faint);font-size:.7rem;';
+    cause.style.cssText = 'color:var(--text-faint);font-size:.7rem;';
     cause.textContent = 'Revenue generated from this site will be used to build a library in Bihar for children from very poor backgrounds.';
     foot.appendChild(cause);
   }
