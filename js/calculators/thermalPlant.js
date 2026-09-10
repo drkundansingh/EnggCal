@@ -7,6 +7,8 @@
 // were used. Nothing here is a hardcoded "answer" — every output is derived
 // from the equations below applied to the supplied assumptions.
 
+import * as steam from './steamTable.js';
+
 export const UNIT_SIZES_MW = [25, 50, 100, 125, 200, 210, 250, 300, 500, 600, 660, 800, 1000];
 
 export const PLANT_TYPES = ['subcritical', 'supercritical', 'ultra-supercritical', 'custom'];
@@ -54,16 +56,55 @@ const KCAL_PER_KWH = 860.42; // thermodynamic equivalent, 1 kWh = 860.42 kcal
 
 /**
  * Boiler duty per kg of steam (h_main_steam - h_feedwater), kcal/kg.
- * Correlation-based, calibrated at a reference feedwater temperature, then
- * corrected for actual feedwater temperature using cp_water ≈ 1 kcal/kg·°C.
- * Exported so other modules (e.g. the Flow Calculator) can reuse the exact
- * same boiler-duty model instead of re-deriving it. Not a substitute for
- * IAPWS-IF97 steam tables — see README "Engineering accuracy notes".
+ * Uses REAL IAPWS-IF97 steam properties (the same verified steamTable.js
+ * module used throughout the rest of this app for DP flow and control
+ * loop work) whenever the given conditions fall within its implemented
+ * regions -- which covers essentially every real subcritical, supercritical,
+ * and ultra-supercritical main-steam and reheat condition (see
+ * usesRealSteamTables() below for exactly which states qualify). Feedwater
+ * is evaluated at the SAME pressure as the boiler -- feed pump discharge is
+ * only modestly above boiler pressure, and compressed-liquid enthalpy is
+ * only weakly pressure-dependent, so this simplification is negligible next
+ * to the ~2500-3000 kJ/kg enthalpy rise being computed.
+ *
+ * Falls back to a correlation ONLY for states outside the implemented IF97
+ * regions (chiefly Region 3, near-critical) -- exported separately below so
+ * callers can tell the user which method actually applied, rather than
+ * silently blending "measured-grade" and "typical estimate" accuracy.
  */
 export function estimateEnthalpyRiseKcalKg(mainSteamPressureBar, mainSteamTempC, feedwaterTempC) {
   if (!Number.isFinite(mainSteamPressureBar) || !Number.isFinite(mainSteamTempC) || !Number.isFinite(feedwaterTempC)) {
     throw new Error('Main steam pressure, main steam temperature and feedwater temperature must all be numbers.');
   }
+  try {
+    const hSteamKJKg = steam.enthalpy(mainSteamPressureBar, mainSteamTempC);
+    const hFeedwaterKJKg = steam.enthalpy(mainSteamPressureBar, feedwaterTempC);
+    return (hSteamKJKg - hFeedwaterKJKg) / 4.1868; // kJ/kg -> kcal/kg (1 kcal = 4.1868 kJ)
+  } catch (e) {
+    return correlationEnthalpyRiseKcalKg(mainSteamPressureBar, mainSteamTempC, feedwaterTempC);
+  }
+}
+
+/** True if estimateEnthalpyRiseKcalKg() will use real IAPWS-IF97 steam
+ * tables for this exact state (both main-steam and feedwater points),
+ * false if it will fall back to the correlation. Exported so the UI can
+ * tell the user which one actually applied for their specific inputs. */
+export function usesRealSteamTables(mainSteamPressureBar, mainSteamTempC, feedwaterTempC) {
+  try {
+    steam.enthalpy(mainSteamPressureBar, mainSteamTempC);
+    steam.enthalpy(mainSteamPressureBar, feedwaterTempC);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** The original correlation-based estimate, kept as the fallback for
+ * states outside the IF97 regions implemented in steamTable.js (chiefly
+ * Region 3, near-critical) -- calibrated at a reference feedwater
+ * temperature, then corrected for actual feedwater temperature using
+ * cp_water ≈ 1 kcal/kg·°C. */
+function correlationEnthalpyRiseKcalKg(mainSteamPressureBar, mainSteamTempC, feedwaterTempC) {
   const REF_FEEDWATER_TEMP_C = 240;
   const CP_WATER_KCAL_PER_KG_C = 1.0;
   const baseEnthalpyRiseKcalKg = 620 + (mainSteamTempC - 500) * 0.35 + (mainSteamPressureBar - 150) * 0.05;

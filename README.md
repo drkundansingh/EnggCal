@@ -547,13 +547,21 @@ custody-transfer-grade:
     achievable fraction (~60-65% of Carnot for modern reheat cycles), shown
     alongside the primary efficiency estimate so a wildly inconsistent input
     combination is visible rather than silently accepted.
-  - Steam enthalpy is still a calibrated correlation, not full IAPWS-IF97
-    steam tables — implementing the genuine multi-region IAPWS-IF97 equations
-    (which involve dozens of region-specific coefficients, and require
-    careful handling near the critical point for ultra-supercritical
-    conditions) is a substantial undertaking on its own and was out of scope
-    here. Good for planning-level estimates; verify against actual design
-    heat balance software for anything else.
+  - Steam enthalpy now uses the same real, verified IAPWS-IF97 steam-table
+    module used throughout the rest of this app (Region 1 compressed liquid
+    for feedwater, Region 2 superheated for main/reheat steam), not a
+    correlation. This was previously a genuine gap — a linear correlation
+    that turned out to be off by 11-16% for realistic subcritical through
+    ultra-supercritical main-steam conditions when checked against the real
+    steam-table values, an error that propagated directly into steam flow,
+    fuel flow, and every downstream number derived from boiler duty. Feedwater
+    is evaluated at the same pressure as the boiler (feed pump discharge is
+    only modestly higher, and compressed-liquid enthalpy is only weakly
+    pressure-dependent, so this simplification is negligible next to the
+    enthalpy rise itself). Falls back to the original correlation only for
+    conditions landing in IAPWS Region 3 (near-critical, not implemented in
+    the steam-table module) — `usesRealSteamTables()` tells the caller which
+    one actually applied for a given state.
 - **Orifice plate**: constant discharge coefficient (default Cd = 0.6), not
   the full iterative ISO 5167 Cd/expansibility correlation.
 - **Control valve sizing**: simplified ISA-75.01-style equations without

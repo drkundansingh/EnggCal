@@ -27,7 +27,8 @@
 // values come from `defaultAdvancedConfig()`, which the caller/UI should let
 // the user override, exactly like Mode 1/2's assumptions.
 
-import { defaultAssumptions, PLANT_TYPES, sizeAdjustedDefaults } from './thermalPlant.js';
+import { defaultAssumptions, PLANT_TYPES, sizeAdjustedDefaults, estimateEnthalpyRiseKcalKg } from './thermalPlant.js';
+import * as steam from './steamTable.js';
 
 export { PLANT_TYPES };
 export const BOILER_TYPES = ['drum', 'once-through'];
@@ -54,6 +55,7 @@ export const PARAM_META = {
   specificFuelConsumptionKgKwh: { label: 'Specific fuel consumption', unit: 'kg/kWh' },
   co2EmissionTh: { label: 'CO₂ emission', unit: 't/h' },
   mainSteamFlowTh: { label: 'Main steam flow', unit: 't/h' },
+  enthalpyRiseKcalKg: { label: 'Boiler duty (enthalpy rise)', unit: 'kcal/kg' },
   mainSteamPressureBar: { label: 'Main steam pressure', unit: 'bar' },
   mainSteamTempC: { label: 'Main steam temperature', unit: '°C' },
   reheatPressureBar: { label: 'Reheat pressure', unit: 'bar' },
@@ -185,12 +187,8 @@ const RULES = [
     formula: 'Q_boiler = Q_fuel × η_boiler',
     compute: (v) => v.heatInputKcalH * (v.boilerEfficiencyPct / 100) },
   { out: 'enthalpyRiseKcalKg', inputs: ['mainSteamPressureBar', 'mainSteamTempC', 'feedwaterTempC'], kind: 'assumption',
-    formula: 'Δh ≈ [620 + 0.35×(T−500) + 0.05×(P−150)] − (T_fw − 240)×cp_water  [correlation + feedwater correction, not full IAPWS-IF97]',
-    compute: (v) => {
-      const base = 620 + (v.mainSteamTempC - 500) * 0.35 + (v.mainSteamPressureBar - 150) * 0.05;
-      const fwCorrection = (v.feedwaterTempC - 240) * 1.0; // cp_water ≈ 1 kcal/kg·°C
-      return Math.max(400, base - fwCorrection);
-    } },
+    formula: 'Δh = h(P,T)_main steam − h(P,T_fw)_feedwater, from real IAPWS-IF97 steam tables (feedwater assumed at the same pressure as the boiler) — falls back to a correlation only for states outside the implemented steam-table regions (chiefly near-critical Region 3)',
+    compute: (v) => estimateEnthalpyRiseKcalKg(v.mainSteamPressureBar, v.mainSteamTempC, v.feedwaterTempC) },
   { out: 'mainSteamFlowTh', inputs: ['boilerHeatOutputKcalH', 'enthalpyRiseKcalKg'], kind: 'law',
     formula: 'SteamFlow = Q_boiler / Δh',
     compute: (v) => v.boilerHeatOutputKcalH / (v.enthalpyRiseKcalKg * 1000) },
@@ -240,11 +238,15 @@ const RULES = [
     formula: 'FlueGas ≈ Air + Fuel  (mass balance, ash/moisture neglected)',
     compute: (v) => v.combustionAirFlowTh + v.fuelFlowTh },
   { out: 'condenserSaturationTempC', inputs: ['condenserPressureKPa'], kind: 'law',
-    formula: 'Antoine equation (water, 1-100°C range): T = B/(A − log₁₀(P_mmHg)) − C,  A=8.07131, B=1730.63, C=233.426',
+    formula: 'Real IAPWS-IF97 saturation temperature at the condenser pressure (same verified steam-table module used for boiler duty above) — falls back to the Antoine equation only if that pressure is outside the implemented saturation-curve range',
     compute: (v) => {
-      const pMmHg = v.condenserPressureKPa * 7.50062;
-      if (!(pMmHg > 0)) throw new Error('Condenser pressure must be > 0');
-      return 1730.63 / (8.07131 - Math.log10(pMmHg)) - 233.426;
+      if (!(v.condenserPressureKPa > 0)) throw new Error('Condenser pressure must be > 0');
+      try {
+        return steam.tsat(v.condenserPressureKPa / 1000) - 273.15; // kPa -> MPa
+      } catch (e) {
+        const pMmHg = v.condenserPressureKPa * 7.50062;
+        return 1730.63 / (8.07131 - Math.log10(pMmHg)) - 233.426;
+      }
     } },
   { out: 'carnotEfficiencyLimitPct', inputs: ['mainSteamTempC', 'condenserSaturationTempC'], kind: 'law',
     formula: 'η_Carnot = [1 − (T_cond+273.15)/(T_steam+273.15)] × 100  — absolute thermodynamic ceiling, not the actual achievable cycle efficiency',

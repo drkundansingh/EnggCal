@@ -2100,5 +2100,268 @@ test('evaluateChain: rejects duplicate block ids', () => {
   assert.throws(() => sama.evaluateChain(blocks));
 });
 
+console.log('\n--- samaLogic.js dynamic blocks (Lag, Lead-Lag, Integrator, Rate Limit, Dead Time, PID) ---');
+test('lag block reaches within 0.1% of a step input after 10 time constants', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'lagOut', type: 'lag', params: { tau: 10 }, inputs: [{ source: 'block', blockId: 'sp' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  let r;
+  for (let i = 0; i < 200; i++) r = sim.step();
+  approx(r.get('lagOut').value, 50, 0.05);
+});
+test('leadLag: steady-state gain is exactly 1, and initial jump matches the analytic initial-value theorem', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 10 }] },
+    { id: 'll', type: 'leadLag', params: { leadT: 5, lagT: 20 }, inputs: [{ source: 'block', blockId: 'sp' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.1);
+  const r1 = sim.step();
+  approx(r1.get('ll').value, 10 * 5 / 20, 0.05); // initial value theorem: A*Tlead/Tlag
+  let r;
+  for (let i = 0; i < 3000; i++) r = sim.step();
+  approx(r.get('ll').value, 10, 0.01); // settles to unity gain
+});
+test('rateLimit: a step input ramps at the set rate rather than jumping instantly', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 100 }] },
+    { id: 'ramped', type: 'rateLimit', params: { rate: 10 }, inputs: [{ source: 'block', blockId: 'sp' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1);
+  let r;
+  for (let i = 0; i < 3; i++) r = sim.step();
+  approx(r.get('ramped').value, 30, 1e-9);
+});
+test('deadTime: output is exactly zero before the delay elapses, then matches the input exactly', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 42 }] },
+    { id: 'delayed', type: 'deadTime', params: { delay: 3 }, inputs: [{ source: 'block', blockId: 'sp' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1);
+  let r;
+  for (let i = 0; i < 2; i++) r = sim.step();
+  assert.equal(r.get('delayed').value, 0);
+  for (let i = 0; i < 2; i++) r = sim.step();
+  assert.equal(r.get('delayed').value, 42);
+});
+test('integrator: ramps at rate = gain * input, matching hand calculation', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 5 }] },
+    { id: 'level', type: 'integrator', params: { gain: 2, min: -1000, max: 1000 }, inputs: [{ source: 'block', blockId: 'sp' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1);
+  let r;
+  for (let i = 0; i < 10; i++) r = sim.step();
+  approx(r.get('level').value, 2 * 5 * 10, 1e-9);
+});
+test('PID in a genuine closed loop (controlling a lag process fed back into itself) converges cleanly to setpoint', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pv', type: 'lag', params: { tau: 5 }, inputs: [{ source: 'block', blockId: 'pidOut' }] },
+    { id: 'pidOut', type: 'pid', params: { kp: 2, ki: 0.5, kd: 0, outMin: 0, outMax: 100 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.2);
+  let r;
+  for (let i = 0; i < 600; i++) r = sim.step();
+  approx(r.get('pv').value, 50, 0.05);
+  assert.equal(r.get('pv').error, null);
+  assert.equal(r.get('pidOut').error, null);
+});
+test('LogicSimulation: closed-loop feedback does not diverge or oscillate once settled (stability check)', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pv', type: 'lag', params: { tau: 5 }, inputs: [{ source: 'block', blockId: 'pidOut' }] },
+    { id: 'pidOut', type: 'pid', params: { kp: 2, ki: 0.5, kd: 0, outMin: 0, outMax: 100 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.2);
+  const series = [];
+  for (let i = 0; i < 400; i++) { sim.step(); series.push(sim.lastOutputs.get('pv').value); }
+  const last30 = series.slice(-30);
+  const drift = Math.max(...last30) - Math.min(...last30);
+  assert.ok(drift < 0.01, `expected the loop to have settled, got drift ${drift}`);
+});
+test('evaluateChain (static, instant mode) rejects a dynamic block with a clear, specific error rather than crashing', () => {
+  const blocks = [
+    { id: 'lagOut', type: 'lag', params: { tau: 10 }, inputs: [{ source: 'const', value: 5 }] },
+  ];
+  const r = sama.evaluateChain(blocks);
+  assert.ok(r.get('lagOut').error && r.get('lagOut').error.includes('Simulation mode'));
+});
+test('hasDynamicBlocks correctly distinguishes static-only chains from ones containing a dynamic block', () => {
+  assert.equal(sama.hasDynamicBlocks([{ id: 'a', type: 'gain' }]), false);
+  assert.equal(sama.hasDynamicBlocks([{ id: 'a', type: 'gain' }, { id: 'b', type: 'pid' }]), true);
+});
+test('LogicSimulation.reset() clears dynamic state back to its initial condition', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'lagOut', type: 'lag', params: { tau: 10 }, inputs: [{ source: 'block', blockId: 'sp' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  for (let i = 0; i < 200; i++) sim.step();
+  approx(sim.lastOutputs.get('lagOut').value, 50, 0.1);
+  sim.reset();
+  const r = sim.step();
+  assert.ok(r.get('lagOut').value < 5, 'expected the lag to have reset back near zero, not stayed near 50');
+});
+
+console.log('\n--- samaLogic.js I/O terminal blocks (DI, AI, DO, AO) ---');
+test('DI: has no inputs and outputs its set field state as a clean 0/1', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.di.inputs.min, 0);
+  assert.equal(sama.SAMA_BLOCK_TYPES.di.inputs.max, 0);
+  assert.equal(sama.SAMA_BLOCK_TYPES.di.compute([], { state: 1 }), 1);
+  assert.equal(sama.SAMA_BLOCK_TYPES.di.compute([], { state: 0.2 }), 0);
+});
+test('AI: has no inputs and outputs its set field value unchanged', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.ai.inputs.min, 0);
+  approx(sama.SAMA_BLOCK_TYPES.ai.compute([], { value: 42.5 }), 42.5, 1e-9);
+});
+test('DO/AO: pass through their single input correctly (DO rounds to 0/1, AO does not)', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.do_.compute([0.7]), 1);
+  assert.equal(sama.SAMA_BLOCK_TYPES.do_.compute([0.3]), 0);
+  approx(sama.SAMA_BLOCK_TYPES.ao_.compute([42.5]), 42.5, 1e-9);
+});
+test('A full DI/AI/DO/AO field-terminal chain evaluates correctly end to end', () => {
+  const blocks = [
+    { id: 'di1', type: 'di', params: { state: 1 }, inputs: [] },
+    { id: 'ai1', type: 'ai', params: { value: 42.5 }, inputs: [] },
+    { id: 'do1', type: 'do_', params: {}, inputs: [{ source: 'block', blockId: 'di1' }] },
+    { id: 'ao1', type: 'ao_', params: {}, inputs: [{ source: 'block', blockId: 'ai1' }] },
+  ];
+  const r = sama.evaluateChain(blocks);
+  assert.equal(r.get('do1').value, 1);
+  approx(r.get('ao1').value, 42.5, 1e-9);
+});
+
+console.log('\n--- samaLogic.js orderForEvaluation / orderForSimulation (free-form canvas ordering fix) ---');
+test('orderForEvaluation: reorders blocks created out of dependency order so evaluateChain resolves correctly', () => {
+  const blocks = [
+    { id: 'b1', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 70 }] },
+    { id: 'b3', type: 'highSelect', params: {}, inputs: [{ source: 'block', blockId: 'b1' }, { source: 'block', blockId: 'b4' }] },
+    { id: 'b4', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 99 }] },
+  ];
+  const raw = sama.evaluateChain(blocks);
+  assert.ok(raw.get('b3').error, 'expected the unordered chain to fail, confirming the bug this fixes is real');
+  const ordered = sama.orderForEvaluation(blocks);
+  const r = sama.evaluateChain(ordered);
+  assert.equal(r.get('b3').value, 99);
+  assert.equal(r.get('b3').error, null);
+});
+test('orderForEvaluation: returns null for a genuine cycle (no dynamic block to break it)', () => {
+  const cyclic = [
+    { id: 'x', type: 'gain', params: { k: 1 }, inputs: [{ source: 'block', blockId: 'y' }] },
+    { id: 'y', type: 'gain', params: { k: 1 }, inputs: [{ source: 'block', blockId: 'x' }] },
+  ];
+  assert.equal(sama.orderForEvaluation(cyclic), null);
+});
+test('orderForSimulation: falls back to the original array for a genuine cycle instead of failing', () => {
+  const cyclic = [
+    { id: 'x', type: 'gain', params: { k: 1 }, inputs: [{ source: 'block', blockId: 'y' }] },
+    { id: 'y', type: 'gain', params: { k: 1 }, inputs: [{ source: 'block', blockId: 'x' }] },
+  ];
+  const result = sama.orderForSimulation(cyclic);
+  assert.equal(result.length, 2);
+  assert.deepEqual(result.map((b) => b.id), ['x', 'y']);
+});
+test('orderForSimulation: still properly orders an acyclic chain (not just a blind fallback)', () => {
+  const blocks = [
+    { id: 'b3', type: 'gain', params: { k: 1 }, inputs: [{ source: 'block', blockId: 'b1' }] },
+    { id: 'b1', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 5 }] },
+  ];
+  const ordered = sama.orderForSimulation(blocks);
+  assert.deepEqual(ordered.map((b) => b.id), ['b1', 'b3']);
+});
+
+console.log('\n--- samaLogic.js SR Latch, Time Delay, Pulse Timer ---');
+test('srLatch: Set drives TRUE, hold preserves it, Reset drives FALSE, reset-dominant on both', () => {
+  const blocks = [
+    { id: 's', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'r', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'latch', type: 'srLatch', params: {}, inputs: [{ source: 'block', blockId: 's' }, { source: 'block', blockId: 'r' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1);
+  blocks[0].inputs[0].value = 1;
+  assert.equal(sim.step().get('latch').value, 1);
+  blocks[0].inputs[0].value = 0;
+  assert.equal(sim.step().get('latch').value, 1, 'expected hold with both inputs false');
+  blocks[1].inputs[0].value = 1;
+  assert.equal(sim.step().get('latch').value, 0);
+  blocks[0].inputs[0].value = 1; // both S and R now true
+  assert.equal(sim.step().get('latch').value, 0, 'expected reset-dominant behavior');
+});
+test('timeDelay (ON-delay): output stays FALSE until the delay elapses, and resets if input drops early', () => {
+  const blocks = [
+    { id: 'trig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 1 }] },
+    { id: 'td', type: 'timeDelay', params: { delaySec: 3, mode: 0 }, inputs: [{ source: 'block', blockId: 'trig' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1);
+  assert.equal(sim.step().get('td').value, 0);
+  assert.equal(sim.step().get('td').value, 0);
+  assert.equal(sim.step().get('td').value, 1, 'expected TRUE once the 3s delay has elapsed');
+  // Reset test: drop input before delay completes
+  const blocks2 = [
+    { id: 'trig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 1 }] },
+    { id: 'td', type: 'timeDelay', params: { delaySec: 3, mode: 0 }, inputs: [{ source: 'block', blockId: 'trig' }] },
+  ];
+  const sim2 = new sama.LogicSimulation(blocks2, 1);
+  sim2.step(); sim2.step();
+  blocks2[0].inputs[0].value = 0;
+  assert.equal(sim2.step().get('td').value, 0);
+  blocks2[0].inputs[0].value = 1;
+  assert.equal(sim2.step().get('td').value, 0, 'expected the timer to have reset, not resume from where it left off');
+});
+test('timeDelay (OFF-delay): output stays TRUE for a while after input drops, then goes FALSE', () => {
+  const blocks = [
+    { id: 'trig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 1 }] },
+    { id: 'td', type: 'timeDelay', params: { delaySec: 3, mode: 1 }, inputs: [{ source: 'block', blockId: 'trig' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1);
+  assert.equal(sim.step().get('td').value, 1);
+  blocks[0].inputs[0].value = 0;
+  assert.equal(sim.step().get('td').value, 1, 'expected TRUE to persist immediately after the drop');
+  assert.equal(sim.step().get('td').value, 1);
+  assert.equal(sim.step().get('td').value, 0, 'expected FALSE once the off-delay has elapsed');
+});
+test('pulseTimer: a single fixed-duration pulse on a rising edge, not retriggered by holding the input TRUE', () => {
+  const blocks = [
+    { id: 'trig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'pt', type: 'pulseTimer', params: { pulseDurSec: 2 }, inputs: [{ source: 'block', blockId: 'trig' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1);
+  blocks[0].inputs[0].value = 1;
+  assert.equal(sim.step().get('pt').value, 1);
+  assert.equal(sim.step().get('pt').value, 1);
+  assert.equal(sim.step().get('pt').value, 0, 'expected the pulse to have ended after its set duration');
+  assert.equal(sim.step().get('pt').value, 0, 'expected no retrigger while input holds TRUE with no new edge');
+  blocks[0].inputs[0].value = 0;
+  sim.step();
+  blocks[0].inputs[0].value = 1; // a genuine new rising edge
+  assert.equal(sim.step().get('pt').value, 1, 'expected a fresh pulse on the new rising edge');
+});
+
+console.log('\n--- samaLogic.js AI block: process-parameter range and clamping ---');
+test('AI: value passes through unchanged when within its defined min/max range', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.ai.compute([], { value: 50, min: 0, max: 100 }), 50);
+});
+test('AI: value is clamped to max when it exceeds the defined range (matching a real transmitter\u2019s calibrated span)', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.ai.compute([], { value: 150, min: 0, max: 100 }), 100);
+});
+test('AI: value is clamped to min when it falls below the defined range', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.ai.compute([], { value: -10, min: 0, max: 100 }), 0);
+});
+test('AI: clamping still works correctly even if min/max were accidentally entered swapped', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.ai.compute([], { value: 150, min: 100, max: 0 }), 100);
+  assert.equal(sama.SAMA_BLOCK_TYPES.ai.compute([], { value: -10, min: 100, max: 0 }), 0);
+});
+test('AI: full chain still evaluates correctly through an AO with a realistic process range', () => {
+  const blocks = [
+    { id: 'ai1', type: 'ai', params: { value: 537, min: 0, max: 500, paramType: 'temperature' }, inputs: [] },
+    { id: 'ao1', type: 'ao_', params: {}, inputs: [{ source: 'block', blockId: 'ai1' }] },
+  ];
+  const r = sama.evaluateChain(blocks);
+  assert.equal(r.get('ai1').value, 500);
+  assert.equal(r.get('ao1').value, 500);
+});
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail > 0) process.exit(1);

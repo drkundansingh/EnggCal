@@ -5944,201 +5944,701 @@ function pageRefrigerationTons() {
 
 // ---------- SAMA Logic Diagram Simulator ----------
 function pageSamaLogic() {
-  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>SAMA Logic Diagram Simulator</h1>
-    <p class="lead">Build control logic from standard SAMA function blocks — summers, high/low select, limiters, AND/OR/NOT, comparators — and see every block's output update live as you change inputs. Covers the static/algebraic blocks used in interlock and permissive logic; for full time-stepped dynamic loops (lag, integrator), see Control Loops.</p></div>`));
+  const DYNAMIC_COLOR = '#a78bfa';
+  const CONNECT_OK_COLOR = '#4ade80'; // distinct "connected" green -- separate from the wire's own cyan, so a successful/live connection reads clearly at a glance
+  app.appendChild(h(`<div class="page-head" style="margin-bottom:12px;padding-bottom:12px;">
+    <div class="eyebrow">Power Plant</div><h1>SAMA Logic Diagram Simulator</h1>
+    <p class="lead">Click <b>+ Blocks</b>, drag a block onto the canvas, then drag from a block's output dot to another block's input dot to wire it up. Add any dynamic block (lag, integrator, PID...) and Simulate runs it live over time; a purely static diagram computes instantly.</p></div>`));
 
+  // ---- State. Every block now carries its own x,y directly (this is a
+  // free-form canvas, not an auto-laid-out list) alongside the same
+  // type/params/inputs shape the already-verified sama.* engine expects
+  // -- the engine itself is completely unchanged by this rewrite. ----
   let blocks = [];
   let counter = 0;
-
-  const addRow = h(`<div class="card">
-    <div class="panel-title">Add a Block</div>
-    <div class="input-row">
-      <div class="field" style="flex:2;"><label>Block type</label>
-        <select id="newBlockType">
-          <optgroup label="Analog">
-            ${Object.entries(sama.SAMA_BLOCK_TYPES).filter(([, d]) => d.category === 'analog').map(([id, d]) => `<option value="${id}">${d.label}</option>`).join('')}
-          </optgroup>
-          <optgroup label="Logic">
-            ${Object.entries(sama.SAMA_BLOCK_TYPES).filter(([, d]) => d.category === 'logic').map(([id, d]) => `<option value="${id}">${d.label}</option>`).join('')}
-          </optgroup>
-        </select>
-      </div>
-      <div class="field"><label>&nbsp;</label><button class="btn" id="addBlockBtn" style="width:100%;">+ Add Block</button></div>
-    </div>
-    <div id="blockTypeDesc" style="color:var(--text-faint);font-size:.78rem;"></div>
-  </div>`);
-  app.appendChild(addRow);
-
-  const listWrap = h('<div id="samaBlockList" style="margin-top:16px;"></div>');
-  app.appendChild(listWrap);
-  const diagramWrap = h('<div class="card" style="margin-top:16px;"><div class="panel-title">Diagram</div><div id="samaDiagram" style="overflow-x:auto;"></div></div>');
-  app.appendChild(diagramWrap);
-
-  function updateDesc() {
-    const type = addRow.querySelector('#newBlockType').value;
-    addRow.querySelector('#blockTypeDesc').textContent = sama.SAMA_BLOCK_TYPES[type].description;
+  let selectedId = null;
+  let simulation = null;
+  let simTimer = null;
+  let simRunning = false;
+  const SIM_DT = 0.15;
+  const BW = 168, BH = 66;
+  /** A block's actual on-canvas size, from its own scale factor (default
+   * 1). Every place that used to read the flat BW/BH constants now calls
+   * this per-block, so each block can be resized independently. */
+  function blockSize(block) {
+    const s = block.scale ?? 1;
+    return { bw: BW * s, bh: BH * s };
   }
-  addRow.querySelector('#newBlockType').addEventListener('change', updateDesc);
-  updateDesc();
 
-  addRow.querySelector('#addBlockBtn').addEventListener('click', () => {
-    const type = addRow.querySelector('#newBlockType').value;
-    const def = sama.SAMA_BLOCK_TYPES[type];
-    counter += 1;
-    const id = 'b' + counter;
-    const params = {};
-    def.params.forEach((p) => { params[p.id] = p.default; });
-    const inputs = Array.from({ length: def.inputs.min }, () => ({ source: 'const', value: 0 }));
-    blocks.push({ id, type, params, inputs });
-    renderAll();
+  // ---- Toolbar ----
+  const toolbar = h(`<div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;">
+    <button class="btn" id="toggleBlocksBtn">+ Blocks</button>
+    <select id="loadExampleSelect" style="width:auto;">
+      <option value="">Load Example\u2026</option>
+      <option value="pidLevel">PID Level Control (closed loop)</option>
+      <option value="crossLimit">Combustion Cross-Limiting</option>
+    </select>
+    <button class="btn secondary" id="clearAllBtn">Clear All</button>
+    <div id="simControls" style="display:none;align-items:center;gap:10px;margin-left:auto;">
+      <span class="pill" style="background:var(--amber-dim);color:var(--amber);border-color:var(--amber);">SIMULATING</span>
+      <button class="btn secondary" id="simPlayPause">Pause</button>
+      <button class="btn secondary" id="simReset">Reset</button>
+      <span id="simClock" style="font-family:var(--font-mono);color:var(--text-faint);font-size:.8rem;">t = 0.0 s</span>
+    </div>
+    <span id="staticNote" style="color:var(--text-faint);font-size:.78rem;margin-left:auto;">Static diagram — computes instantly. Add a dynamic block to simulate over time.</span>
+  </div>`);
+  app.appendChild(toolbar);
+
+  // ---- Palette (overlay popup, not pushed into the layout -- opening
+  // it must never shrink the canvas, which is the whole point of the
+  // "use full area" fix below) ----
+  const IO_COLOR = '#4ade80';
+  const CATS = [['analog', 'Analog (static)', 'var(--cyan)'], ['logic', 'Logic (static)', 'var(--amber)'], ['dynamic', 'Dynamic (time-stepped)', DYNAMIC_COLOR], ['io', 'Field I/O Terminals (DI/DO/AI/AO)', IO_COLOR]];
+  const paletteAnchor = h('<div style="position:relative;"></div>');
+  app.appendChild(paletteAnchor);
+  const palette = h(`<div class="card" id="palettePanel" style="display:none;position:absolute;top:6px;left:0;z-index:40;width:min(640px,92vw);max-height:70vh;max-height:70dvh;overflow:auto;box-shadow:0 12px 32px rgba(0,0,0,.45);">
+    ${CATS.map(([cat, label, color]) => `
+      <div style="margin-bottom:10px;">
+        <div class="panel-title" style="color:${color};">${label}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${Object.entries(sama.SAMA_BLOCK_TYPES).filter(([, d]) => d.category === cat).map(([id, d]) => `
+            <div class="palette-chip" data-block-type="${id}" title="${d.description.replace(/"/g, '&quot;')}"
+              style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid ${color};border-radius:6px;font-size:.8rem;color:${color};background:var(--bg-panel);">
+              ${d.label}
+            </div>`).join('')}
+        </div>
+      </div>`).join('')}
+    <div style="color:var(--text-faint);font-size:.76rem;">Drag a block onto the canvas to add it, or tap here then tap the canvas.</div>
+  </div>`);
+  paletteAnchor.appendChild(palette);
+  toolbar.querySelector('#toggleBlocksBtn').addEventListener('click', () => {
+    palette.style.display = palette.style.display === 'none' ? '' : 'none';
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (palette.style.display !== 'none' && !palette.contains(e.target) && e.target.id !== 'toggleBlocksBtn') {
+      palette.style.display = 'none';
+    }
   });
 
-  function boxShapeStyle(category) {
-    return category === 'logic'
-      ? 'border-radius:4px;border-style:solid;'
-      : 'border-radius:50%/60%;border-style:solid;'; // rounded/oval hint at the SAMA analog-function circle
+  // ---- Canvas + properties panel ----
+  const layoutRow = h('<div style="display:flex;gap:14px;margin-top:12px;align-items:flex-start;"></div>');
+  const canvasCard = h(`<div class="card" style="flex:1;min-width:0;padding:0;overflow:hidden;">
+    <div id="samaCanvasWrap" style="position:relative;width:100%;height:calc(100vh - 250px);height:calc(100dvh - 250px);min-height:560px;overflow:auto;background:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, var(--line) 27px, var(--line) 28px),
+      repeating-linear-gradient(90deg, transparent, transparent 27px, var(--line) 27px, var(--line) 28px);
+      background-size:28px 28px; opacity:1;">
+      <svg id="samaSvg" width="1600" height="1100" style="font-family:var(--font-mono);display:block;"></svg>
+    </div>
+  </div>`);
+  const propsCard = h(`<div class="card" id="propsPanel" style="width:280px;flex:none;display:none;"><div class="panel-title">Block Properties</div><div id="propsBody"></div></div>`);
+  layoutRow.append(canvasCard, propsCard);
+  app.appendChild(layoutRow);
+
+  const svg = canvasCard.querySelector('#samaSvg');
+  const canvasWrap = canvasCard.querySelector('#samaCanvasWrap');
+
+  // ==================================================================
+  // Simulation plumbing (unchanged logic, reused verbatim from the
+  // already-verified sama.* engine)
+  // ==================================================================
+  function stopTimer() { if (simTimer) { clearInterval(simTimer); simTimer = null; } }
+  function structureChanged() {
+    stopTimer();
+    if (sama.hasDynamicBlocks(blocks)) {
+      // orderForSimulation resolves any ordinary out-of-order wiring (the
+      // canvas lets you create/connect blocks in any order, unlike the
+      // old sequential list UI) and leaves a genuine feedback cycle
+      // alone -- LogicSimulation.step() already knows how to resolve
+      // that correctly with a one-step delay.
+      simulation = new sama.LogicSimulation(sama.orderForSimulation(blocks), SIM_DT);
+      simRunning = true;
+      startTimer();
+    } else {
+      simulation = null;
+    }
+    render();
+  }
+  function startTimer() {
+    stopTimer();
+    if (!simulation) return;
+    simTimer = setInterval(() => { simulation.step(); updateLiveValues(); }, SIM_DT * 1000);
+  }
+  function currentResults() {
+    if (simulation) return simulation.lastOutputs || new Map();
+    // A purely static chain has no valid notion of a feedback cycle --
+    // orderForEvaluation resolves ordinary out-of-order wiring; if it
+    // returns null the wiring is a genuine cycle with nothing dynamic to
+    // break it, so fall back to the raw array and let evaluateChain's
+    // normal per-block error surface that clearly instead of masking it.
+    try { return sama.evaluateChain(sama.orderForEvaluation(blocks) || blocks); } catch (e) { return new Map(); }
+  }
+  function updateLiveValues() {
+    if (!simulation) return;
+    const clockEl = document.getElementById('simClock');
+    if (clockEl) clockEl.textContent = `t = ${simulation.time.toFixed(1)} s`;
+    refreshDisplayValues();
   }
 
-  function renderAll() {
-    // ---- Recompute the whole chain ----
-    let results;
-    try { results = sama.evaluateChain(blocks); } catch (e) { results = new Map(); toast(e.message); }
-
-    // ---- Block list ----
-    listWrap.innerHTML = '';
-    blocks.forEach((block, idx) => {
-      const def = sama.SAMA_BLOCK_TYPES[block.type];
-      const r = results.get(block.id) || { value: null, error: 'not evaluated' };
-      const priorBlocks = blocks.slice(0, idx);
-      const card = h(`<div class="card" style="margin-bottom:12px;border-color:${r.error ? 'var(--red)' : 'var(--line)'};">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <div style="font-family:var(--font-mono);font-size:.7rem;color:var(--text-faint);">#${idx + 1} \u00b7 ${block.id}</div>
-            <div style="font-weight:600;font-size:1.05rem;">${def.label}</div>
-          </div>
-          <div style="text-align:right;">
-            <div class="readout" style="margin:0;"><span class="value" style="font-size:1.6rem;color:${r.error ? 'var(--red)' : 'var(--cyan)'};">${r.error ? 'ERR' : fmt(r.value, 4)}</span></div>
-            <button class="btn secondary" data-remove="${block.id}" style="margin-top:6px;padding:4px 10px;font-size:.75rem;">Remove</button>
-          </div>
-        </div>
-        ${r.error ? `<div class="assumptions-note" style="margin-top:8px;">${r.error}</div>` : ''}
-        <div style="margin-top:10px;">
-          ${block.inputs.map((inp, i) => `
-            <div class="input-row" data-input-idx="${i}" style="align-items:flex-end;">
-              <div class="field"><label>Input ${i + 1} source</label>
-                <select data-input-source="${i}">
-                  <option value="const" ${inp.source === 'const' ? 'selected' : ''}>Constant value</option>
-                  ${priorBlocks.map((pb) => `<option value="${pb.id}" ${inp.source === 'block' && inp.blockId === pb.id ? 'selected' : ''}>Output of ${pb.id} (${sama.SAMA_BLOCK_TYPES[pb.type].label})</option>`).join('')}
-                </select>
-              </div>
-              ${inp.source === 'const' ? `<div class="field"><label>Value</label><input type="number" step="any" data-input-value="${i}" value="${inp.value}"></div>` : ''}
-              ${def.inputs.min !== def.inputs.max && block.inputs.length > def.inputs.min ? `<div class="field" style="flex:0;"><button class="btn secondary" data-remove-input="${i}" style="padding:6px 10px;">\u2212</button></div>` : ''}
-            </div>`).join('')}
-          ${def.inputs.min !== def.inputs.max && block.inputs.length < def.inputs.max ? `<button class="btn secondary" data-add-input style="font-size:.78rem;">+ Add input</button>` : ''}
-        </div>
-        ${def.params.length ? `<div class="input-row" style="margin-top:8px;">
-          ${def.params.map((p) => `<div class="field"><label>${p.label}</label><input type="number" step="any" data-param="${p.id}" value="${block.params[p.id]}"></div>`).join('')}
-        </div>` : ''}
-      </div>`);
-      listWrap.appendChild(card);
-
-      card.querySelectorAll('[data-input-source]').forEach((sel) => sel.addEventListener('change', () => {
-        const i = +sel.dataset.inputSource;
-        const val = sel.value;
-        block.inputs[i] = val === 'const' ? { source: 'const', value: 0 } : { source: 'block', blockId: val };
-        renderAll();
-      }));
-      card.querySelectorAll('[data-input-value]').forEach((inp) => inp.addEventListener('input', () => {
-        const i = +inp.dataset.inputValue;
-        block.inputs[i].value = +inp.value;
-        renderAll();
-      }));
-      card.querySelectorAll('[data-param]').forEach((inp) => inp.addEventListener('input', () => {
-        block.params[inp.dataset.param] = +inp.value;
-        renderAll();
-      }));
-      const addInputBtn = card.querySelector('[data-add-input]');
-      if (addInputBtn) addInputBtn.addEventListener('click', () => { block.inputs.push({ source: 'const', value: 0 }); renderAll(); });
-      card.querySelectorAll('[data-remove-input]').forEach((btn) => btn.addEventListener('click', () => {
-        block.inputs.splice(+btn.dataset.removeInput, 1); renderAll();
-      }));
-      card.querySelector(`[data-remove="${block.id}"]`).addEventListener('click', () => {
-        // Removing a block that something downstream references would leave
-        // a dangling reference -- fall back that input to a constant instead
-        // of leaving the chain broken.
-        blocks.forEach((b) => b.inputs.forEach((inp) => { if (inp.source === 'block' && inp.blockId === block.id) { inp.source = 'const'; inp.value = 0; } }));
-        blocks = blocks.filter((b) => b.id !== block.id);
-        renderAll();
-      });
-    });
-
-    if (!blocks.length) listWrap.innerHTML = '<div class="card"><div class="empty-state">Add your first block above to start building the logic chain.</div></div>';
-
-    // ---- Diagram: simple top-to-bottom flow, boxes + arrows for
-    // block-sourced inputs. Arrows only ever point from an earlier block
-    // to a later one -- the chain's evaluation order guarantees that.
-    // A connection to the IMMEDIATELY preceding block draws as a simple
-    // top-to-bottom curve. A connection that SKIPS over one or more
-    // blocks in between routes out to a side lane instead of a straight
-    // line down the shared center column -- straight through would pass
-    // directly behind the skipped block's own box and become invisible. ----
-    const bw = 190, bh = 64, gapY = 60, padX = 20, padY = 20, laneW = 26;
-    const positions = {};
-    blocks.forEach((block, idx) => {
-      positions[block.id] = { x: padX, y: padY + idx * (bh + gapY), idx };
-    });
-    // Assign each skip-connection its own lane so simultaneous skips don't overlap each other.
-    let laneCount = 0;
-    const laneFor = new Map();
+  /** Updates every place a computed VALUE is shown -- diagram node text
+   * and border color, and the properties panel's own readout -- without
+   * ever touching an <input> element. Used both by the periodic
+   * simulation tick (every SIM_DT) and by editing a value/param field
+   * directly; either one previously triggered a full render()/
+   * renderProps() rebuild, which regenerates every <input>'s HTML from
+   * the current data (including a NaN from a lone "-" typed so far) and
+   * so wiped out whatever the user was mid-typing, on a timer even when
+   * nobody had touched anything. This function changes text content and
+   * a couple of style/attribute values directly on the existing DOM
+   * nodes instead, so a focused input and its cursor position are left
+   * completely alone. */
+  function refreshDisplayValues() {
+    const results = currentResults();
     blocks.forEach((block) => {
-      block.inputs.forEach((inp) => {
-        if (inp.source === 'block' && positions[inp.blockId]) {
-          const skip = positions[block.id].idx - positions[inp.blockId].idx > 1;
-          if (skip) { laneFor.set(inp.blockId + '>' + block.id, laneCount); laneCount += 1; }
-        }
-      });
-    });
-    const svgW = 640 + laneCount * laneW;
-    const svgH = blocks.length * (bh + gapY) + padY * 2;
-    let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" width="${svgW}" height="${svgH}" style="font-family:var(--font-mono);">`;
-    // arrows first (so boxes draw on top)
-    blocks.forEach((block, idx) => {
-      block.inputs.forEach((inp) => {
-        if (inp.source === 'block' && positions[inp.blockId]) {
-          const from = positions[inp.blockId], to = positions[block.id];
-          const laneKey = inp.blockId + '>' + block.id;
-          if (laneFor.has(laneKey)) {
-            const laneX = padX + bw + 16 + laneFor.get(laneKey) * laneW;
-            const x1 = from.x + bw, y1 = from.y + bh / 2;
-            const x2 = to.x + bw, y2 = to.y + bh / 2;
-            svg += `<path d="M ${x1} ${y1} L ${laneX} ${y1} L ${laneX} ${y2} L ${x2} ${y2}" fill="none" stroke="var(--cyan)" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>`;
-          } else {
-            const x1 = from.x + bw / 2, y1 = from.y + bh;
-            const x2 = to.x + bw / 2, y2 = to.y;
-            const midY = (y1 + y2) / 2;
-            svg += `<path d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}" fill="none" stroke="var(--cyan)" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>`;
-          }
-        }
-      });
-    });
-    svg += `<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>`;
-    blocks.forEach((block, idx) => {
       const def = sama.SAMA_BLOCK_TYPES[block.type];
       const r = results.get(block.id) || { value: null, error: null };
-      const pos = positions[block.id];
-      const color = r.error ? 'var(--red)' : (def.category === 'logic' ? 'var(--amber)' : 'var(--cyan)');
-      svg += `<g>
-        <rect x="${pos.x}" y="${pos.y}" width="${bw}" height="${bh}" rx="${def.category === 'logic' ? 6 : 28}" fill="var(--bg-panel)" stroke="${color}" stroke-width="1.5"/>
-        <text x="${pos.x + bw / 2}" y="${pos.y + 22}" text-anchor="middle" font-size="11" fill="${color}" font-weight="600">${def.label}</text>
-        <text x="${pos.x + bw / 2}" y="${pos.y + 38}" text-anchor="middle" font-size="9" fill="var(--text-faint)">${block.id}</text>
-        <text x="${pos.x + bw / 2}" y="${pos.y + 54}" text-anchor="middle" font-size="13" fill="var(--text)" font-weight="700">${r.error ? 'ERR' : fmt(r.value, 3)}</text>
-      </g>`;
+      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : 'var(--cyan)';
+      const g = svg.querySelector(`[data-block-id="${block.id}"]`);
+      if (g) {
+        const shapeEl = g.querySelector('ellipse, rect, polygon');
+        if (shapeEl) shapeEl.setAttribute('stroke', color);
+        const valEl = g.querySelector(`[data-diagram-value="${block.id}"]`);
+        if (valEl) { valEl.textContent = r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 3)); valEl.setAttribute('fill', r.error ? 'var(--red)' : 'var(--text)'); }
+      }
     });
-    svg += '</svg>';
-    document.getElementById('samaDiagram').innerHTML = blocks.length ? svg : '<div class="empty-state">Diagram appears once you add blocks.</div>';
+    if (selectedId) {
+      const block = blocks.find((b) => b.id === selectedId);
+      if (block) {
+        const r = results.get(block.id) || { value: null, error: null };
+        const readoutEl = document.querySelector('#propsBody .readout .value');
+        if (readoutEl) { readoutEl.textContent = r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 4)); readoutEl.style.color = r.error ? 'var(--red)' : 'var(--cyan)'; }
+      }
+    }
   }
 
-  renderAll();
+  // ==================================================================
+  // Canvas rendering: blocks (with input/output ports) + wires
+  // ==================================================================
+  function portPositions(block) {
+    const n = block.inputs.length;
+    const rot = block.rotation || 0;
+    const { bw, bh } = blockSize(block);
+    const cx = block.x + bw / 2, cy = block.y + bh / 2;
+    // The block's shape and text stay upright for readability regardless
+    // of rotation -- only which EDGE the ports sit on changes. This is
+    // the same simplification real schematic tools make: you can flip
+    // which side signal flows in/out of, without needing sideways text.
+    if (rot === 180) {
+      return { ins: block.inputs.map((_, i) => ({ x: block.x + bw, y: block.y + ((i + 1) * bh) / (n + 1) })), out: { x: block.x, y: cy } };
+    }
+    if (rot === 90) {
+      return { ins: block.inputs.map((_, i) => ({ x: block.x + ((i + 1) * bw) / (n + 1), y: block.y })), out: { x: cx, y: block.y + bh } };
+    }
+    if (rot === 270) {
+      return { ins: block.inputs.map((_, i) => ({ x: block.x + ((i + 1) * bw) / (n + 1), y: block.y + bh })), out: { x: cx, y: block.y } };
+    }
+    return { ins: block.inputs.map((_, i) => ({ x: block.x, y: block.y + ((i + 1) * bh) / (n + 1) })), out: { x: block.x + bw, y: cy } };
+  }
+
+  function render() {
+    renderDiagramContent();
+    wireInteractions();
+    renderProps();
+  }
+
+  /** Just the SVG markup (+ toolbar visibility), no listener attachment
+   * or properties-panel rebuild. Dragging a block calls this alone on
+   * every pointermove instead of the full render() above -- re-querying
+   * every port/wire/block and creating a fresh batch of event listener
+   * closures dozens of times per second (which the full render() does,
+   * via wireInteractions()) is real, avoidable work that was making the
+   * drag feel noticeably less smooth than it should. The full render()
+   * still runs once when the drag ends, to settle everything and
+   * re-attach listeners in a clean, consistent state. */
+  function renderDiagramContent() {
+    const results = currentResults();
+    toolbar.querySelector('#simControls').style.display = simulation ? 'flex' : 'none';
+    toolbar.querySelector('#staticNote').style.display = simulation ? 'none' : '';
+
+    // The SVG's own width/height must always cover every block's actual
+    // position, or a block dragged past the previous fixed bounds gets
+    // silently clipped by the SVG viewport -- invisible, even though its
+    // data position (and everything about the simulation) is completely
+    // correct. Recomputed on every render so no drag distance can ever
+    // outrun it.
+    const PAD = 240;
+    let maxX = 1600, maxY = 1100;
+    blocks.forEach((block) => {
+      const { bw, bh } = blockSize(block);
+      maxX = Math.max(maxX, block.x + bw + PAD);
+      maxY = Math.max(maxY, block.y + bh + PAD);
+    });
+    svg.setAttribute('width', maxX);
+    svg.setAttribute('height', maxY);
+
+    let svgContent = `<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>`;
+
+    // Wires
+    blocks.forEach((block) => {
+      const { ins } = portPositions(block);
+      block.inputs.forEach((inp, i) => {
+        if (inp.source === 'block') {
+          const src = blocks.find((b) => b.id === inp.blockId);
+          if (!src) return;
+          const { out } = portPositions(src);
+          const to = ins[i];
+          const midX = (out.x + to.x) / 2;
+          const wireD = `M ${out.x} ${out.y} C ${midX} ${out.y}, ${midX} ${to.y}, ${to.x} ${to.y}`;
+          // A wire's actual clickable area used to be exactly its 2px
+          // stroke -- genuinely hard to hit on a curved path, which is
+          // exactly why disconnecting one felt broken. This invisible,
+          // much wider path sits underneath and carries the same
+          // data-wire-to/data-wire-idx, giving a forgiving ~18px hit
+          // margin around the visible line without changing how it looks.
+          svgContent += `<path d="${wireD}" fill="none" stroke="transparent" stroke-width="18" data-wire-to="${block.id}" data-wire-idx="${i}" style="cursor:pointer;"/>`;
+          svgContent += `<path d="${wireD}" fill="none" stroke="var(--cyan)" stroke-width="2" marker-end="url(#arrow)" opacity="0.8" style="pointer-events:none;"/>`;
+        }
+      });
+    });
+
+    // Blocks
+    blocks.forEach((block) => {
+      const def = sama.SAMA_BLOCK_TYPES[block.type];
+      const r = results.get(block.id) || { value: null, error: null };
+      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : 'var(--cyan)';
+      const { bw, bh } = blockSize(block);
+      const scale = block.scale ?? 1;
+      const cx = block.x + bw / 2, cy = block.y + bh / 2;
+      const isSelected = block.id === selectedId;
+      let shape;
+      if (def.category === 'analog') {
+        shape = `<ellipse cx="${cx}" cy="${cy}" rx="${bw / 2}" ry="${bh / 2}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+      } else if (def.category === 'dynamic') {
+        const cut = 20 * scale;
+        shape = `<polygon points="${block.x + cut},${block.y} ${block.x + bw - cut},${block.y} ${block.x + bw},${cy} ${block.x + bw - cut},${block.y + bh} ${block.x + cut},${block.y + bh} ${block.x},${cy}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+      } else if (def.category === 'io') {
+        // "House"/pentagon terminal shape, the common convention for
+        // marking a real field I/O termination point as visually
+        // distinct from an internal calculation block.
+        const peak = 16 * scale;
+        shape = `<polygon points="${block.x},${block.y} ${block.x + bw},${block.y} ${block.x + bw},${block.y + bh - peak} ${cx},${block.y + bh} ${block.x},${block.y + bh - peak}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+      } else {
+        shape = `<rect x="${block.x}" y="${block.y}" width="${bw}" height="${bh}" rx="4" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+      }
+      const { ins, out } = portPositions(block);
+      const portR = Math.max(3, 6 * scale), hitR = Math.max(8, 15 * scale);
+      svgContent += `<g data-block-id="${block.id}" class="sama-node" style="cursor:grab;touch-action:none;">
+        ${shape}
+        <text x="${cx}" y="${block.y + 20 * scale}" text-anchor="middle" font-size="${(10.5 * scale).toFixed(1)}" fill="${color}" font-weight="600" style="pointer-events:none;">${def.label}</text>
+        <text x="${cx}" y="${block.y + 34 * scale}" text-anchor="middle" font-size="${(8.5 * scale).toFixed(1)}" fill="var(--text-faint)" style="pointer-events:none;">${block.id}</text>
+        <text x="${cx}" y="${block.y + 52 * scale}" text-anchor="middle" font-size="${(13 * scale).toFixed(1)}" fill="${r.error ? 'var(--red)' : 'var(--text)'}" font-weight="700" data-diagram-value="${block.id}" style="pointer-events:none;">${r.error ? 'ERR' : (r.value === null ? '—' : fmt(r.value, 3))}</text>
+        <circle data-port="out" data-block-id="${block.id}" cx="${out.x}" cy="${out.y}" r="${portR}" fill="var(--bg-panel)" stroke="var(--cyan)" stroke-width="2" style="pointer-events:none;"/>
+        <circle data-port="out" data-block-id="${block.id}" cx="${out.x}" cy="${out.y}" r="${hitR}" fill="transparent" style="cursor:crosshair;touch-action:none;"/>
+        ${ins.map((p, i) => `
+        <circle data-port="in" data-block-id="${block.id}" data-input-idx="${i}" cx="${p.x}" cy="${p.y}" r="${portR}" fill="${block.inputs[i].source === 'block' ? CONNECT_OK_COLOR : 'var(--bg-panel)'}" stroke="${block.inputs[i].source === 'block' ? CONNECT_OK_COLOR : 'var(--cyan)'}" stroke-width="2" style="pointer-events:none;"/>
+        <circle data-port="in" data-block-id="${block.id}" data-input-idx="${i}" cx="${p.x}" cy="${p.y}" r="${hitR}" fill="transparent" style="cursor:crosshair;touch-action:none;"/>`).join('')}
+        <text x="${block.x + bw - 4}" y="${block.y - 6}" text-anchor="end" font-size="13" fill="var(--red)" data-remove-block="${block.id}" style="cursor:pointer;font-weight:700;">✕</text>
+      </g>`;
+    });
+
+    svg.innerHTML = svgContent;
+  }
+
+  // ==================================================================
+  // Properties panel for the selected block
+  // ==================================================================
+  /** Renders one param's field, choosing the right control for its
+   * schema: a checkbox for a boolean toggle, a dropdown for a fixed set
+   * of options, a range slider when the param declares sliderWhen and
+   * that OTHER param (e.g. "enable live slider") is currently truthy on
+   * this block, or a plain number field otherwise. All four still write
+   * to the same data-param attribute, so the existing input handler
+   * needs no per-type special-casing. */
+  function paramFieldHTML(p, block) {
+    const val = block.params[p.id];
+    if (p.type === 'boolean') {
+      return `<div class="field" style="flex-direction:row;align-items:center;gap:8px;"><label style="margin:0;">${p.label}</label><input type="checkbox" data-param="${p.id}" data-param-bool="1" ${val ? 'checked' : ''} style="width:auto;"></div>`;
+    }
+    if (p.options) {
+      return `<div class="field"><label>${p.label}</label><select data-param="${p.id}">${p.options.map((o) => `<option value="${o.value}" ${val === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}</select></div>`;
+    }
+    if (p.sliderWhen && block.params[p.sliderWhen]) {
+      const lo = block.params[p.sliderMin] ?? 0, hi = block.params[p.sliderMax] ?? 100;
+      return `<div class="field"><label>${p.label} (${fmt(val, 2)})</label><input type="range" min="${Math.min(lo, hi)}" max="${Math.max(lo, hi)}" step="any" data-param="${p.id}" value="${val}"></div>`;
+    }
+    return `<div class="field"><label>${p.label}</label><input type="number" step="any" data-param="${p.id}" value="${val}"></div>`;
+  }
+
+  function renderProps() {
+    const panel = document.getElementById('propsPanel');
+    const body = document.getElementById('propsBody');
+    const block = blocks.find((b) => b.id === selectedId);
+    if (!block) { panel.style.display = 'none'; return; }
+    panel.style.display = '';
+    const def = sama.SAMA_BLOCK_TYPES[block.type];
+    const results = currentResults();
+    const r = results.get(block.id) || { value: null, error: null };
+    body.innerHTML = `
+      <div style="font-weight:600;margin-bottom:4px;">${def.label} <span style="color:var(--text-faint);font-weight:400;font-size:.78rem;">(${block.id})</span></div>
+      <div class="readout" style="margin:6px 0;"><span class="value" style="font-size:1.4rem;color:${r.error ? 'var(--red)' : 'var(--cyan)'};">${r.error ? 'ERR' : (r.value === null ? '—' : fmt(r.value, 4))}</span></div>
+      ${r.error ? `<div class="assumptions-note" style="font-size:.74rem;">${r.error}</div>` : ''}
+      <div style="color:var(--text-faint);font-size:.74rem;margin:6px 0;">${def.description}</div>
+      ${block.inputs.map((inp, i) => inp.source === 'const' ? `
+        <div class="field"><label>Input ${i + 1} (constant)</label><input type="number" step="any" data-const-idx="${i}" value="${inp.value}"></div>
+      ` : `<div class="field"><label>Input ${i + 1}</label><div style="color:var(--cyan);font-size:.82rem;padding:6px 0;">← wired from ${inp.blockId}</div></div>`).join('')}
+      ${def.inputs.min !== def.inputs.max ? `<div class="btn-row">
+        ${block.inputs.length < def.inputs.max ? '<button class="btn secondary" id="propAddInput" style="font-size:.76rem;">+ Input</button>' : ''}
+        ${block.inputs.length > def.inputs.min ? '<button class="btn secondary" id="propRemoveInput" style="font-size:.76rem;">− Input</button>' : ''}
+      </div>` : ''}
+      ${def.params.length ? def.params.map((p) => paramFieldHTML(p, block)).join('') : ''}
+      <div class="field"><label>Block size (${Math.round((block.scale ?? 1) * 100)}%)</label><input type="range" min="0.6" max="1.6" step="0.1" data-block-size value="${block.scale ?? 1}"></div>
+      <button class="btn secondary" id="propRotateBlock" style="margin-top:8px;width:100%;">Rotate 90\u00b0 (currently ${block.rotation || 0}\u00b0)</button>
+      <button class="btn secondary" id="propRemoveBlock" style="margin-top:8px;width:100%;">Remove Block</button>
+    `;
+    // Guard against NaN (typing a lone "-" as the first character of a
+    // negative number parses to NaN) and, critically, do NOT call render()
+    // or structureChanged() here -- those rebuild the whole properties
+    // panel's HTML, including this very <input>, which wipes out
+    // whatever the user is mid-typing (the exact reason negative numbers
+    // felt broken: the "-" got overwritten by a re-render before a digit
+    // could follow it). refreshDisplayValues() updates only the
+    // computed VALUES shown elsewhere, never any <input> element.
+    body.querySelectorAll('[data-const-idx]').forEach((inp) => inp.addEventListener('input', () => {
+      const v = parseFloat(inp.value);
+      if (!Number.isNaN(v)) block.inputs[+inp.dataset.constIdx].value = v;
+      refreshDisplayValues();
+    }));
+    body.querySelectorAll('[data-param]').forEach((inp) => inp.addEventListener('input', () => {
+      // A running simulation already re-reads params fresh every step
+      // (see each dynamic block's stepCompute), so there is no need to
+      // rebuild it here either -- doing so would reset all accumulated
+      // state (e.g. a PID's integral term) on every keystroke.
+      const key = inp.dataset.param;
+      if (inp.dataset.paramBool) {
+        // A boolean toggle here specifically controls whether a sibling
+        // param renders as a slider -- that's a structural change to
+        // the panel (swapping which input type appears), so it needs a
+        // full render(), unlike every other param edit on this page.
+        block.params[key] = inp.checked ? 1 : 0;
+        render();
+        return;
+      }
+      const v = parseFloat(inp.value);
+      // A select's option values can be either numeric (e.g. Time Delay's
+      // mode: 0/1) or a genuine string label (e.g. AI's process parameter:
+      // "temperature", "vibration"...) -- parseFloat() on a string like
+      // "vibration" is NaN, so the old NaN-guard here was silently
+      // discarding every string-valued selection instead of ever saving
+      // it. Numeric option values still get converted to actual numbers
+      // (needed for comparisons like `params.mode < 0.5` elsewhere);
+      // anything that doesn't parse as a number is kept as the raw string.
+      block.params[key] = Number.isNaN(v) ? inp.value : v;
+      if (inp.type === 'range') {
+        // Update the slider's own label live as it's dragged -- the
+        // number is the whole point of watching a slider move, and a
+        // full render() here would rebuild the input mid-drag.
+        const labelEl = inp.closest('.field')?.querySelector('label');
+        if (labelEl) labelEl.textContent = labelEl.textContent.replace(/\([^)]*\)$/, `(${fmt(v, 2)})`);
+      }
+      refreshDisplayValues();
+    }));
+    const addBtn = body.querySelector('#propAddInput');
+    if (addBtn) addBtn.addEventListener('click', () => { block.inputs.push({ source: 'const', value: 0 }); structureChanged(); });
+    const remBtn = body.querySelector('#propRemoveInput');
+    if (remBtn) remBtn.addEventListener('click', () => { block.inputs.pop(); structureChanged(); });
+    body.querySelector('#propRotateBlock').addEventListener('click', () => {
+      block.rotation = ((block.rotation || 0) + 90) % 360;
+      render();
+    });
+    const sizeSlider = body.querySelector('[data-block-size]');
+    if (sizeSlider) sizeSlider.addEventListener('input', () => {
+      block.scale = +sizeSlider.value;
+      render(); // purely visual, like rotation -- never touches the simulation
+    });
+    body.querySelector('#propRemoveBlock').addEventListener('click', () => removeBlock(block.id));
+  }
+
+  function removeBlock(id) {
+    blocks.forEach((b) => b.inputs.forEach((inp) => { if (inp.source === 'block' && inp.blockId === id) { inp.source = 'const'; inp.value = 0; } }));
+    blocks = blocks.filter((b) => b.id !== id);
+    if (selectedId === id) selectedId = null;
+    structureChanged();
+  }
+
+  // ==================================================================
+  // Interactions: dragging an existing block to reposition, clicking a
+  // block to select it, dragging from a port to wire, clicking a wire
+  // or the X to delete. All pointer-event based -- works for mouse and
+  // touch, and (same lesson learned before) all move/up listeners go on
+  // `document`, never on the SVG node itself, since render() replaces
+  // the whole SVG's innerHTML on every intermediate frame.
+  // ==================================================================
+  function svgPoint(clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+    return { x: clientX - rect.left + canvasWrap.scrollLeft, y: clientY - rect.top + canvasWrap.scrollTop };
+  }
+
+  function wireInteractions() {
+    svg.querySelectorAll('[data-remove-block]').forEach((el) => el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      removeBlock(el.dataset.removeBlock);
+    }));
+
+    svg.querySelectorAll('path[data-wire-to]').forEach((path) => path.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      const toId = path.dataset.wireTo, idx = +path.dataset.wireIdx;
+      const block = blocks.find((b) => b.id === toId);
+      block.inputs[idx] = { source: 'const', value: 0 };
+      structureChanged();
+    }));
+
+    // Shared wire-drag helper: draws a live dashed line from `fromId`'s
+    // output port following the pointer, and on release either connects
+    // to whatever input port was under the cursor or leaves nothing
+    // connected. Used both for a plain NEW connection (dragging from an
+    // output dot) and for RECONNECTING an existing one (dragging from an
+    // input dot that already has a wire "picks up" that wire from its
+    // source end, using this exact same drag).
+    function startWireDragFrom(fromId, onComplete) {
+      const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      tempLine.setAttribute('stroke', 'var(--amber)'); tempLine.setAttribute('stroke-width', '2.5'); tempLine.setAttribute('fill', 'none');
+      tempLine.setAttribute('stroke-dasharray', '5,4');
+      svg.appendChild(tempLine);
+      const src = blocks.find((b) => b.id === fromId);
+      const { out } = portPositions(src);
+
+      // Show every port you COULD drop on right away, as a light ring
+      // around its (already enlarged) touch target -- the direct fix
+      // for "difficulty in connection": you can see every valid target
+      // the moment you start dragging, not only once you happen to land
+      // on top of one.
+      const validTargets = [...svg.querySelectorAll('[data-port="in"]')].filter((el) => el.getAttribute('r') === '15' && el.dataset.blockId !== fromId);
+      validTargets.forEach((el) => { el.setAttribute('stroke', 'var(--cyan)'); el.setAttribute('stroke-width', '2'); el.setAttribute('opacity', '0.6'); });
+
+      let hoveredEl = null;
+      function setHover(el) {
+        if (hoveredEl === el) return;
+        if (hoveredEl) { hoveredEl.setAttribute('stroke', 'var(--cyan)'); hoveredEl.setAttribute('stroke-width', '2'); hoveredEl.setAttribute('opacity', '0.6'); }
+        if (el) { el.setAttribute('stroke', CONNECT_OK_COLOR); el.setAttribute('stroke-width', '4'); el.setAttribute('opacity', '1'); }
+        hoveredEl = el;
+      }
+      function onMove(ev) {
+        const p = svgPoint(ev.clientX, ev.clientY);
+        tempLine.setAttribute('d', `M ${out.x} ${out.y} L ${p.x} ${p.y}`);
+        const target = document.elementFromPoint(ev.clientX, ev.clientY);
+        const isValid = target && target.dataset && target.dataset.port === 'in' && target.dataset.blockId !== fromId;
+        setHover(isValid ? target : null);
+      }
+      function onUp(ev) {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        tempLine.remove();
+        // Always clear every ring/hover style, whether or not a
+        // connection was actually made -- dropping in empty space
+        // aborts the connection and previously left these stuck on
+        // screen, since only a SUCCESSFUL connection triggered the
+        // re-render that would otherwise have cleared them.
+        setHover(null);
+        validTargets.forEach((el) => { el.removeAttribute('stroke'); el.removeAttribute('stroke-width'); el.removeAttribute('opacity'); });
+        const target = document.elementFromPoint(ev.clientX, ev.clientY);
+        let connected = false;
+        if (target && target.dataset && target.dataset.port === 'in') {
+          const toId = target.dataset.blockId, idx = +target.dataset.inputIdx;
+          if (toId !== fromId) {
+            const toBlock = blocks.find((b) => b.id === toId);
+            toBlock.inputs[idx] = { source: 'block', blockId: fromId };
+            connected = true;
+          }
+        }
+        onComplete(connected);
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    }
+
+    svg.querySelectorAll('[data-port="out"]').forEach((portEl) => portEl.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      startWireDragFrom(portEl.dataset.blockId, (connected) => { if (connected) structureChanged(); });
+    }));
+
+    // Reconnect: pressing down on an INPUT port that already has a wire
+    // detaches it immediately (so you visually "pick it up") and lets you
+    // drag to a DIFFERENT output port to change which block feeds this
+    // input -- drop on empty space to simply leave it disconnected. This
+    // changes the SOURCE for a fixed input, which is the natural meaning
+    // of "reconnect" (as opposed to moving the same source to feed a
+    // different input elsewhere).
+    svg.querySelectorAll('[data-port="in"]').forEach((portEl) => portEl.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      const toId = portEl.dataset.blockId, idx = +portEl.dataset.inputIdx;
+      const block = blocks.find((b) => b.id === toId);
+      const existing = block.inputs[idx];
+      if (existing.source !== 'block') return; // unconnected input dot -- nothing to pick up
+      block.inputs[idx] = { source: 'const', value: 0 };
+      render();
+      const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      tempLine.setAttribute('stroke', 'var(--amber)'); tempLine.setAttribute('stroke-width', '2.5'); tempLine.setAttribute('fill', 'none');
+      tempLine.setAttribute('stroke-dasharray', '5,4');
+      svg.appendChild(tempLine);
+      const validSources = [...svg.querySelectorAll('[data-port="out"]')].filter((el) => el.dataset.blockId !== toId);
+      validSources.forEach((el) => { el.setAttribute('stroke', 'var(--cyan)'); el.setAttribute('stroke-width', '2'); el.setAttribute('opacity', '0.6'); });
+      let hoveredEl = null;
+      function setHover(el) {
+        if (hoveredEl === el) return;
+        if (hoveredEl) { hoveredEl.setAttribute('stroke', 'var(--cyan)'); hoveredEl.setAttribute('stroke-width', '2'); hoveredEl.setAttribute('opacity', '0.6'); }
+        if (el) { el.setAttribute('stroke', CONNECT_OK_COLOR); el.setAttribute('stroke-width', '4'); el.setAttribute('opacity', '1'); }
+        hoveredEl = el;
+      }
+      function onMove(ev) {
+        const { ins } = portPositions(block);
+        const to = ins[idx];
+        const p = svgPoint(ev.clientX, ev.clientY);
+        tempLine.setAttribute('d', `M ${to.x} ${to.y} L ${p.x} ${p.y}`);
+        const target = document.elementFromPoint(ev.clientX, ev.clientY);
+        const isValid = target && target.dataset && target.dataset.port === 'out' && target.dataset.blockId !== toId;
+        setHover(isValid ? target : null);
+      }
+      function onUp(ev) {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        tempLine.remove();
+        setHover(null);
+        validSources.forEach((el) => { el.removeAttribute('stroke'); el.removeAttribute('stroke-width'); el.removeAttribute('opacity'); });
+        const target = document.elementFromPoint(ev.clientX, ev.clientY);
+        if (target && target.dataset && target.dataset.port === 'out' && target.dataset.blockId !== toId) {
+          block.inputs[idx] = { source: 'block', blockId: target.dataset.blockId };
+        }
+        structureChanged();
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    }));
+
+    svg.querySelectorAll('.sama-node').forEach((node) => node.addEventListener('pointerdown', (e) => {
+      if (e.target.dataset.port || e.target.dataset.removeBlock) return; // handled above
+      e.preventDefault();
+      const id = node.dataset.blockId;
+      const block = blocks.find((b) => b.id === id);
+      const startX = e.clientX, startY = e.clientY;
+      const startBX = block.x, startBY = block.y;
+      let moved = false;
+      function onMove(ev) {
+        const dx = ev.clientX - startX, dy = ev.clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+        block.x = Math.max(0, startBX + dx);
+        block.y = Math.max(0, startBY + dy);
+        renderDiagramContent(); // cheap: markup only, no listener churn while actively dragging
+      }
+      function onUp() {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        if (!moved) selectedId = id;
+        render(); // settle once: re-attach listeners and refresh the properties panel
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    }));
+  }
+
+  // ==================================================================
+  // Palette drag-to-create
+  // ==================================================================
+  palette.querySelectorAll('.palette-chip').forEach((chip) => {
+    chip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const type = chip.dataset.blockType;
+      const ghost = chip.cloneNode(true);
+      ghost.style.position = 'fixed'; ghost.style.pointerEvents = 'none'; ghost.style.zIndex = '9999'; ghost.style.opacity = '0.85';
+      ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px';
+      document.body.appendChild(ghost);
+      function onMove(ev) { ghost.style.left = ev.clientX + 'px'; ghost.style.top = ev.clientY + 'px'; }
+      function onUp(ev) {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        ghost.remove();
+        const rect = canvasWrap.getBoundingClientRect();
+        if (ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom) {
+          const def = sama.SAMA_BLOCK_TYPES[type];
+          counter += 1;
+          const id = 'b' + counter;
+          const params = {};
+          def.params.forEach((p) => { params[p.id] = p.default; });
+          const inputs = Array.from({ length: def.inputs.min }, () => ({ source: 'const', value: 0 }));
+          const p = svgPoint(ev.clientX, ev.clientY);
+          blocks.push({ id, type, params, inputs, x: Math.max(0, p.x - BW / 2), y: Math.max(0, p.y - BH / 2), rotation: 0, scale: 1 });
+          selectedId = id;
+          structureChanged();
+        }
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  });
+
+  toolbar.querySelector('#clearAllBtn').addEventListener('click', () => {
+    blocks = []; selectedId = null; structureChanged();
+  });
+  toolbar.querySelector('#simPlayPause').addEventListener('click', () => {
+    simRunning = !simRunning;
+    toolbar.querySelector('#simPlayPause').textContent = simRunning ? 'Pause' : 'Play';
+    if (simRunning) startTimer(); else stopTimer();
+  });
+  toolbar.querySelector('#simReset').addEventListener('click', () => { if (simulation) { simulation.reset(); updateLiveValues(); } });
+
+  // ==================================================================
+  // Real, complete example circuits -- both independently verified
+  // against hand/engine calculations before being wired in here (see
+  // the build notes): a genuine closed-loop level control (PID against
+  // a true integrating process, matching how level control is modeled
+  // everywhere else in this app -- not a simplified lag), and the same
+  // combustion cross-limiting philosophy used in the Control Loops
+  // section, demonstrating the actual safety behavior (fuel demand held
+  // back to what air can support during a load increase).
+  // ==================================================================
+  const EXAMPLES = {
+    pidLevel: {
+      label: 'PID Level Control (closed loop)',
+      about: 'A real closed-loop level controller. The Level Setpoint (50) and the actual Level are compared by the PID, which outputs a valve demand. That demand is combined with a fixed Outflow disturbance (45) by the Summer \u2014 inflow minus outflow \u2014 and the result accumulates in the Integrator, which IS the level (a tank has no self-regulation: any lasting imbalance between in and out just keeps ramping the level, exactly like the real drum-level physics used elsewhere in this app).',
+      watch: 'Watch the Integrator (\u222b) block, labeled "level" \u2014 it should settle at 50 (the setpoint), and once it does, the PID\u2019s own output will have settled at exactly 45 \u2014 matching the outflow disturbance. That match is the real physics: at a steady level, inflow must equal outflow.',
+      blocks: [
+        { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }], x: 20, y: 20, rotation: 0 },
+        { id: 'outflow', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 45 }], x: 20, y: 220, rotation: 0 },
+        { id: 'pid', type: 'pid', params: { kp: 2, ki: 0.3, kd: 0, outMin: 0, outMax: 100 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'level' }], x: 300, y: 20, rotation: 0 },
+        { id: 'net', type: 'summer', params: { bias: 0 }, gains: [1, -1], inputs: [{ source: 'block', blockId: 'pid' }, { source: 'block', blockId: 'outflow' }], x: 620, y: 130, rotation: 0 },
+        { id: 'level', type: 'integrator', params: { gain: 0.3, min: -100, max: 100 }, inputs: [{ source: 'block', blockId: 'net' }], x: 940, y: 130, rotation: 0 },
+      ],
+    },
+    crossLimit: {
+      label: 'Combustion Cross-Limiting',
+      about: 'The safety logic that keeps a boiler from ever running fuel-rich. Fuel Demand and Air Feedforward normally track together. The Air Demand output is a HIGH SELECT of the two \u2014 air is never allowed to fall below what fuel needs. The Fuel Demand output is a LOW SELECT of the same two \u2014 fuel is never allowed to exceed what air can actually support.',
+      watch: 'Both start equal (75, 75) so both outputs read 75. Select the "fuel" block and raise its value to, say, 90 \u2014 Air Demand rises to 90 immediately (air leads), but Fuel Demand stays pinned at 75 (fuel is held back) until air actually catches up. That gap is the entire point of cross-limiting.',
+      blocks: [
+        { id: 'fuel', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 75 }], x: 20, y: 20, rotation: 0 },
+        { id: 'air', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 75 }], x: 20, y: 220, rotation: 0 },
+        { id: 'airDemand', type: 'highSelect', params: {}, inputs: [{ source: 'block', blockId: 'fuel' }, { source: 'block', blockId: 'air' }], x: 380, y: 20, rotation: 0 },
+        { id: 'fuelDemand', type: 'lowSelect', params: {}, inputs: [{ source: 'block', blockId: 'fuel' }, { source: 'block', blockId: 'air' }], x: 380, y: 220, rotation: 0 },
+      ],
+    },
+  };
+  const exampleInfo = h('<div class="card" id="exampleInfo" style="display:none;margin-top:10px;"></div>');
+  app.appendChild(exampleInfo);
+  toolbar.querySelector('#loadExampleSelect').addEventListener('change', (e) => {
+    const key = e.target.value;
+    if (!key || !EXAMPLES[key]) return;
+    const ex = EXAMPLES[key];
+    blocks = ex.blocks.map((b) => ({ ...b, inputs: b.inputs.map((i) => ({ ...i })) }));
+    counter = blocks.length;
+    selectedId = null;
+    exampleInfo.style.display = '';
+    exampleInfo.innerHTML = `
+      <div class="panel-title" style="margin-bottom:2px;">${ex.label}</div>
+      <p style="color:var(--text-dim);font-size:.86rem;line-height:1.6;margin:6px 0;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">${ex.about}</p>
+      <div class="assumptions-note" style="margin-top:8px;">${ex.watch}</div>
+    `;
+    structureChanged();
+    e.target.value = '';
+  });
+
+  render();
 }// ---------- Beam Analysis ----------
 
 // ================= CIVIL ENGINEERING SECTION =================
@@ -8347,7 +8847,7 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260908125111';
+const APP_BUILD = '20260910161636';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('buildTag')) {

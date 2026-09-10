@@ -53,6 +53,21 @@ function v1(p, T) {
   return (R * T / (p * 1000)) * pi * gp;
 }
 
+/** Region 1 specific enthalpy, kJ/kg. p in MPa, T in K. Same dimensionless
+ * Gibbs free energy gamma(pi,tau) as v1() above (reusing the identical,
+ * already-verified R1_I/R1_J/R1_n coefficient tables) — this is its
+ * temperature derivative gamma_tau rather than v1's pressure derivative:
+ * h = R*T*tau*gamma_tau (IAPWS-IF97 eq. 9). */
+function h1(p, T) {
+  const pi = p / 16.53;
+  const tau = 1386 / T;
+  let gtau = 0;
+  for (let i = 0; i < R1_n.length; i++) {
+    gtau += R1_n[i] * Math.pow(7.1 - pi, R1_I[i]) * R1_J[i] * Math.pow(tau - 1.222, R1_J[i] - 1);
+  }
+  return R * T * tau * gtau;
+}
+
 // ---------- Region 2: superheated steam ----------
 const R2_J0 = [0, 1, -5, -4, -3, -2, -1, 2, 3];
 const R2_n0 = [
@@ -86,6 +101,21 @@ function v2(p, T) {
     grp += R2_n[i] * R2_I[i] * Math.pow(pi, R2_I[i] - 1) * Math.pow(tau - 0.5, R2_J[i]);
   }
   return (R * T / (p * 1000)) * pi * (g0p + grp);
+}
+
+/** Region 2 specific enthalpy, kJ/kg. p in MPa, T in K. Same ideal-gas-part
+ * plus residual-part split as v2() above (reusing the identical,
+ * already-verified R2_n0/R2_J0/R2_I/R2_J/R2_n coefficient tables) — this
+ * is the temperature derivative of each part rather than v2's pressure
+ * derivative: h = R*T*tau*(gamma0_tau + gammar_tau) (IAPWS-IF97 eq. 15). */
+function h2(p, T) {
+  const pi = p;
+  const tau = 540 / T;
+  let g0tau = 0;
+  for (let i = 0; i < R2_n0.length; i++) g0tau += R2_n0[i] * R2_J0[i] * Math.pow(tau, R2_J0[i] - 1);
+  let grtau = 0;
+  for (let i = 0; i < R2_n.length; i++) grtau += R2_n[i] * Math.pow(pi, R2_I[i]) * R2_J[i] * Math.pow(tau - 0.5, R2_J[i] - 1);
+  return R * T * tau * (g0tau + grtau);
 }
 
 // ---------- Region 4: saturation line ----------
@@ -170,6 +200,31 @@ export function density(pressureBarA, tempC) {
 }
 
 /**
+ * Specific enthalpy in kJ/kg for pressure (bar absolute) and temperature
+ * (°C) — real IAPWS-IF97, the same Region 1 / Region 2 formulation and
+ * coefficient tables as specificVolume() above, not a correlation or
+ * approximation. Throws the same way specificVolume() does for a state
+ * outside the implemented regions, rather than returning a plausible but
+ * wrong number.
+ */
+export function enthalpy(pressureBarA, tempC) {
+  if (!Number.isFinite(pressureBarA) || pressureBarA <= 0) {
+    throw new Error('Pressure must be greater than zero (absolute bar).');
+  }
+  if (!Number.isFinite(tempC)) throw new Error('Temperature must be a number (°C).');
+  const p = pressureBarA / 10;     // bar -> MPa
+  const T = tempC + 273.15;
+  const r = region(p, T);
+  if (r === null) {
+    throw new Error(`State ${pressureBarA} bar a / ${tempC} °C is outside the IF97 range implemented here (0–100 MPa, 0–800 °C).`);
+  }
+  if (r === 3) {
+    throw new Error(`State ${pressureBarA} bar a / ${tempC} °C falls in IAPWS Region 3 (near-critical), which is not implemented. Supply the enthalpy directly from your own steam tables for this condition.`);
+  }
+  return r === 1 ? h1(p, T) : h2(p, T);
+}
+
+/**
  * Density with an explicit phase check, for flow work.
  * Returns the density plus whether the state is superheated steam,
  * subcooled water, or sitting essentially on the saturation line — where a
@@ -179,6 +234,7 @@ export function steamState(pressureBarA, tempC) {
   const p = pressureBarA / 10;
   const T = tempC + 273.15;
   const rho = density(pressureBarA, tempC);
+  const h = enthalpy(pressureBarA, tempC);
   let tSatC = null;
   try { tSatC = tsat(p) - 273.15; } catch { /* above critical pressure */ }
 
@@ -196,5 +252,5 @@ export function steamState(pressureBarA, tempC) {
     phase = 'saturated / wet';
     note = `Within 1 °C of saturation (${tSatC.toFixed(1)} °C). Density is very sensitive here and steam quality is unknown, so a DP flow reading in this region should be treated as indicative only.`;
   }
-  return { densityKgM3: rho, specificVolumeM3Kg: 1 / rho, phase, saturationTempC: tSatC, note };
+  return { densityKgM3: rho, specificVolumeM3Kg: 1 / rho, enthalpyKJKg: h, phase, saturationTempC: tSatC, note };
 }
