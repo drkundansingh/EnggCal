@@ -17,7 +17,7 @@
 //   - BUILD_ID is stamped at build time, so every deploy gets a fresh cache
 //     and the previous one is deleted on activate.
 
-const BUILD_ID = '20260910161636';           // replaced during build
+const BUILD_ID = '20260911191310';           // replaced during build
 const CACHE_NAME = 'enghub-' + BUILD_ID;
 
 const SHELL_FILES = [

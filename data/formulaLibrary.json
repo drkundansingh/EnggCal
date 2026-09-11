@@ -323,5 +323,31 @@
     "application": "Building and simulating custom interlock/permissive control logic from standard symbols",
     "assumptions": "Static/algebraic blocks only — no dynamic (lag, integrator, timer) blocks, which need time-stepped simulation instead",
     "standard": "SAMA (Scientific Apparatus Makers Association) PMC 22.1 standard symbols"
+  },
+  {
+    "id": "f-cable-gland",
+    "name": "Cable Overall Diameter & Gland Size",
+    "category": "Instrumentation",
+    "formula": "OD = [(d_cond + 2t_ins) × k_layup + 2t_inner + 2t_armour] + 2t_outer, then match OD to a standard gland's clamping range",
+    "description": "Builds up a multicore cable's overall diameter layer by layer -- conductor, insulation, the geometric lay-up factor for the core/pair count, inner sheath, optional armour, and outer sheath -- then selects the standard cable gland whose clamping range covers that OD.",
+    "variables": "d_cond = conductor diameter, t_ins = insulation thickness, k_layup = lay-up (cabling) factor for the element count, t_inner/t_outer = sheath thickness, t_armour = armour wire diameter",
+    "units": "mm",
+    "example": "4 pair × 1.5 sqmm instrumentation cable, unarmoured → OD ≈ 14.1 mm → M25 gland (10-17 mm range)",
+    "application": "Selecting cable glands for junction boxes, marshalling cabinets, and field instrument enclosures",
+    "assumptions": "Standard IEC 60228 stranding allowance, IS 5831/IS 1554-based insulation thickness, geometric circle-packing lay-up factors (exact for 1/2/3/4/7 cores, interpolated for other standard counts). An estimate, not a specific manufacturer's datasheet -- actual cable OD varies between manufacturers even at the same nominal size.",
+    "standard": "IEC 60228, IS 1554, IS 5831, IEC 62444"
+  },
+  {
+    "id": "f-boiler-efficiency",
+    "name": "Boiler Efficiency (Indirect / Heat Loss Method)",
+    "category": "Power Plant",
+    "formula": "η = 100 − (L1+L2+L3+L4+L5+L6+L7+L8), L1 = m×Cp×(Tf−Ta)/GCV×100, L2 = 9H₂×[584+Cp(Tf−Ta)]/GCV×100",
+    "description": "Computes boiler efficiency from individually calculated heat losses (dry flue gas, H2 in fuel, moisture in fuel/air, CO, surface radiation, unburnt carbon) rather than an assumed efficiency percentage. The standard method used for real boiler performance testing.",
+    "variables": "m = dry flue gas mass (kg/kg fuel), Cp = specific heat, Tf/Ta = flue gas/ambient temperature, H2 = hydrogen % in fuel, GCV = gross calorific value",
+    "units": "kcal/kg, %, °C",
+    "example": "Coal (C=55%, H2=3.5%, moisture=8%), GCV=4200 kcal/kg, flue gas O2=5%, Tf=160°C, Ta=30°C → efficiency ≈ 85%",
+    "application": "Real boiler performance testing and energy audits (ASME PTC 4.1 / BEE India standard procedure) — available as Mode 5 of the Thermal Plant Estimator",
+    "assumptions": "L1-L5 computed from fuel ultimate analysis and flue gas data. L6 (surface loss) and L7/L8 (unburnt carbon in ash) require direct measurement and are user-supplied, not derived. Result is GCV-basis — differs from NCV-basis figures often quoted for high-hydrogen fuels like natural gas.",
+    "standard": "ASME PTC 4.1, BEE India standard procedure, BS 845 / DIN 1942 equivalent"
   }
 ]

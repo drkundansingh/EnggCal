@@ -32,7 +32,7 @@ export const OEM_REFERENCE_PROFILES = [
 
 export const VOTING_SCHEMES = ['1oo1', '1oo2', '2oo2', '2oo3', '2oo4', 'custom'];
 
-export const STATUS = { NORMAL: 'NORMAL', ALARM: 'ALARM', TRIP: 'TRIP' };
+export const STATUS = { NORMAL: 'NORMAL', ALARM: 'ALARM', TRIP: 'TRIP', TRIP_PENDING: 'TRIP PENDING' };
 
 export const CLASSIFICATIONS = [
   'ALARM', 'WARNING', 'INTERLOCK', 'PERMISSIVE', 'RUNBACK', 'LOAD LIMIT',
@@ -88,6 +88,45 @@ export const PARAMETER_REGISTRY = [
     applicability: 'all', normalMin: 1.2, normalMax: 2.0, alarmSetpoint: 0.9, tripSetpoint: 0.6, direction: 'low',
     timeDelaySec: 0, voting: '2oo3', tripAction: 'ETS trip, turning gear/AC-DC oil pump sequence per plant logic', resetCondition: 'Pressure normal, manual reset',
     permissive: 'None — safety trip', classification: 'ETS', dataType: 'Public Reference' },
+
+  // ---------------- Turbine Lube Oil Pumps (Main/AC/DC redundancy) ----------------
+  // A real turbine-generator's lube oil supply is never a single pump: the
+  // main pump (shaft- or motor-driven, normally running) is backed by an
+  // AC auxiliary pump that auto-starts on falling pressure, itself backed
+  // by a DC emergency pump on station batteries as the last line of
+  // defense -- because a tripped turbine rotor keeps coasting down, and
+  // still needs lubricated bearings, for several minutes with no other
+  // reason to run any AC-powered equipment at all. Each auto-start
+  // setpoint sits above the one below it, so each layer engages before
+  // the one behind it is needed, all above the ultimate ETS trip point.
+  { id: 'aux-loppump-main-fail', system: 'Turbine Lube Oil Pumps', category: 'Auxiliary Drive', label: 'Main Lube Oil Pump Running Status FAILED', unit: 'boolean',
+    applicability: 'all', normalMin: 0, normalMax: 0, alarmSetpoint: 1, tripSetpoint: 1, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'AC auxiliary lube oil pump auto-starts per interlock; alarm only, not itself an ETS trip while a standby pump maintains pressure', resetCondition: 'Main pump running confirmed, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-loppump-ac-autostart', system: 'Turbine Lube Oil Pumps', category: 'Auxiliary Drive', label: 'AC Auxiliary Lube Oil Pump Auto-Start Pressure', unit: 'bar',
+    applicability: 'all', normalMin: 1.2, normalMax: 2.0, alarmSetpoint: 1.05, tripSetpoint: 1.0, direction: 'low',
+    timeDelaySec: 0, voting: '2oo3', tripAction: 'AC auxiliary lube oil pump auto-starts — first backup layer, engages before the alarm setpoint on the main system pressure is even reached', resetCondition: 'Pressure restored, pump remains available for next demand',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-loppump-ac-fail-start', system: 'Turbine Lube Oil Pumps', category: 'Auxiliary Drive', label: 'AC Auxiliary Lube Oil Pump Failed to Start', unit: 'boolean',
+    applicability: 'all', normalMin: 0, normalMax: 0, alarmSetpoint: 1, tripSetpoint: 1, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'DC emergency lube oil pump auto-starts per interlock — critical alarm, the last automatic backup layer must now engage', resetCondition: 'Pump start confirmed on retry, manual reset',
+    permissive: 'None — critical alarm', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-loppump-ac-overload', system: 'Turbine Lube Oil Pumps', category: 'Auxiliary Drive', label: 'AC Auxiliary Lube Oil Pump Motor Overload', unit: '% FLC',
+    applicability: 'all', normalMin: 0, normalMax: 100, alarmSetpoint: 105, tripSetpoint: 115, direction: 'high',
+    timeDelaySec: 3, voting: '1oo1', tripAction: 'Alarm — DC emergency lube oil pump auto-starts per interlock if the AC pump trips on overload', resetCondition: 'Current normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-loppump-dc-autostart', system: 'Turbine Lube Oil Pumps', category: 'Auxiliary Drive', label: 'DC Emergency Lube Oil Pump Auto-Start Pressure', unit: 'bar',
+    applicability: 'all', normalMin: 1.2, normalMax: 2.0, alarmSetpoint: 0.8, tripSetpoint: 0.75, direction: 'low',
+    timeDelaySec: 0, voting: '2oo3', tripAction: 'DC emergency lube oil pump auto-starts on station batteries — last automatic layer, sits below the AC pump\u2019s auto-start point and above the ultimate ETS trip', resetCondition: 'Pressure restored, pump remains available for next demand',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-loppump-dc-fail-start', system: 'Turbine Lube Oil Pumps', category: 'Auxiliary Drive', label: 'DC Emergency Lube Oil Pump Failed to Start', unit: 'boolean',
+    applicability: 'all', normalMin: 0, normalMax: 0, alarmSetpoint: 1, tripSetpoint: 1, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'No further automatic backup remains — treat as an imminent-trip emergency; the ultimate ETS low lube-oil-pressure trip is the only protection left before bearing damage during coastdown', resetCondition: 'Pump start confirmed on retry, manual reset',
+    permissive: 'None — critical alarm, highest priority in the plant', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-loppump-dc-battery-low', system: 'Turbine Lube Oil Pumps', category: 'Auxiliary Drive', label: 'DC Emergency Lube Oil Pump Battery/DC Supply Voltage LOW', unit: 'V DC',
+    applicability: 'all', normalMin: 110, normalMax: 125, alarmSetpoint: 105, tripSetpoint: 100, direction: 'low',
+    timeDelaySec: 5, voting: '2oo3', tripAction: 'Alarm — the last line of defense for turbine bearing lubrication during a total blackout is degraded; investigate the station battery/charger immediately, not just the pump', resetCondition: 'DC bus voltage normal, manual reset',
+    permissive: 'None — critical alarm', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
   { id: 'ets-ehc-oil-pressure', system: 'ETS', category: 'Turbine Mechanical', label: 'EHC / Control Oil Pressure', unit: 'bar',
     applicability: 'all', normalMin: 100, normalMax: 140, alarmSetpoint: 90, tripSetpoint: 70, direction: 'low',
     timeDelaySec: 1, voting: '2oo3', tripAction: 'ETS trip — valves fail closed on loss of EHC pressure', resetCondition: 'Pressure normal, manual reset',
@@ -438,6 +477,10 @@ export const PARAMETER_REGISTRY = [
     applicability: 'all', normalMin: 0, normalMax: 100, alarmSetpoint: 105, tripSetpoint: 115, direction: 'high',
     timeDelaySec: 3, voting: '1oo1', tripAction: 'PA fan trip — standby PA fan auto-start per interlock', resetCondition: 'Current normal, manual reset',
     permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-pafan-bearing-temp', system: 'PA Fan', category: 'Auxiliary Drive', label: 'PA Fan Bearing Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 85, alarmSetpoint: 90, tripSetpoint: 100, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'PA fan trip — standby PA fan auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
 
   // ---------------- Mill / Pulverizer ----------------
   { id: 'aux-mill-outlet-temp', system: 'Mill', category: 'Auxiliary Drive', label: 'Mill Outlet Temperature HIGH', unit: '°C',
@@ -452,6 +495,15 @@ export const PARAMETER_REGISTRY = [
     applicability: 'all', normalMin: 40, normalMax: 85, alarmSetpoint: 90, tripSetpoint: 100, direction: 'high',
     timeDelaySec: 0, voting: '1oo1 (per mill)', tripAction: 'Mill trip — associated feeder trips', resetCondition: 'Temperature normal, manual reset',
     permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-mill-winding-temp', system: 'Mill', category: 'Auxiliary Drive', label: 'Mill Motor Winding Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 120, alarmSetpoint: 130, tripSetpoint: 155, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1 (per mill)', tripAction: 'Mill trip — associated feeder trips', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-mill-vibration-hh', system: 'Mill', category: 'Auxiliary Drive', label: 'Mill Motor/Gearbox Vibration HIGH-HIGH', unit: 'mm/s RMS',
+    applicability: 'all', normalMin: 0, normalMax: 4.5, alarmSetpoint: 7.1, tripSetpoint: 11.2, direction: 'high',
+    timeDelaySec: 2, voting: '1oo1 (per mill)', tripAction: 'Mill trip — associated feeder trips; measured at the motor/gearbox, since the slow-speed grinding table itself falls below the range ISO 10816-3 covers', resetCondition: 'Vibration normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference',
+    source: 'General shape of ISO 10816/20816 vibration-severity practice for large industrial gear drives.' },
 
   // ---------------- APH (Air Preheater) ----------------
   { id: 'aux-aph-diff-pressure', system: 'APH', category: 'Auxiliary Drive', label: 'APH Differential Pressure HIGH', unit: 'mmWC',
@@ -472,12 +524,29 @@ export const PARAMETER_REGISTRY = [
     applicability: 'all', normalMin: 40, normalMax: 80, alarmSetpoint: 85, tripSetpoint: 95, direction: 'high',
     timeDelaySec: 0, voting: '1oo1', tripAction: 'CW pump trip — standby CW pump auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
     permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-cwpump-winding-temp', system: 'CW Pump', category: 'Auxiliary Drive', label: 'CW Pump Motor Winding Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 120, alarmSetpoint: 130, tripSetpoint: 155, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'CW pump trip — standby CW pump auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
 
   // ---------------- ACW Pump (Auxiliary Cooling Water) ----------------
   { id: 'aux-acwpump-overload', system: 'ACW Pump', category: 'Auxiliary Drive', label: 'ACW Pump Motor Overload', unit: '% FLC',
     applicability: 'all', normalMin: 0, normalMax: 100, alarmSetpoint: 105, tripSetpoint: 115, direction: 'high',
     timeDelaySec: 3, voting: '1oo1', tripAction: 'ACW pump trip — standby ACW pump auto-start per interlock; auxiliary cooling loss risk if redundancy lost', resetCondition: 'Current normal, manual reset',
     permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-acwpump-bearing-temp', system: 'ACW Pump', category: 'Auxiliary Drive', label: 'ACW Pump Bearing Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 80, alarmSetpoint: 85, tripSetpoint: 95, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'ACW pump trip — standby ACW pump auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-acwpump-winding-temp', system: 'ACW Pump', category: 'Auxiliary Drive', label: 'ACW Pump Motor Winding Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 120, alarmSetpoint: 130, tripSetpoint: 155, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'ACW pump trip — standby ACW pump auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-acwpump-vibration-hh', system: 'ACW Pump', category: 'Auxiliary Drive', label: 'ACW Pump Vibration HIGH-HIGH', unit: 'mm/s RMS',
+    applicability: 'all', normalMin: 0, normalMax: 4.5, alarmSetpoint: 7.1, tripSetpoint: 11.2, direction: 'high',
+    timeDelaySec: 2, voting: '1oo1', tripAction: 'ACW pump trip — standby ACW pump auto-start per interlock', resetCondition: 'Vibration normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference',
+    source: 'General shape of ISO 10816/20816 vibration-severity practice for large industrial pumps.' },
 
   // ---------------- CEP (Condensate Extraction Pump) ----------------
   { id: 'aux-cep-low-hotwell', system: 'CEP', category: 'Auxiliary Drive', label: 'Hotwell Level LOW-LOW (CEP suction)', unit: 'mm',
@@ -488,6 +557,19 @@ export const PARAMETER_REGISTRY = [
     applicability: 'all', normalMin: 0, normalMax: 100, alarmSetpoint: 105, tripSetpoint: 115, direction: 'high',
     timeDelaySec: 3, voting: '1oo1', tripAction: 'CEP trip — standby CEP auto-start per interlock', resetCondition: 'Current normal, manual reset',
     permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-cep-bearing-temp', system: 'CEP', category: 'Auxiliary Drive', label: 'CEP Bearing Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 80, alarmSetpoint: 85, tripSetpoint: 95, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'CEP trip — standby CEP auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-cep-winding-temp', system: 'CEP', category: 'Auxiliary Drive', label: 'CEP Motor Winding Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 120, alarmSetpoint: 130, tripSetpoint: 155, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'CEP trip — standby CEP auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-cep-vibration-hh', system: 'CEP', category: 'Auxiliary Drive', label: 'CEP Vibration HIGH-HIGH', unit: 'mm/s RMS',
+    applicability: 'all', normalMin: 0, normalMax: 4.5, alarmSetpoint: 7.1, tripSetpoint: 11.2, direction: 'high',
+    timeDelaySec: 2, voting: '1oo1', tripAction: 'CEP trip — standby CEP auto-start per interlock; vibration is often an earlier indicator of cavitation from low hotwell NPSH than the level switch alone', resetCondition: 'Vibration normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference',
+    source: 'General shape of ISO 10816/20816 vibration-severity practice for large industrial pumps.' },
 
   // ---------------- MDBFP (Motor-Driven Boiler Feed Pump) ----------------
   { id: 'aux-mdbfp-suction-pressure', system: 'MDBFP', category: 'Auxiliary Drive', label: 'MDBFP Suction Pressure LOW-LOW', unit: 'bar',
@@ -497,6 +579,14 @@ export const PARAMETER_REGISTRY = [
   { id: 'aux-mdbfp-thrust-bearing-temp', system: 'MDBFP', category: 'Auxiliary Drive', label: 'MDBFP Thrust Bearing Temperature HIGH', unit: '°C',
     applicability: 'all', normalMin: 40, normalMax: 90, alarmSetpoint: 95, tripSetpoint: 105, direction: 'high',
     timeDelaySec: 0, voting: '1oo1', tripAction: 'MDBFP trip — standby BFP auto-start per interlock', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-mdbfp-radial-bearing-temp', system: 'MDBFP', category: 'Auxiliary Drive', label: 'MDBFP Radial/Journal Bearing Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 85, alarmSetpoint: 90, tripSetpoint: 100, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'MDBFP trip — standby BFP auto-start per interlock; monitored separately from the thrust bearing, which carries a different, usually higher, temperature margin', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-mdbfp-winding-temp', system: 'MDBFP', category: 'Auxiliary Drive', label: 'MDBFP Motor Winding Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 120, alarmSetpoint: 130, tripSetpoint: 155, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'MDBFP trip — standby BFP auto-start per interlock; the driving motor on a USC unit\u2019s BFP is typically several MW and carries its own embedded winding RTDs, separate from the pump\u2019s own bearing temperatures', resetCondition: 'Temperature normal, manual reset',
     permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
   { id: 'aux-mdbfp-overload', system: 'MDBFP', category: 'Auxiliary Drive', label: 'MDBFP Motor Overload', unit: '% FLC',
     applicability: 'all', normalMin: 0, normalMax: 100, alarmSetpoint: 105, tripSetpoint: 115, direction: 'high',
@@ -522,10 +612,22 @@ export const PARAMETER_REGISTRY = [
     applicability: 'all', normalMin: 1.5, normalMax: 3, alarmSetpoint: 1.0, tripSetpoint: 0.7, direction: 'low',
     timeDelaySec: 2, voting: '2oo3', tripAction: 'TDBFP trip — standby BFP auto-start per interlock', resetCondition: 'Pressure normal, manual reset',
     permissive: 'None — safety trip', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-tdbfp-acpump-autostart', system: 'TDBFP', category: 'Auxiliary Drive', label: 'TDBFP AC Standby Lube Oil Pump Auto-Start Pressure', unit: 'bar',
+    applicability: 'all', normalMin: 1.5, normalMax: 3, alarmSetpoint: 1.25, tripSetpoint: 1.2, direction: 'low',
+    timeDelaySec: 0, voting: '2oo3', tripAction: 'AC standby lube oil pump auto-starts — backup layer for the TDBFP\u2019s own driving turbine and pump bearings, engaging before the low lube-oil-pressure alarm above is reached', resetCondition: 'Pressure restored, pump remains available for next demand',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-tdbfp-acpump-fail-start', system: 'TDBFP', category: 'Auxiliary Drive', label: 'TDBFP AC Standby Lube Oil Pump Failed to Start', unit: 'boolean',
+    applicability: 'all', normalMin: 0, normalMax: 0, alarmSetpoint: 1, tripSetpoint: 1, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'Critical alarm — no further automatic backup for TDBFP lubrication; the low lube-oil-pressure trip above is the only protection left before bearing damage', resetCondition: 'Pump start confirmed on retry, manual reset',
+    permissive: 'None — critical alarm', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
   { id: 'aux-tdbfp-suction-pressure', system: 'TDBFP', category: 'Auxiliary Drive', label: 'TDBFP Suction Pressure LOW-LOW', unit: 'bar',
     applicability: 'all', normalMin: 5, normalMax: 8, alarmSetpoint: 4, tripSetpoint: 3, direction: 'low',
     timeDelaySec: 2, voting: '2oo3', tripAction: 'TDBFP trip on low suction to prevent cavitation — standby BFP auto-start per interlock', resetCondition: 'Pressure normal, manual reset',
     permissive: 'None — pump protection', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
+  { id: 'aux-tdbfp-bearing-temp', system: 'TDBFP', category: 'Auxiliary Drive', label: 'TDBFP Thrust/Journal Bearing Temperature HIGH', unit: '°C',
+    applicability: 'all', normalMin: 40, normalMax: 90, alarmSetpoint: 95, tripSetpoint: 105, direction: 'high',
+    timeDelaySec: 0, voting: '1oo1', tripAction: 'TDBFP trip — standby BFP auto-start per interlock; monitored on both the driving turbine and the pump end, a distinct measurement from the lube-oil pressure protection above', resetCondition: 'Temperature normal, manual reset',
+    permissive: 'None', classification: 'AUXILIARY DRIVE', dataType: 'Public Reference' },
 
   // ---------------- Rotating equipment vibration (researched addition) ----------------
   // Vibration monitoring was entirely absent from the registry despite being
@@ -653,6 +755,28 @@ export function evaluateStatus(value, alarmSetpoint, tripSetpoint, direction) {
     return STATUS.NORMAL;
   }
   throw new Error(`Unknown direction: ${direction}`);
+}
+
+/**
+ * Same evaluation as evaluateStatus(), but honoring the parameter's own
+ * time delay -- a real protection system does not trip on a single
+ * instantaneous scan; it requires the value to REMAIN past the trip
+ * setpoint for at least timeDelaySec before the trip actually latches
+ * (the standard debounce/persistence-timer behavior used to reject
+ * transient noise and momentary spikes). elapsedSec is how long the
+ * value has already been sitting past the trip setpoint. If the value
+ * is past the trip setpoint but that duration hasn't been met yet, this
+ * returns TRIP_PENDING rather than TRIP -- distinct from an instant trip
+ * (timeDelaySec = 0), which trips on the first scan exactly as before.
+ */
+export function evaluateStatusWithDelay(value, alarmSetpoint, tripSetpoint, direction, timeDelaySec, elapsedSec) {
+  const inTripRange = direction === 'high' ? value >= tripSetpoint : value <= tripSetpoint;
+  if (inTripRange) {
+    return elapsedSec >= timeDelaySec ? STATUS.TRIP : STATUS.TRIP_PENDING;
+  }
+  const inAlarmRange = direction === 'high' ? value >= alarmSetpoint : value <= alarmSetpoint;
+  if (inAlarmRange) return STATUS.ALARM;
+  return STATUS.NORMAL;
 }
 
 // ---------------- Disturbance simulator ----------------

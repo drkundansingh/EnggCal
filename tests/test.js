@@ -32,6 +32,8 @@ import * as cl from '../js/calculators/controlLoops.js';
 import * as hvac from '../js/calculators/hvac.js';
 import * as mech from '../js/calculators/mechDesign.js';
 import * as sama from '../js/calculators/samaLogic.js';
+import * as cg from '../js/calculators/cableGland.js';
+import * as be from '../js/calculators/boilerEfficiency.js';
 import * as csur from '../js/calculators/civilSurveying.js';
 import * as vt from '../js/calculators/vesselsTanks.js';
 import * as pt from '../js/calculators/processThermal.js';
@@ -2361,6 +2363,158 @@ test('AI: full chain still evaluates correctly through an AO with a realistic pr
   const r = sama.evaluateChain(blocks);
   assert.equal(r.get('ai1').value, 500);
   assert.equal(r.get('ao1').value, 500);
+});
+
+console.log('\n--- cableGland.js: cable OD build-up and gland size selection ---');
+test('conductorDiameterMM: matches the solid-equivalent formula plus the stranding allowance', () => {
+  const d = cg.conductorDiameterMM(1.5);
+  approx(d, 1.08 * Math.sqrt(4 * 1.5 / Math.PI), 1e-9);
+});
+test('insulationThicknessMM: instrumentation cable matches the verified real datasheet reference (Polycab 1.5 sqmm, 0.44mm min PVC)', () => {
+  approx(cg.insulationThicknessMM(1.5, 'instrumentation'), 0.44, 0.01);
+});
+test('insulationThicknessMM: power cable is thicker than instrumentation cable at the same conductor size (1100V vs 300/500V rating)', () => {
+  const power = cg.insulationThicknessMM(2.5, 'power');
+  const instr = cg.insulationThicknessMM(2.5, 'instrumentation');
+  assert.ok(power > instr, 'expected power cable insulation to be thicker than instrumentation at the same size');
+});
+test('cableBuildUp: 4-pair x 1.5 sqmm unarmoured instrumentation cable lands in the commonly-quoted 12-14mm OD range for this real construction', () => {
+  const r = cg.cableBuildUp(1.5, 4, 'pair', 'instrumentation', false);
+  assert.ok(r.overallDiaMM >= 12 && r.overallDiaMM <= 15, `expected 12-15mm, got ${r.overallDiaMM}`);
+});
+test('cableBuildUp: pair construction gives a larger OD than core construction for the same element count (matches manufacturer documentation)', () => {
+  const pair = cg.cableBuildUp(1.5, 4, 'pair', 'instrumentation', false);
+  const core = cg.cableBuildUp(1.5, 4, 'core', 'instrumentation', false);
+  assert.ok(pair.overallDiaMM > core.overallDiaMM);
+});
+test('cableBuildUp: armoured cable has a larger OD than the same unarmoured cable', () => {
+  const armoured = cg.cableBuildUp(2.5, 3, 'core', 'power', true);
+  const unarmoured = cg.cableBuildUp(2.5, 3, 'core', 'power', false);
+  assert.ok(armoured.overallDiaMM > unarmoured.overallDiaMM);
+});
+test('cableBuildUp: OD increases monotonically with conductor size for a fixed core count', () => {
+  let prev = 0;
+  for (const a of cg.STANDARD_CORE_SIZES_MM2) {
+    const r = cg.cableBuildUp(a, 4, 'core', 'power', false);
+    assert.ok(r.overallDiaMM > prev, `expected OD to increase at ${a} sqmm`);
+    prev = r.overallDiaMM;
+  }
+});
+test('cableBuildUp: OD increases monotonically with core count for a fixed conductor size', () => {
+  let prev = 0;
+  for (const n of [1, 2, 3, 4, 5, 7, 12, 19]) {
+    const r = cg.cableBuildUp(2.5, n, 'core', 'power', false);
+    assert.ok(r.overallDiaMM > prev, `expected OD to increase at ${n} cores`);
+    prev = r.overallDiaMM;
+  }
+});
+test('selectGlandSize: picks a gland whose range actually covers the cable OD', () => {
+  const g = cg.selectGlandSize(13);
+  assert.ok(g !== null);
+  assert.ok(13 >= g.minMM && 13 <= g.maxMM);
+});
+test('selectGlandSize: gland size steps up correctly across a realistic size progression (verified monotonic gland selection)', () => {
+  const results = [1.5, 2.5, 4, 6, 10, 16, 25, 35].map((a) => cg.selectGlandSize(cg.cableBuildUp(a, 4, 'core', 'power', false).overallDiaMM).size);
+  const order = cg.GLAND_SIZES.map((g) => g.size);
+  let lastIdx = -1;
+  for (const size of results) {
+    const idx = order.indexOf(size);
+    assert.ok(idx >= lastIdx, 'expected gland size to never decrease as cable size increases');
+    lastIdx = idx;
+  }
+});
+test('selectGlandSize: returns null (not a wrong guess) for a cable OD beyond the largest standard gland', () => {
+  assert.equal(cg.selectGlandSize(200), null);
+});
+
+console.log('\n--- boilerEfficiency.js: indirect/heat-loss method ---');
+test('theoreticalAirKgPerKgFuel: matches the classic textbook reference case (C=70.5,H2=4.5,O2=6,S=3 -> 9.61 kg/kg)', () => {
+  approx(be.theoreticalAirKgPerKgFuel(70.5, 4.5, 6.0, 3.0), 9.6135, 0.001);
+});
+test('excessAirPctFromO2: standard O2-to-excess-air relation', () => {
+  approx(be.excessAirPctFromO2(5), (5/16)*100, 1e-9);
+});
+test('boilerEfficiencyIndirect: realistic Indian bituminous coal case lands in the typically-quoted 80-88% GCV-basis range', () => {
+  const r = be.boilerEfficiencyIndirect({
+    carbonPct: 55, hydrogenPct: 3.5, oxygenPct: 8, nitrogenPct: 1.2, sulfurPct: 0.5, moisturePct: 8,
+    gcvKcalKg: 4200, fluO2Pct: 5.0, fluCOPct: 0, flueGasTempC: 160, ambientTempC: 30,
+    surfaceLossPct: 1.5, flyAshUnburntPct: 1.0, bottomAshUnburntPct: 0.5,
+  });
+  assert.ok(r.efficiencyPct >= 78 && r.efficiencyPct <= 88, `expected 78-88%, got ${r.efficiencyPct}`);
+  approx(r.totalLossPct, 100 - r.efficiencyPct, 1e-9);
+});
+test('boilerEfficiencyIndirect: L5 (CO loss) is a small correction, not an order-of-magnitude error (regression for a real bug caught during development)', () => {
+  const r = be.boilerEfficiencyIndirect({
+    carbonPct: 55, hydrogenPct: 3.5, oxygenPct: 8, nitrogenPct: 1.2, sulfurPct: 0.5, moisturePct: 8,
+    gcvKcalKg: 4200, fluO2Pct: 5.0, fluCOPct: 0.1, flueGasTempC: 160, ambientTempC: 30, surfaceLossPct: 1.5,
+  });
+  assert.ok(r.L5 > 0 && r.L5 < 2, `expected L5 to be a small % (0-2%), got ${r.L5}`);
+});
+test('boilerEfficiencyIndirect: zero CO gives zero L5', () => {
+  const r = be.boilerEfficiencyIndirect({
+    carbonPct: 55, hydrogenPct: 3.5, oxygenPct: 8, nitrogenPct: 1.2, sulfurPct: 0.5, moisturePct: 8,
+    gcvKcalKg: 4200, fluO2Pct: 5.0, fluCOPct: 0, flueGasTempC: 160, ambientTempC: 30, surfaceLossPct: 1.5,
+  });
+  assert.equal(r.L5, 0);
+});
+test('boilerEfficiencyIndirect: higher flue gas temperature increases the dry flue gas loss (L1) and lowers efficiency', () => {
+  const base = { carbonPct: 55, hydrogenPct: 3.5, oxygenPct: 8, nitrogenPct: 1.2, sulfurPct: 0.5, moisturePct: 8,
+    gcvKcalKg: 4200, fluO2Pct: 5.0, fluCOPct: 0, ambientTempC: 30, surfaceLossPct: 1.5 };
+  const cool = be.boilerEfficiencyIndirect({ ...base, flueGasTempC: 140 });
+  const hot = be.boilerEfficiencyIndirect({ ...base, flueGasTempC: 200 });
+  assert.ok(hot.L1 > cool.L1);
+  assert.ok(hot.efficiencyPct < cool.efficiencyPct);
+});
+test('boilerEfficiencyIndirect: higher excess air (higher flue O2) increases dry flue gas loss', () => {
+  const base = { carbonPct: 55, hydrogenPct: 3.5, oxygenPct: 8, nitrogenPct: 1.2, sulfurPct: 0.5, moisturePct: 8,
+    gcvKcalKg: 4200, fluCOPct: 0, flueGasTempC: 160, ambientTempC: 30, surfaceLossPct: 1.5 };
+  const lean = be.boilerEfficiencyIndirect({ ...base, fluO2Pct: 3 });
+  const rich = be.boilerEfficiencyIndirect({ ...base, fluO2Pct: 8 });
+  assert.ok(rich.L1 > lean.L1, 'expected more excess air to increase the dry flue gas loss');
+});
+test('boilerEfficiencyIndirect: throws when flue gas temperature is not above ambient', () => {
+  assert.throws(() => be.boilerEfficiencyIndirect({
+    carbonPct: 55, hydrogenPct: 3.5, oxygenPct: 8, nitrogenPct: 1.2, sulfurPct: 0.5, moisturePct: 8,
+    gcvKcalKg: 4200, fluO2Pct: 5.0, flueGasTempC: 20, ambientTempC: 30, surfaceLossPct: 1.5,
+  }));
+});
+test('boilerEfficiencyIndirect: gas-fired (high H2, no moisture/ash) case is physically sensible on a GCV basis', () => {
+  const r = be.boilerEfficiencyIndirect({
+    carbonPct: 75, hydrogenPct: 25, oxygenPct: 0, nitrogenPct: 0, sulfurPct: 0, moisturePct: 0,
+    gcvKcalKg: 11900, fluO2Pct: 3.0, fluCOPct: 0, flueGasTempC: 140, ambientTempC: 30, surfaceLossPct: 1.0,
+  });
+  assert.ok(r.efficiencyPct > 75 && r.efficiencyPct < 90, `expected a sensible GCV-basis range, got ${r.efficiencyPct}`);
+  assert.ok(r.L2 > 5, 'expected the H2-moisture loss to be substantial for a high-hydrogen fuel');
+});
+
+console.log('\n--- tripProtection.js: evaluateStatusWithDelay (time-delay-aware trip evaluation) ---');
+test('evaluateStatusWithDelay: a value past the trip setpoint but not yet persisted long enough returns TRIP_PENDING, not TRIP', () => {
+  assert.equal(trip.evaluateStatusWithDelay(0.5, 0.9, 0.6, 'low', 2, 0.5), trip.STATUS.TRIP_PENDING);
+});
+test('evaluateStatusWithDelay: once elapsed time meets the configured delay, status becomes TRIP', () => {
+  assert.equal(trip.evaluateStatusWithDelay(0.5, 0.9, 0.6, 'low', 2, 2.5), trip.STATUS.TRIP);
+});
+test('evaluateStatusWithDelay: exactly at the delay boundary counts as TRIP (>=), not TRIP_PENDING', () => {
+  assert.equal(trip.evaluateStatusWithDelay(0.5, 0.9, 0.6, 'low', 2, 2), trip.STATUS.TRIP);
+});
+test('evaluateStatusWithDelay: a zero time delay trips instantly, same as the original evaluateStatus()', () => {
+  assert.equal(trip.evaluateStatusWithDelay(0.5, 0.9, 0.6, 'low', 0, 0), trip.STATUS.TRIP);
+});
+test('evaluateStatusWithDelay: alarm-range values are unaffected by the time delay (only the trip condition uses it)', () => {
+  assert.equal(trip.evaluateStatusWithDelay(0.85, 0.9, 0.6, 'low', 2, 0), trip.STATUS.ALARM);
+});
+test('evaluateStatusWithDelay: normal-range values are unaffected', () => {
+  assert.equal(trip.evaluateStatusWithDelay(1.5, 0.9, 0.6, 'low', 2, 0), trip.STATUS.NORMAL);
+});
+test('evaluateStatusWithDelay: high-direction parameters work the same way as low-direction ones', () => {
+  assert.equal(trip.evaluateStatusWithDelay(120, 105, 115, 'high', 3, 1), trip.STATUS.TRIP_PENDING);
+  assert.equal(trip.evaluateStatusWithDelay(120, 105, 115, 'high', 3, 3), trip.STATUS.TRIP);
+});
+test('evaluateStatusWithDelay: matches the plain evaluateStatus() result whenever elapsed time already exceeds the delay', () => {
+  const cases = [[0.5, 0.9, 0.6, 'low'], [0.85, 0.9, 0.6, 'low'], [1.5, 0.9, 0.6, 'low'], [120, 105, 115, 'high']];
+  for (const [val, alarm, tripSp, dir] of cases) {
+    assert.equal(trip.evaluateStatusWithDelay(val, alarm, tripSp, dir, 2, 999), trip.evaluateStatus(val, alarm, tripSp, dir));
+  }
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

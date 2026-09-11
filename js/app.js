@@ -27,6 +27,8 @@ import * as pt from './calculators/processThermal.js';
 import * as hvac from './calculators/hvac.js';
 import * as mech from './calculators/mechDesign.js';
 import * as sama from './calculators/samaLogic.js';
+import * as cg from './calculators/cableGland.js';
+import * as be from './calculators/boilerEfficiency.js';
 import * as cst from './calculators/civilStructural.js';
 import * as ccon from './calculators/civilConcrete.js';
 import * as cgeo from './calculators/civilGeotech.js';
@@ -116,6 +118,7 @@ const NAV = [
       { id: 'pid', label: 'PID Controller', icon: '∫' },
       { id: 'loop-uncertainty', label: 'Loop Uncertainty', icon: '±' },
       { id: 'cavitation', label: 'Valve Cavitation', icon: '◌' },
+      { id: 'cable-gland', label: 'Cable & Gland Sizing', icon: '⏚' },
     ]
   },
   {
@@ -281,7 +284,7 @@ const DEFAULT_DESCRIPTION = 'Free professional engineering calculators for therm
 const SEO_META = {
   '': { title: 'Engineering Calculator Hub \u2014 Free Power Plant & Electrical Calculators', description: DEFAULT_DESCRIPTION },
   'thermal-plant': { title: 'Thermal Power Plant Heat Rate & Efficiency Estimator', description: 'Estimate thermal power plant heat rate, efficiency, fuel consumption and coal/gas cost from unit MW rating \u2014 free online calculator.' },
-  'protection': { title: 'Turbine & Boiler Protection Parameter Registry (98 Trips)', description: 'Reference registry of 98 turbine and boiler protection trip parameters \u2014 ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.' },
+  'protection': { title: 'Turbine & Boiler Protection Parameter Registry (117 Trips)', description: 'Reference registry of 117 turbine and boiler protection trip parameters \u2014 ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.' },
   'control-loops': { title: 'Power Plant Control Loops \u2014 Live Interactive Simulation', description: 'Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.' },
   'short-circuit': { title: 'Short Circuit / Fault Current Calculator (IEC 60909)', description: 'Calculate three-phase and single-phase-to-ground short circuit fault current per IEC 60909 \u2014 free online electrical fault calculator.' },
   'idmt': { title: 'IDMT Relay Curve Calculator (IEC 60255 & IEEE C37.112)', description: 'Calculate IDMT relay operating time for Standard/Very/Extremely Inverse curves per IEC 60255 and IEEE C37.112 \u2014 free relay curve calculator.' },
@@ -303,7 +306,7 @@ const SEO_META = {
   'voltage-unbalance': { title: 'Voltage Unbalance & Motor Derating Calculator (NEMA MG-1)', description: 'Calculate three-phase voltage unbalance and the resulting motor derating factor per NEMA MG-1.' },
   'tx-inrush': { title: 'Transformer Inrush Current Calculator', description: 'Estimate transformer energization inrush current and decay time to check protection relay settings.' },
   'dp-flow-wizard': { title: 'DP to Flow Calculator \u2014 Orifice, Venturi & Nozzle', description: 'Convert differential pressure to mass or volumetric flow for orifice plates, venturis and flow nozzles \u2014 step-by-step wizard.' },
-  'dp-flow-cal': { title: 'Steam, Water & Air Flow Calculator \u2014 No Pipe or Orifice Diameter Needed', description: 'Calculate steam, water, or air flow from a DP transmitter\u2019s calibrated range alone \u2014 real IAPWS-IF97 steam tables for steam/water, ideal-gas for air, no pipe or orifice diameter required.' },
+  'dp-flow-cal': { title: 'Steam, Water & Air Flow Calculator \u2014 No Pipe or Orifice Diameter Needed', description: 'Calculate steam, water, or air flow from a DP transmitter\u2019s calibrated range alone \u2014 real IAPWS-IF97 steam tables, no pipe or orifice diameter required.' },
   'steam-props': { title: 'Steam Properties Calculator (IAPWS-IF97)', description: 'Calculate real steam density and specific volume from pressure and temperature using IAPWS-IF97 \u2014 not an ideal-gas approximation.' },
   'converter': { title: 'Engineering Unit Converter', description: 'Convert between engineering units for pressure, flow, temperature, length, and more.' },
   'transmitter': { title: '4\u201320 mA Transmitter Calculator', description: 'Convert between 4\u201320 mA signal, percentage of range, and engineering units for any transmitter.' },
@@ -316,6 +319,7 @@ const SEO_META = {
   'pid': { title: 'PID Controller Tuning Calculator', description: 'Calculate PID controller gains and simulate step response for process control loop tuning.' },
   'loop-uncertainty': { title: 'Instrument Loop Uncertainty Calculator', description: 'Calculate total measurement loop uncertainty by combining individual instrument accuracy contributions.' },
   'cavitation': { title: 'Control Valve Cavitation Check Calculator', description: 'Check a control valve for cavitation and flashing risk from upstream/downstream pressure and vapor pressure.' },
+  'cable-gland': { title: 'Cable & Gland Size Calculator', description: 'Predict instrumentation or power cable overall diameter from core count, size and armouring, and get the matching standard cable gland size.' },
   'formula-library': { title: 'Engineering Formula Library', description: 'Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.' },
   'history': { title: 'Calculation History', description: 'Your saved calculation history for this device.', noindex: true },
   'support': { title: 'Support the Project \u2014 Engineering Calculator Hub', description: 'Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.' },
@@ -341,7 +345,7 @@ const SEO_META = {
   'hvac-load': { title: 'Sensible Heat Load Calculator (HVAC)', description: 'Calculate HVAC sensible cooling or heating load from airflow and temperature difference, in imperial or metric units.' },
   'duct-sizing': { title: 'Duct Sizing Calculator (Velocity Method)', description: 'Calculate required duct cross-sectional area and round-duct diameter from airflow and design velocity.' },
   'refrigeration-tons': { title: 'Refrigeration Tons to kW/BTU Converter', description: 'Convert refrigeration capacity between tons, kW and BTU/hr using the standard 1 ton = 3.5168 kW definition.' },
-  'sama-logic': { title: 'SAMA Logic Diagram Simulator', description: 'Build and simulate control logic from standard SAMA function blocks — summers, high/low select, limiters, AND/OR/NOT, comparators — chained together with live output values.' },
+  'sama-logic': { title: 'SAMA Logic Diagram Simulator', description: 'Build and simulate control logic from standard SAMA function blocks — summers, selects, limiters, logic gates, timers — chained together with live values.' },
   'civil-beam': { title: 'Beam Deflection, Bending Moment & Shear Force Calculator', description: 'Calculate beam deflection, maximum bending moment and shear force for simply-supported and cantilever beams, point load or UDL.' },
   'civil-section': { title: 'Section Properties Calculator (Moment of Inertia & Section Modulus)', description: 'Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.' },
   'civil-column': { title: 'Column Buckling Calculator (Euler)', description: 'Calculate Euler critical buckling load and slenderness ratio for a column with any standard end-support condition.' },
@@ -655,7 +659,8 @@ function breadcrumbJsonLd(route) {
   const url = `${SITE_URL}/?page=${encodeURIComponent(route)}`;
   const items = [
     { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE_URL}/` },
-    { '@type': 'ListItem', position: 2, name: (meta && meta.title) || item.label, item: url },
+    { '@type': 'ListItem', position: 2, name: group.group, item: `${SITE_URL}/` },
+    { '@type': 'ListItem', position: 3, name: (meta && meta.title) || item.label, item: url },
   ];
   return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items };
 }
@@ -717,7 +722,7 @@ const ROUTE_TIER = {
   'motor-prot': 'scoped', 'lsig': 'scoped', 'coordination': 'scoped',
   'motor-start': 'scoped', 'pf-correction': 'scoped', 'battery-sizing': 'scoped',
   'tx-loading': 'scoped', 'dp-flow-wizard': 'scoped', 'dp-level': 'scoped',
-  'control-valve': 'scoped', 'cavitation': 'scoped', 'rtd': 'scoped',
+  'control-valve': 'scoped', 'cavitation': 'scoped', 'rtd': 'scoped', 'cable-gland': 'scoped',
   'thermocouple': 'scoped', 'pid': 'scoped', 'loop-uncertainty': 'scoped',
   'horizontal-tank': 'scoped', 'vertical-tank': 'scoped', 'vessel-wall': 'scoped',
   'insulation-loss': 'scoped', 'thermal-expansion': 'scoped', 'gas-compression': 'scoped',
@@ -833,6 +838,7 @@ const ROUTES = {
   'pid': pagePid,
   'loop-uncertainty': pageLoopUncertainty,
   'cavitation': pageCavitation,
+  'cable-gland': pageCableGland,
   'formula-library': pageFormulaLibrary,
   'history': pageHistory,
   'support': pageSupport,
@@ -994,6 +1000,7 @@ function pageThermalPlant() {
     <div class="tab" data-mode="fuel">Mode 2: Fuel → Generation</div>
     <div class="tab" data-mode="advanced">Mode 3: Flexible Estimator (partial inputs)</div>
     <div class="tab" data-mode="flow">Mode 4: Flow Calculator</div>
+    <div class="tab" data-mode="boilerEff">Mode 5: Boiler Efficiency (Indirect)</div>
   </div>`);
   app.appendChild(tabs);
 
@@ -1019,6 +1026,7 @@ function pageThermalPlant() {
     if (mode === 'mw') renderMwInputs();
     else if (mode === 'fuel') renderFuelInputs();
     else if (mode === 'advanced') renderAdvancedInputs();
+    else if (mode === 'boilerEff') renderBoilerEfficiency();
     else renderFlowCalculator();
   }
 
@@ -1679,6 +1687,101 @@ function pageThermalPlant() {
     }
 
     renderSub();
+  }
+
+  function renderBoilerEfficiency() {
+    inputPanel.style.display = 'none';
+    layout.style.gridTemplateColumns = '1fr';
+    resultPanel.innerHTML = `
+      <div class="panel-title">Boiler Efficiency by the Indirect (Heat Loss) Method</div>
+      <p style="color:var(--text-dim);font-size:.84rem;">The standard heat-loss / indirect method (ASME PTC 4.1 in the US, the BEE India standard energy-audit procedure) — genuinely different from the assumed efficiency % used in Modes 1-4 above. Every major loss is computed from the fuel's ultimate analysis and measured flue gas data, not assumed.</p>
+      <div class="calc-layout" id="beLayout"></div>
+    `;
+    const beLayout = resultPanel.querySelector('#beLayout');
+    const left = h(`<div class="card">
+      <div class="panel-title">Fuel Ultimate Analysis (mass %, as-fired)</div>
+      <div class="input-row">
+        <div class="field"><label>Carbon C</label><input type="number" id="be_c" step="any" value="55"></div>
+        <div class="field"><label>Hydrogen H\u2082</label><input type="number" id="be_h2" step="any" value="3.5"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Oxygen O\u2082</label><input type="number" id="be_o2f" step="any" value="8"></div>
+        <div class="field"><label>Nitrogen N\u2082</label><input type="number" id="be_n2" step="any" value="1.2"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Sulfur S</label><input type="number" id="be_s" step="any" value="0.5"></div>
+        <div class="field"><label>Moisture</label><input type="number" id="be_m" step="any" value="8"></div>
+      </div>
+      <div class="hint">Ash % makes up the remainder \u2014 not used directly in L1-L5, only relevant if you supply the unburnt-carbon losses below.</div>
+      <div class="field"><label>Fuel GCV (kcal/kg)</label><input type="number" id="be_gcv" step="any" value="4200"></div>
+
+      <div class="panel-title" style="margin-top:16px;">Flue Gas &amp; Temperatures</div>
+      <div class="input-row">
+        <div class="field"><label>Flue gas O\u2082 (dry basis, %)</label><input type="number" id="be_fo2" step="any" value="5.0"></div>
+        <div class="field"><label>Flue gas CO (%, optional)</label><input type="number" id="be_fco" step="any" value="0"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Flue gas exit temp (\u00b0C)</label><input type="number" id="be_tf" step="any" value="160"></div>
+        <div class="field"><label>Ambient temp (\u00b0C)</label><input type="number" id="be_ta" step="any" value="30"></div>
+      </div>
+
+      <div class="panel-title" style="margin-top:16px;">Losses Requiring Direct Measurement</div>
+      <div class="hint">These cannot be derived from fuel analysis alone \u2014 L6 needs a surface survey or manufacturer's chart; L7/L8 need ash sampling and lab analysis (solid fuel only). Typical L6 for a mid-size boiler: 0.5-2%.</div>
+      <div class="input-row">
+        <div class="field"><label>L6 \u2014 surface radiation &amp; convection (%)</label><input type="number" id="be_l6" step="any" value="1.5"></div>
+        <div class="field"><label>L7+L8 \u2014 unburnt carbon in ash (%, optional)</label><input type="number" id="be_l78" step="any" value="0"></div>
+      </div>
+      <div class="btn-row"><button class="btn" id="be_calc">Calculate</button></div>
+    </div>`);
+    const right = h('<div class="card"><div class="empty-state">Enter the fuel analysis and flue gas data, then calculate.</div></div>');
+    beLayout.append(left, right);
+
+    left.querySelector('#be_calc').addEventListener('click', () => {
+      const carbonPct = +left.querySelector('#be_c').value;
+      const hydrogenPct = +left.querySelector('#be_h2').value;
+      const oxygenPct = +left.querySelector('#be_o2f').value;
+      const nitrogenPct = +left.querySelector('#be_n2').value;
+      const sulfurPct = +left.querySelector('#be_s').value;
+      const moisturePct = +left.querySelector('#be_m').value;
+      const gcvKcalKg = +left.querySelector('#be_gcv').value;
+      const fluO2Pct = +left.querySelector('#be_fo2').value;
+      const fluCOPct = +left.querySelector('#be_fco').value;
+      const flueGasTempC = +left.querySelector('#be_tf').value;
+      const ambientTempC = +left.querySelector('#be_ta').value;
+      const surfaceLossPct = +left.querySelector('#be_l6').value;
+      const unburntPct = +left.querySelector('#be_l78').value;
+      try {
+        const r = be.boilerEfficiencyIndirect({
+          carbonPct, hydrogenPct, oxygenPct, nitrogenPct, sulfurPct, moisturePct, gcvKcalKg,
+          fluO2Pct, fluCOPct, flueGasTempC, ambientTempC, surfaceLossPct, flyAshUnburntPct: unburntPct,
+        });
+        right.innerHTML = `
+          <div class="readout"><span class="value">${fmt(r.efficiencyPct, 2)}</span><span class="unit">%</span><div class="label">Boiler Efficiency (GCV basis, indirect method)</div></div>
+          <div class="panel-title" style="margin-top:14px;">Individual Losses (%)</div>
+          <div class="result-grid">
+            ${resultRow('L1 \u2014 Dry flue gas', fmt(r.L1, 2))}
+            ${resultRow('L2 \u2014 H\u2082 in fuel', fmt(r.L2, 2))}
+            ${resultRow('L3 \u2014 Moisture in fuel', fmt(r.L3, 2))}
+            ${resultRow('L4 \u2014 Moisture in air', fmt(r.L4, 3))}
+            ${resultRow('L5 \u2014 CO (incomplete combustion)', fmt(r.L5, 2))}
+            ${resultRow('L6 \u2014 Surface radiation/convection', fmt(r.L6, 2))}
+            ${resultRow('L7+L8 \u2014 Unburnt carbon in ash', fmt(r.L7 + r.L8, 2))}
+            ${resultRow('Total losses', fmt(r.totalLossPct, 2))}
+          </div>
+          <div class="panel-title" style="margin-top:14px;">Combustion Parameters</div>
+          <div class="result-grid">
+            ${resultRow('Theoretical air', fmt(r.theoreticalAirKgKg, 3) + ' kg/kg fuel')}
+            ${resultRow('Excess air', fmt(r.excessAirPct, 1) + ' %')}
+            ${resultRow('Actual air supplied', fmt(r.actualAirSuppliedKgKg, 3) + ' kg/kg fuel')}
+            ${resultRow('Dry flue gas mass', fmt(r.dryFlueGasMassKgKg, 3) + ' kg/kg fuel')}
+          </div>
+          <div class="assumptions-note" style="margin-top:12px;">GCV-basis result. High-hydrogen fuels (natural gas especially) show a noticeably lower GCV-basis efficiency than the NCV-basis figure often quoted for the same boiler \u2014 both are legitimate, different accounting conventions; this result is explicitly GCV-basis. L6-L8 are as entered, not derived \u2014 confirm them against a surface survey or ash lab analysis for a real performance test.</div>
+        `;
+        saveAndToast('thermal-plant', `Boiler efficiency \u2014 GCV ${gcvKcalKg} kcal/kg`,
+          { carbonPct, hydrogenPct, oxygenPct, nitrogenPct, sulfurPct, moisturePct, gcvKcalKg, fluO2Pct, fluCOPct, flueGasTempC, ambientTempC, surfaceLossPct, unburntPct },
+          { 'Efficiency': fmt(r.efficiencyPct, 2) + ' %', 'Total losses': fmt(r.totalLossPct, 2) + ' %' });
+      } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+    });
   }
 
   renderInputs();
@@ -2521,6 +2624,7 @@ function pageProtection() {
 
   function statusBadgeClass(status) {
     if (status === 'TRIP') return 'out';
+    if (status === 'TRIP PENDING') return 'out';
     if (status === 'ALARM') return 'warning';
     return 'normal';
   }
@@ -2573,14 +2677,16 @@ function pageProtection() {
     const title = system === 'ETS' ? 'Turbine Trip Dashboard (ETS)' : system === 'MFT' ? 'Boiler Trip Dashboard (MFT)' : 'Major Drives Dashboard';
     right.appendChild(h(`<div>
       <div class="panel-title">${title} — ${plantConfig.plantType}, ${plantConfig.boilerType} boiler, ${plantConfig.unitMW} MW</div>
-      <p style="color:var(--text-dim);font-size:.78rem;">Enter a current value for any parameter and click its <b>Submit</b> button (or press Enter) to check status against its alarm/trip setpoints — each row evaluates independently.</p>
+      <p style="color:var(--text-dim);font-size:.78rem;">Enter a current value AND how long it has been held there, then click its <b>Submit</b> button (or press Enter) — a real protection system doesn't trip on a single instantaneous reading, it requires the value to persist past its trip setpoint for at least the time delay shown (editable per row) before the trip actually latches. Each row evaluates independently.</p>
       <div style="overflow-x:auto;">
-        <table><thead><tr><th>Parameter</th>${isDrives ? '<th>Drive</th>' : ''}<th>Category</th><th>Value</th><th></th><th>Alarm</th><th>Trip</th><th>Status</th><th>Data type</th></tr></thead><tbody>
+        <table><thead><tr><th>Parameter</th>${isDrives ? '<th>Drive</th>' : ''}<th>Category</th><th>Value</th><th>Held for (s)</th><th>Time delay (s)</th><th></th><th>Alarm</th><th>Trip</th><th>Status</th><th>Data type</th></tr></thead><tbody>
           ${params.map((p) => `<tr data-id="${p.id}">
             <td>${p.label}</td>
             ${isDrives ? `<td style="font-size:.76rem;color:var(--cyan);">${p.system}</td>` : ''}
             <td style="font-size:.76rem;color:var(--text-dim);">${p.category}</td>
             <td><input type="number" class="pv-input" data-id="${p.id}" value="${(p.normalMin + p.normalMax) / 2}" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">${p.unit}</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="${p.id}" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="${p.id}" value="${p.timeDelaySec}" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: ${p.timeDelaySec} s \u2014 editable here to try a different delay"></td>
             <td><button class="btn secondary eval-row-btn" data-id="${p.id}" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
             <td class="num">${fmt(p.alarmSetpoint, 3)}</td>
             <td class="num">${fmt(p.tripSetpoint, 3)}</td>
@@ -2590,14 +2696,16 @@ function pageProtection() {
         </tbody></table>
       </div>
       <div class="btn-row" style="margin-top:14px;"><button class="btn secondary" id="evalAllBtn">Evaluate all statuses</button></div>
-      <p style="color:var(--text-dim);font-size:.78rem;margin-top:10px;">Enter a current value per parameter and click Evaluate — this simulates live status against the configured setpoints.</p>
+      <p style="color:var(--text-dim);font-size:.78rem;margin-top:10px;">Enter a current value per parameter and click Evaluate — this simulates live status against the configured setpoints. A value past its trip setpoint shows <b>TRIP PENDING</b> until the held-for duration reaches the time delay, then <b>TRIP</b>.</p>
     </div>`));
 
     function evaluateRow(tr) {
       const id = tr.dataset.id;
       const p = params.find((x) => x.id === id);
       const val = +tr.querySelector('.pv-input').value;
-      const status = trip.evaluateStatus(val, p.alarmSetpoint, p.tripSetpoint, p.direction);
+      const elapsedSec = +tr.querySelector('.pv-elapsed').value;
+      const timeDelaySec = +tr.querySelector('.pv-delay').value;
+      const status = trip.evaluateStatusWithDelay(val, p.alarmSetpoint, p.tripSetpoint, p.direction, timeDelaySec, elapsedSec);
       tr.querySelector('.status-cell').innerHTML = `<span class="badge ${statusBadgeClass(status)}">${status}</span>`;
     }
     right.querySelectorAll('.eval-row-btn').forEach((btn) => {
@@ -3849,6 +3957,7 @@ function pageSupport() {
     <div class="support-footer-sig">
       <div class="name">Built &amp; Maintained by Dr. Kundan</div>
       <div>Engineering • Automation • Instrumentation • Power Plant Technology</div>
+      <div style="margin-top:6px;">For suggestions or to report a bug, write to <a href="mailto:admin@engineeringhubcalc.com" style="color:var(--cyan);">admin@engineeringhubcalc.com</a></div>
       <div>&copy; 2026 Dr. Kundan — All Rights Reserved</div>
     </div>
 
@@ -5980,8 +6089,8 @@ function pageSamaLogic() {
     </select>
     <button class="btn secondary" id="clearAllBtn">Clear All</button>
     <div id="simControls" style="display:none;align-items:center;gap:10px;margin-left:auto;">
-      <span class="pill" style="background:var(--amber-dim);color:var(--amber);border-color:var(--amber);">SIMULATING</span>
-      <button class="btn secondary" id="simPlayPause">Pause</button>
+      <span class="pill" id="simStatusPill" style="background:var(--amber-dim);color:var(--amber);border-color:var(--amber);">READY</span>
+      <button class="btn secondary" id="simPlayPause">Run</button>
       <button class="btn secondary" id="simReset">Reset</button>
       <span id="simClock" style="font-family:var(--font-mono);color:var(--text-faint);font-size:.8rem;">t = 0.0 s</span>
     </div>
@@ -6051,8 +6160,17 @@ function pageSamaLogic() {
       // alone -- LogicSimulation.step() already knows how to resolve
       // that correctly with a one-step delay.
       simulation = new sama.LogicSimulation(sama.orderForSimulation(blocks), SIM_DT);
-      simRunning = true;
-      startTimer();
+      // Deliberately does NOT auto-start. Every structural change (adding
+      // a block, wiring it, changing an input count) used to jump
+      // straight into a running simulation, often with the diagram still
+      // half-built and default/placeholder values in place -- exactly
+      // the kind of state where a timer block looks "broken" simply
+      // because it's been running against the wrong inputs the whole
+      // time. Build the whole diagram first, then press Run.
+      simRunning = false;
+      toolbar.querySelector('#simPlayPause').textContent = 'Run';
+      const pill = toolbar.querySelector('#simStatusPill');
+      if (pill) pill.textContent = 'READY';
     } else {
       simulation = null;
     }
@@ -6579,10 +6697,24 @@ function pageSamaLogic() {
   });
   toolbar.querySelector('#simPlayPause').addEventListener('click', () => {
     simRunning = !simRunning;
-    toolbar.querySelector('#simPlayPause').textContent = simRunning ? 'Pause' : 'Play';
+    toolbar.querySelector('#simPlayPause').textContent = simRunning ? 'Pause' : 'Run';
+    const pill = toolbar.querySelector('#simStatusPill');
+    if (pill) pill.textContent = simRunning ? 'SIMULATING' : 'PAUSED';
     if (simRunning) startTimer(); else stopTimer();
   });
-  toolbar.querySelector('#simReset').addEventListener('click', () => { if (simulation) { simulation.reset(); updateLiveValues(); } });
+  toolbar.querySelector('#simReset').addEventListener('click', () => {
+    if (!simulation) return;
+    simulation.reset();
+    updateLiveValues();
+    // Reset stops the clock too -- deliberately does not resume on its
+    // own, for the same "you're always the one who presses Run" reason
+    // structureChanged() no longer auto-starts.
+    simRunning = false;
+    stopTimer();
+    toolbar.querySelector('#simPlayPause').textContent = 'Run';
+    const pill = toolbar.querySelector('#simStatusPill');
+    if (pill) pill.textContent = 'READY';
+  });
 
   // ==================================================================
   // Real, complete example circuits -- both independently verified
@@ -8686,6 +8818,92 @@ function pageCavitation() {
   });
 }
 
+// ---------- Cable & Gland Sizing ----------
+function pageCableGland() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>Cable &amp; Gland Size Calculator</h1>
+    <p class="lead">Build up a cable's overall diameter from its core count, core size, construction and armouring, and get the matching standard cable gland size. This is a genuine engineering estimate from standard IS/IEC-based formulas, not a substitute for the actual cable manufacturer's datasheet \u2014 real cable OD varies between manufacturers even for the same nominal size, so confirm the final gland selection against the measured or datasheet OD before ordering.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Cable Specification</div>
+    <div class="field"><label>Cable type</label>
+      <select id="cableType">
+        <option value="instrumentation">Instrumentation cable (300/500 V)</option>
+        <option value="power">Power cable (1100 V)</option>
+      </select>
+    </div>
+    <div class="field" id="constructionField"><label>Construction</label>
+      <select id="construction">
+        <option value="core">Core (cores laid up directly)</option>
+        <option value="pair">Pair (cores twisted into pairs first, then laid up \u2014 instrumentation only)</option>
+      </select>
+    </div>
+    <div class="input-row">
+      <div class="field"><label id="elementsLabel">Number of cores</label>
+        <select id="elements">
+          ${cg.ELEMENT_COUNTS.map((n) => `<option value="${n}" ${n === 4 ? 'selected' : ''}>${n}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Core size</label>
+        <select id="coreSize">
+          ${cg.STANDARD_CORE_SIZES_MM2.map((a) => `<option value="${a}" ${a === 1.5 ? 'selected' : ''}>${a} mm\u00b2</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="field" style="flex-direction:row;align-items:center;gap:8px;"><label style="margin:0;">Armoured (galvanised steel wire)</label><input type="checkbox" id="armoured" style="width:auto;"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter the cable specification and calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  function syncConstructionVisibility() {
+    const isInstrumentation = left.querySelector('#cableType').value === 'instrumentation';
+    left.querySelector('#constructionField').style.display = isInstrumentation ? '' : 'none';
+    left.querySelector('#elementsLabel').textContent = (isInstrumentation && left.querySelector('#construction').value === 'pair') ? 'Number of pairs' : 'Number of cores';
+    if (!isInstrumentation) left.querySelector('#construction').value = 'core';
+  }
+  left.querySelector('#cableType').addEventListener('change', syncConstructionVisibility);
+  left.querySelector('#construction').addEventListener('change', syncConstructionVisibility);
+  syncConstructionVisibility();
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const cableType = left.querySelector('#cableType').value;
+    const construction = left.querySelector('#construction').value;
+    const elements = +left.querySelector('#elements').value;
+    const areaMM2 = +left.querySelector('#coreSize').value;
+    const armoured = left.querySelector('#armoured').checked;
+    try {
+      const b = cg.cableBuildUp(areaMM2, elements, construction, cableType, armoured);
+      const gland = cg.selectGlandSize(b.overallDiaMM);
+      right.innerHTML = `
+        <div class="readout"><span class="value">${fmt(b.overallDiaMM, 2)}</span><span class="unit">mm OD</span><div class="label">Predicted Cable Overall Diameter</div></div>
+        <div style="text-align:center;margin:10px 0 16px;">
+          ${gland ? `<span class="badge normal" style="font-size:1.1rem;padding:8px 20px;">${gland.size} Gland</span>
+            <div style="color:var(--text-faint);font-size:.8rem;margin-top:6px;">Clamping range ${gland.minMM}\u2013${gland.maxMM} mm \u2014 this cable sits at ${fmt(b.overallDiaMM, 1)} mm</div>`
+            : `<span class="badge out" style="font-size:1rem;padding:8px 18px;">No standard gland (M12\u2013M75) covers this OD</span>`}
+        </div>
+        <div class="panel-title">Build-up (each layer, mm)</div>
+        <div class="result-grid">
+          ${resultRow('Conductor diameter', fmt(b.conductorDiaMM, 2))}
+          ${resultRow('Insulation thickness (each side)', fmt(b.insulationMM, 2))}
+          ${resultRow('Insulated core/pair diameter', fmt(construction === 'pair' ? b.bundleUnitMM : b.coreInsulatedDiaMM, 2))}
+          ${resultRow('Diameter under inner sheath', fmt(b.diaUnderInnerSheathMM, 2))}
+          ${resultRow('Inner sheath thickness (each side)', fmt(b.innerSheathThicknessMM, 2))}
+          ${armoured ? resultRow('Armour added (both sides)', fmt(b.armourAddedMM, 2)) : ''}
+          ${resultRow('Diameter under outer sheath', fmt(b.diaUnderOuterSheathMM, 2))}
+          ${resultRow('Outer sheath thickness (each side)', fmt(b.outerSheathThicknessMM, 2))}
+          ${resultRow('Overall diameter', fmt(b.overallDiaMM, 2))}
+        </div>
+        <div class="assumptions-note" style="margin-top:12px;">Engineering estimate from standard formulas (IEC 60228 stranding allowance, IS 5831/IS 1554-based insulation, standard cabling lay-up geometry) \u2014 not a specific manufacturer's datasheet. Actual cable OD varies between manufacturers even at the same nominal size; confirm against the datasheet or a measured sample before final gland selection, especially for critical or hazardous-area installations.</div>
+      `;
+      saveAndToast('cable-gland', `${elements}${construction === 'pair' ? ' Pair' : ' Core'} \u00d7 ${areaMM2} sqmm ${cableType}`,
+        { cableType, construction, elements, areaMM2, armoured },
+        { 'Overall OD': fmt(b.overallDiaMM, 2) + ' mm', 'Gland': gland?.size ?? 'none' });
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
 // ---------- Formula Library ----------
 function pageFormulaLibrary() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Reference</div><h1>Formula Library</h1>
@@ -8847,10 +9065,14 @@ if (adminLoginLink) {
 // registration failure affect the rest of the app.
 // Display the running build number. This is what makes "am I on the new
 // version?" a one-second check instead of a guess based on page content.
-const APP_BUILD = '20260910161636';
+// (APP_BUILD itself is kept and still updated by stamp-build.js on every
+// build -- the version.json update-check mechanism depends on that file
+// being stamped correctly -- only the visible "build XXXXXXXX" text in
+// the footer has been removed, since it was just clutter for a visitor.)
+const APP_BUILD = '20260911191310';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
-  if (foot && !document.getElementById('buildTag')) {
+  if (foot && !document.getElementById('causeTag')) {
     // Deliberately NOT using margin-left for spacing here (as this used
     // to) -- a fixed CSS margin is a rigid, unstretchable gap that
     // text-align:justify cannot absorb the way it absorbs a normal space
@@ -8859,18 +9081,24 @@ const APP_BUILD = '20260910161636';
     // Real space text nodes keep the footer as one uniform, justifiable
     // run of text.
     foot.appendChild(document.createTextNode(' '));
-    const s = document.createElement('span');
-    s.id = 'buildTag';
-    s.style.cssText = 'color:var(--text-faint);font-family:var(--font-mono);font-size:.7rem;';
-    s.textContent = 'build ' + APP_BUILD;
-    foot.appendChild(s);
-
-    foot.appendChild(document.createTextNode(' '));
     const cause = document.createElement('span');
     cause.id = 'causeTag';
     cause.style.cssText = 'color:var(--text-faint);font-size:.7rem;';
     cause.textContent = 'Revenue generated from this site will be used to build a library in Bihar for children from very poor backgrounds.';
     foot.appendChild(cause);
+
+    foot.appendChild(document.createTextNode(' '));
+    const contact = document.createElement('span');
+    contact.id = 'contactTag';
+    contact.style.cssText = 'color:var(--text-faint);font-size:.7rem;';
+    contact.textContent = 'For suggestions or to report a bug, write to ';
+    const mailLink = document.createElement('a');
+    mailLink.href = 'mailto:admin@engineeringhubcalc.com';
+    mailLink.textContent = 'admin@engineeringhubcalc.com';
+    mailLink.style.cssText = 'color:var(--cyan);';
+    contact.appendChild(mailLink);
+    contact.appendChild(document.createTextNode('.'));
+    foot.appendChild(contact);
   }
 })();
 
