@@ -13,6 +13,7 @@ import * as trip from './calculators/tripProtection.js';
 import * as flow from './calculators/flowEngine.js';
 import * as store from './storage.js';
 import * as lu from './calculators/loopUncertainty.js';
+import * as fsafe from './calculators/functionalSafety.js';
 import * as cl from './calculators/controlLoops.js';
 import * as steam from './calculators/steamTable.js';
 import * as ec from './calculators/electricalCommon.js';
@@ -21,6 +22,7 @@ import * as idmt from './calculators/idmt.js';
 import * as rs from './calculators/relaySettings.js';
 import * as pipe from './calculators/piping.js';
 import * as rot from './calculators/rotatingEquipment.js';
+import * as ppOps from './calculators/powerPlantOps.js';
 import * as hx from './calculators/heatExchanger.js';
 import * as vt from './calculators/vesselsTanks.js';
 import * as pt from './calculators/processThermal.js';
@@ -101,6 +103,8 @@ const NAV = [
       { id: 'protection', label: 'Turbine & Boiler Protection', icon: '🛡' },
       { id: 'control-loops', label: 'Control Loops', icon: '↻' },
       { id: 'sama-logic', label: 'SAMA Logic Simulator', icon: '⌗' },
+      { id: 'boiler-blowdown', label: 'Boiler Blowdown Rate', icon: '≣' },
+      { id: 'cooling-tower', label: 'Cooling Tower Performance', icon: '❄' },
     ]
   },
   {
@@ -119,6 +123,10 @@ const NAV = [
       { id: 'loop-uncertainty', label: 'Loop Uncertainty', icon: '±' },
       { id: 'cavitation', label: 'Valve Cavitation', icon: '◌' },
       { id: 'cable-gland', label: 'Cable & Gland Sizing', icon: '⏚' },
+      { id: 'sil-verification', label: 'SIL / PFDavg Verification', icon: '🛡' },
+      { id: 'gauge-range', label: 'Pressure Gauge Range Selection', icon: '⏲' },
+      { id: 'interface-level', label: 'Interface Level (Two-Liquid DP)', icon: '≋' },
+      { id: 'loop-power', label: '4–20 mA Loop Power Budget', icon: '🔋' },
     ]
   },
   {
@@ -152,6 +160,7 @@ const NAV = [
       { id: 'pump-npsh', label: 'Pump NPSH & Affinity Laws', icon: '↻' },
       { id: 'pump-specific-speed', label: 'Pump Specific Speed', icon: '§' },
       { id: 'fan-laws', label: 'Fan / Blower Laws & Power', icon: '≈' },
+      { id: 'compressor-power', label: 'Compressor Power (Adiabatic)', icon: '⇗' },
       { id: 'bearing-life', label: 'Bearing L10 Life (ISO 281)', icon: '●' },
       { id: 'heat-exchanger', label: 'Heat Exchanger LMTD & Area', icon: '⇌' },
       { id: 'horizontal-tank', label: 'Horizontal Tank Volume (Dip Chart)', icon: '▭' },
@@ -319,6 +328,10 @@ const SEO_META = {
   'pid': { title: 'PID Controller Tuning Calculator', description: 'Calculate PID controller gains and simulate step response for process control loop tuning.' },
   'loop-uncertainty': { title: 'Instrument Loop Uncertainty Calculator', description: 'Calculate total measurement loop uncertainty by combining individual instrument accuracy contributions.' },
   'cavitation': { title: 'Control Valve Cavitation Check Calculator', description: 'Check a control valve for cavitation and flashing risk from upstream/downstream pressure and vapor pressure.' },
+  'sil-verification': { title: 'SIL / PFDavg Verification Calculator (IEC 61508/61511)', description: 'Calculate PFDavg and the achievable SIL for a safety instrumented function from subsystem failure rates, architecture, and proof-test interval.' },
+  'gauge-range': { title: 'Pressure Gauge Range Selection Calculator (ASME B40.100)', description: 'Select a standard pressure gauge range so normal operating pressure falls in the recommended 25-75% of full scale.' },
+  'interface-level': { title: 'Interface Level Calculator (Two-Liquid DP Measurement)', description: 'Calculate DP transmitter calibration values and current interface level for a two-liquid (e.g. oil-water) interface measurement.' },
+  'loop-power': { title: '4-20 mA Loop Power Budget Calculator', description: 'Check whether a 4-20mA loop\u2019s supply voltage covers the transmitter\u2019s minimum voltage plus all series wiring and load resistances at 20mA.' },
   'cable-gland': { title: 'Cable & Gland Size Calculator', description: 'Predict instrumentation or power cable overall diameter from core count, size and armouring, and get the matching standard cable gland size.' },
   'formula-library': { title: 'Engineering Formula Library', description: 'Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.' },
   'history': { title: 'Calculation History', description: 'Your saved calculation history for this device.', noindex: true },
@@ -331,6 +344,9 @@ const SEO_META = {
   'pump-npsh': { title: 'Pump NPSH & Affinity Laws Calculator', description: 'Calculate NPSH available, check margin against NPSH required, and apply pump affinity laws for a speed change.' },
   'pump-specific-speed': { title: 'Pump Specific Speed Calculator', description: 'Calculate centrifugal pump specific speed (Ns) and get an impeller type (radial/mixed/axial) selection guide.' },
   'fan-laws': { title: 'Fan / Blower Affinity Laws & Power Calculator', description: 'Apply fan affinity laws for a speed change and calculate fan shaft power from flow, pressure rise and efficiency.' },
+  'compressor-power': { title: 'Adiabatic Compressor Power Calculator', description: 'Calculate ideal-gas adiabatic compression work, discharge temperature, and shaft power from suction/discharge pressure and mass flow.' },
+  'boiler-blowdown': { title: 'Boiler Blowdown Rate Calculator', description: 'Calculate boiler blowdown rate and percentage from steam generation rate and feedwater/boiler water TDS limits.' },
+  'cooling-tower': { title: 'Cooling Tower Performance Calculator', description: 'Calculate cooling tower range, approach, and thermal effectiveness against ambient wet-bulb temperature.' },
   'bearing-life': { title: 'Bearing L10 Life Calculator (ISO 281)', description: 'Calculate rolling element bearing L10 life in revolutions and hours from dynamic load rating and equivalent load.' },
   'heat-exchanger': { title: 'Heat Exchanger LMTD & Area Calculator', description: 'Calculate log mean temperature difference (LMTD) and required heat transfer area for a heat exchanger from its four terminal temperatures.' },
   'horizontal-tank': { title: 'Horizontal Cylindrical Tank Volume Calculator (Dip Chart)', description: 'Calculate partial and total volume of a horizontal cylindrical tank from diameter, length and liquid fill depth \u2014 exact circular-segment geometry.' },
@@ -618,12 +634,12 @@ const PAGE_CONTENT = {
     ],
   },
   'sama-logic': {
-    about: 'SAMA (Scientific Apparatus Makers Association) symbols are the standard notation for control and interlock logic diagrams across the power industry \u2014 the same summing junctions, high/low selects, and limiters that appear throughout real combustion control and permissive logic. This tool lets you wire your own chain of standard blocks and watch every output update live, rather than only viewing pre-built loops.',
+    about: 'SAMA (Scientific Apparatus Makers Association) symbols are the standard notation for control and interlock logic diagrams across the power industry, part of the same lineage as the ISA/MCAA "Functional Diagramming of Instrument and Control Systems" standard \u2014 the same summing junctions, high/low selects, limiters, and manual/auto transfer stations that appear throughout real combustion control and permissive logic. This tool lets you wire your own chain of standard blocks \u2014 both static/algebraic blocks and genuine time-stepped dynamic blocks (lag, derivative, integrator, PID, ramp generators, timers) \u2014 and watch every output update live, including a scrolling trend chart of any signal you choose to watch, rather than only viewing pre-built loops.',
     faq: [
-      { q: 'What\u2019s the difference between this and the Control Loops page?', a: 'Control Loops shows complete, pre-built, time-stepped simulations of real plant control loops (drum level, combustion control, and so on) \u2014 you move a disturbance slider and watch dynamic behavior unfold over simulated seconds. This tool is for building your OWN static logic from individual SAMA blocks \u2014 summers, selects, AND/OR gates \u2014 to check how a specific piece of interlock or permissive logic behaves for a given set of inputs.' },
-      { q: 'Why can a block only reference an earlier block, not a later one?', a: 'A real SAMA diagram is read left to right \u2014 signals flow forward, never backward into an earlier summing junction on the same sheet. Enforcing that here means the chain evaluates in one deterministic pass with no risk of a circular reference, exactly matching how the diagram would actually be drawn and read.' },
+      { q: 'What\u2019s the difference between this and the Control Loops page?', a: 'Control Loops shows complete, pre-built simulations of specific real plant control loops (drum level, combustion control, and so on), each already wired up and ready to run. This tool is for building your OWN logic from individual SAMA blocks \u2014 summers, selects, AND/OR gates, and genuine dynamic blocks like PID, lag, and timers \u2014 to check how a specific piece of interlock, permissive, or control logic behaves for exactly the combination you need, not just the pre-built examples.' },
+      { q: 'Why can a block only reference an earlier block, not a later one?', a: 'A real SAMA diagram is read left to right \u2014 signals flow forward, never backward into an earlier summing junction on the same sheet. Enforcing that here means the chain evaluates in one deterministic pass with no risk of a circular reference, exactly matching how the diagram would actually be drawn and read. A genuine feedback loop (like a PID controlling the process it reads back from) is still fully supported \u2014 it\u2019s resolved correctly using a one-step simulation delay once you add a dynamic block, the same way a real control loop\u2019s feedback path works.' },
       { q: 'What happens if I remove a block that another block depends on?', a: 'The dependent block\u2019s input automatically falls back to a constant value (0) instead of being left broken \u2014 you\u2019ll see it change and can re-wire it to a different source if needed.' },
-      { q: 'Are dynamic blocks like lag, integrator, or timers included?', a: 'Not in this tool \u2014 those need genuine time-stepped simulation to mean anything, which is exactly what the Control Loops section already provides for real, complete control loops. This tool covers the static/algebraic SAMA blocks (summers, selects, limiters, AND/OR/NOT, comparators) that make up the majority of interlock and permissive logic.' },
+      { q: 'Are dynamic blocks like lag, integrator, or timers included?', a: 'Yes \u2014 lag, derivative, lead-lag, integrator, rate limiter, dead time, a ramp/time-function generator, a full anti-windup PID controller, both Reset-dominant and Set-dominant SR latches, a time-delay (ON/OFF-delay) timer, a one-shot pulse timer, and a free-running pulse generator are all available alongside the static/algebraic SAMA blocks (summers, averaging, differencing, selects, limiters, exponential, manual/auto transfer stations, AND/OR/NOT, comparators). Add any dynamic block to a diagram and Simulate mode activates automatically, stepping the whole chain forward in time with a Run/Pause/Reset clock and an optional live trend chart.' },
     ],
   },
 };
@@ -712,7 +728,8 @@ const CONFIDENCE_TIERS = {
 const ROUTE_TIER = {
   'short-circuit': 'verified', 'idmt': 'verified', 'relay-settings': 'verified',
   'grounding-grid': 'verified', 'steam-props': 'verified', 'dp-flow-cal': 'verified',
-  'control-loops': 'verified', 'relief-valve': 'verified',
+  'control-loops': 'verified', 'relief-valve': 'verified', 'gauge-range': 'verified', 'loop-power': 'verified', 'interface-level': 'verified',
+  'compressor-power': 'verified', 'boiler-blowdown': 'verified', 'cooling-tower': 'verified',
 
   'orifice': 'scoped', 'heat-exchanger': 'scoped', 'cable-sizing': 'scoped',
   'cable-withstand': 'scoped', 'pump-npsh': 'scoped', 'fan-laws': 'scoped', 'pump-specific-speed': 'scoped',
@@ -722,7 +739,7 @@ const ROUTE_TIER = {
   'motor-prot': 'scoped', 'lsig': 'scoped', 'coordination': 'scoped',
   'motor-start': 'scoped', 'pf-correction': 'scoped', 'battery-sizing': 'scoped',
   'tx-loading': 'scoped', 'dp-flow-wizard': 'scoped', 'dp-level': 'scoped',
-  'control-valve': 'scoped', 'cavitation': 'scoped', 'rtd': 'scoped', 'cable-gland': 'scoped',
+  'control-valve': 'scoped', 'cavitation': 'scoped', 'rtd': 'scoped', 'cable-gland': 'scoped', 'sil-verification': 'scoped',
   'thermocouple': 'scoped', 'pid': 'scoped', 'loop-uncertainty': 'scoped',
   'horizontal-tank': 'scoped', 'vertical-tank': 'scoped', 'vessel-wall': 'scoped',
   'insulation-loss': 'scoped', 'thermal-expansion': 'scoped', 'gas-compression': 'scoped',
@@ -838,6 +855,10 @@ const ROUTES = {
   'pid': pagePid,
   'loop-uncertainty': pageLoopUncertainty,
   'cavitation': pageCavitation,
+  'sil-verification': pageSILVerification,
+  'gauge-range': pageGaugeRange,
+  'interface-level': pageInterfaceLevel,
+  'loop-power': pageLoopPower,
   'cable-gland': pageCableGland,
   'formula-library': pageFormulaLibrary,
   'history': pageHistory,
@@ -850,6 +871,9 @@ const ROUTES = {
   'pump-npsh': pagePumpNpsh,
   'pump-specific-speed': pagePumpSpecificSpeed,
   'fan-laws': pageFanLaws,
+  'compressor-power': pageCompressorPower,
+  'boiler-blowdown': pageBoilerBlowdown,
+  'cooling-tower': pageCoolingTower,
   'bearing-life': pageBearingLife,
   'heat-exchanger': pageHeatExchanger,
   'horizontal-tank': pageHorizontalTank,
@@ -5345,6 +5369,168 @@ function pageFanLaws() {
   });
 }
 
+// ---------- Compressor Power (Adiabatic) ----------
+function pageCompressorPower() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Compressor Power (Adiabatic)</h1>
+    <p class="lead">Ideal-gas adiabatic (isentropic) compression \u2014 the standard shortcut method for sizing instrument air compressors, blast-furnace/BOF process air, and general utility gas compression across power plants, steel plants, and process industries.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Gas &amp; Conditions</div>
+    <div class="input-row">
+      <div class="field"><label>Suction pressure P\u2081 (kPa abs)</label><input type="number" id="p1" step="any" value="100"></div>
+      <div class="field"><label>Discharge pressure P\u2082 (kPa abs)</label><input type="number" id="p2" step="any" value="500"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Suction temperature (\u00b0C)</label><input type="number" id="t1" step="any" value="20"></div>
+      <div class="field"><label>Mass flow (kg/s)</label><input type="number" id="mdot" step="any" value="1"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Specific heat ratio k (Cp/Cv)</label><input type="number" id="k" step="any" value="1.4"></div>
+      <div class="field"><label>Molar mass (kg/kmol)</label><input type="number" id="mw" step="any" value="28.97"></div>
+    </div>
+    <div class="hint">Air: k=1.4, MW=28.97. Natural gas (mostly methane): k\u22481.3, MW\u224817-19. Nitrogen: k=1.4, MW=28.01.</div>
+    <div class="field" style="margin-top:10px;"><label>Isentropic efficiency (%)</label><input type="number" id="eff" step="any" value="100"></div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter gas and process conditions to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const p1 = +left.querySelector('#p1').value, p2 = +left.querySelector('#p2').value;
+    const t1C = +left.querySelector('#t1').value;
+    const mdot = +left.querySelector('#mdot').value;
+    const k = +left.querySelector('#k').value;
+    const mw = +left.querySelector('#mw').value;
+    const effPct = +left.querySelector('#eff').value;
+    try {
+      const r = rot.adiabaticCompressorPower({ p1Pa: p1 * 1000, p2Pa: p2 * 1000, t1K: t1C + 273.15, k, molarMassKgPerKmol: mw, massFlowKgS: mdot, efficiency: effPct / 100 });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.powerKW, 2)} kW</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">shaft power required</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Pressure ratio', fmt(r.pressureRatio, 3))}
+          ${resultRow('Specific gas constant R', fmt(r.R, 2) + ' J/(kg\u00b7K)')}
+          ${resultRow('Isentropic work', fmt(r.wIsentropicJKg / 1000, 2) + ' kJ/kg')}
+          ${resultRow('Actual work (at stated efficiency)', fmt(r.wActualJKg / 1000, 2) + ' kJ/kg')}
+          ${resultRow('Isentropic discharge temperature', fmt(r.t2IsentropicK - 273.15, 1) + ' \u00b0C')}
+          ${resultRow('Actual discharge temperature', fmt(r.t2ActualK - 273.15, 1) + ' \u00b0C')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">w = [k/(k\u22121)]\u00b7R\u00b7T\u2081\u00b7[(P\u2082/P\u2081)^((k\u22121)/k) \u2212 1], T\u2082 = T\u2081\u00b7(P\u2082/P\u2081)^((k\u22121)/k)<br>Ideal-gas adiabatic (isentropic) compression, the standard shortcut method for preliminary sizing.</div>
+        <div class="assumptions-note" style="margin-top:12px;">Assumes ideal-gas behavior (compressibility factor Z=1) \u2014 conservative for air and light gases at moderate pressure, but increasingly inaccurate for high pressure ratios or real gases far from ideal (e.g. natural gas above ~40 bar). Add mechanical/gearbox losses (typically 3\u20135%) on top of this gas power for total driver power. This does not replace a compressor vendor's own selection calculation.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('compressor-power', `Compressor power \u2014 ${fmt(r.powerKW, 1)} kW`, { p1, p2, t1C, mdot, k, mw }, { powerKW: r.powerKW }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Adiabatic Compressor Power Calculator',
+        inputs: { 'P1 (suction)': `${p1} kPa`, 'P2 (discharge)': `${p2} kPa`, 'T1 (suction)': `${t1C} \u00b0C`, 'Mass flow': `${mdot} kg/s`, k, 'Molar mass': `${mw} kg/kmol`, Efficiency: `${effPct}%` },
+        result: { Power: fmt(r.powerKW, 2) + ' kW', 'Discharge temp (actual)': fmt(r.t2ActualK - 273.15, 1) + ' \u00b0C' },
+        assumptions: { note: 'Ideal-gas adiabatic compression; add mechanical losses for total driver power.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Boiler Blowdown Rate ----------
+function pageBoilerBlowdown() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Boiler Blowdown Rate</h1>
+    <p class="lead">Every kilogram of steam raised leaves its dissolved solids behind in the boiler water \u2014 blowdown is how that concentration is kept under the limit that causes scaling, carryover, and corrosion. A genuine daily calculation for boiler operators and water treatment chemists.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Steam Rate &amp; Water Chemistry</div>
+    <div class="field"><label>Steam generation rate (kg/h)</label><input type="number" id="steamRate" step="any" value="5000"></div>
+    <div class="input-row">
+      <div class="field"><label>Feedwater TDS (ppm)</label><input type="number" id="fwTds" step="any" value="100"></div>
+      <div class="field"><label>Max. allowable boiler water TDS (ppm)</label><input type="number" id="maxTds" step="any" value="3000"></div>
+    </div>
+    <div class="hint">Max. allowable boiler TDS depends on operating pressure and boiler design (typically 3000\u20133500 ppm for low-pressure fire-tube boilers, much lower for high-pressure utility boilers) \u2014 check the boiler manufacturer's limit, not a generic default.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter steam rate and TDS limits to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const steamRateKgH = +left.querySelector('#steamRate').value;
+    const feedwaterTdsPpm = +left.querySelector('#fwTds').value;
+    const maxBoilerTdsPpm = +left.querySelector('#maxTds').value;
+    try {
+      const r = ppOps.boilerBlowdownRate({ steamRateKgH, feedwaterTdsPpm, maxBoilerTdsPpm });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.blowdownKgH, 2)} kg/h</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">required continuous blowdown rate</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Blowdown, % of steam rate', fmt(r.blowdownPct, 3) + ' %')}
+          ${resultRow('Cycles of concentration', fmt(r.cyclesOfConcentration, 1) + '\u00d7')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Blowdown = Steam Rate \u00d7 TDS_feedwater / (TDS_max \u2212 TDS_feedwater)<br>Mass balance on dissolved solids at steady-state boiler water TDS.</div>
+        <div class="assumptions-note" style="margin-top:12px;">This is the continuous (steady-state) blowdown needed on a mass-balance basis \u2014 real operation typically also includes periodic bottom/manual blowdown to remove settled sludge, which this calculation does not include. Recovering blowdown heat through a flash tank or heat exchanger is standard practice at this rate and meaningfully improves overall boiler efficiency.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('boiler-blowdown', `Boiler blowdown \u2014 ${fmt(r.blowdownPct, 2)}%`, { steamRateKgH, feedwaterTdsPpm, maxBoilerTdsPpm }, { blowdownKgH: r.blowdownKgH }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Boiler Blowdown Rate Calculator',
+        inputs: { 'Steam rate': `${steamRateKgH} kg/h`, 'Feedwater TDS': `${feedwaterTdsPpm} ppm`, 'Max boiler TDS': `${maxBoilerTdsPpm} ppm` },
+        result: { Blowdown: fmt(r.blowdownKgH, 2) + ' kg/h', 'Blowdown %': fmt(r.blowdownPct, 3) + '%', 'Cycles of concentration': fmt(r.cyclesOfConcentration, 1) },
+        assumptions: { note: 'Continuous (mass-balance) blowdown only; does not include periodic bottom blowdown.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Cooling Tower Performance ----------
+function pageCoolingTower() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Cooling Tower Performance</h1>
+    <p class="lead">Range tells you how much heat is being rejected; approach tells you how well the tower is actually performing. A cooling tower can only ever approach the ambient wet-bulb temperature, never reach or beat it \u2014 that's the real thermodynamic limit this checks against.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Water &amp; Ambient Temperatures</div>
+    <div class="input-row">
+      <div class="field"><label>Hot water in (\u00b0C)</label><input type="number" id="hotIn" step="any" value="40"></div>
+      <div class="field"><label>Cold water out (\u00b0C)</label><input type="number" id="coldOut" step="any" value="32"></div>
+    </div>
+    <div class="field"><label>Ambient wet-bulb temperature (\u00b0C)</label><input type="number" id="wetBulb" step="any" value="25"></div>
+    <div class="hint">Wet-bulb, not dry-bulb \u2014 evaporative cooling is limited by wet-bulb temperature, and substituting dry-bulb will meaningfully misstate the tower's real effectiveness.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter temperatures to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const hotWaterInC = +left.querySelector('#hotIn').value;
+    const coldWaterOutC = +left.querySelector('#coldOut').value;
+    const wetBulbC = +left.querySelector('#wetBulb').value;
+    try {
+      const r = ppOps.coolingTowerPerformance({ hotWaterInC, coldWaterOutC, wetBulbC });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.effectivenessPct, 1)} %</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">thermal effectiveness</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Range (heat rejection indicator)', fmt(r.range, 2) + ' \u00b0C')}
+          ${resultRow('Approach (true performance indicator)', fmt(r.approach, 2) + ' \u00b0C')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Range = T_hot,in \u2212 T_cold,out<br>Approach = T_cold,out \u2212 T_wetbulb<br>Effectiveness = Range / (Range + Approach) \u00d7 100</div>
+        <div class="assumptions-note" style="margin-top:12px;">Range reflects the process heat load and water flow rate \u2014 it is NOT, by itself, a performance indicator; a lower range can simply mean lower heat load or higher flow, not a better tower. Approach is the real indicator of tower condition: a rising approach (leaving water drifting further from wet-bulb) at unchanged range and flow points to fouled fill, poor air distribution, or reduced fan/water flow, not a change in ambient conditions.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('cooling-tower', `Cooling tower \u2014 ${fmt(r.effectivenessPct, 1)}% effective`, { hotWaterInC, coldWaterOutC, wetBulbC }, { effectivenessPct: r.effectivenessPct }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Cooling Tower Performance Calculator',
+        inputs: { 'Hot water in': `${hotWaterInC} \u00b0C`, 'Cold water out': `${coldWaterOutC} \u00b0C`, 'Wet-bulb': `${wetBulbC} \u00b0C` },
+        result: { Range: fmt(r.range, 2) + ' \u00b0C', Approach: fmt(r.approach, 2) + ' \u00b0C', Effectiveness: fmt(r.effectivenessPct, 1) + '%' },
+        assumptions: { note: 'Approach, not range, is the real indicator of tower performance.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
 // ---------- Bearing L10 Life (ISO 281) ----------
 function pageBearingLife() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Process &amp; Mechanical</div><h1>Bearing L10 Life (ISO 281)</h1>
@@ -6052,6 +6238,19 @@ function pageRefrigerationTons() {
 }
 
 // ---------- SAMA Logic Diagram Simulator ----------
+// Module-level (not inside pageSamaLogic itself) so this state survives
+// navigating away to a different calculator and back -- the same
+// persistence a real DCS's tag database has across displays/graphics.
+// samaPages holds each page's own blocks/undo history/selection;
+// samaTagLibrary and samaGlobalTagValues are shared across every page,
+// which is the actual point of a global tag database: the same tag
+// means the same thing (and, once computed, the same live value)
+// wherever it's referenced.
+let samaPages = [{ name: 'Page 1', blocks: [], undoStack: [], redoStack: [], selectedId: null }];
+let samaCurrentPageIdx = 0;
+let samaTagLibrary = [];
+const samaGlobalTagValues = {}; // tag -> last value computed for it, by whichever page last ran it
+
 function pageSamaLogic() {
   const DYNAMIC_COLOR = '#a78bfa';
   const CONNECT_OK_COLOR = '#4ade80'; // distinct "connected" green -- separate from the wire's own cyan, so a successful/live connection reads clearly at a glance
@@ -6063,13 +6262,62 @@ function pageSamaLogic() {
   // free-form canvas, not an auto-laid-out list) alongside the same
   // type/params/inputs shape the already-verified sama.* engine expects
   // -- the engine itself is completely unchanged by this rewrite. ----
-  let blocks = [];
-  let counter = 0;
-  let selectedId = null;
+  let blocks = samaPages[samaCurrentPageIdx].blocks;
+  let counter = blocks.reduce((max, b) => Math.max(max, +String(b.id).replace(/\D/g, '') || 0), 0);
+  let selectedId = null; // deliberately not restored across a page switch -- a fresh page starts with nothing selected, the same as opening a different graphic in a real DCS
+  let undoStack = samaPages[samaCurrentPageIdx].undoStack;
+  let redoStack = samaPages[samaCurrentPageIdx].redoStack;
+  let tagLibrary = samaTagLibrary; // shared across every page -- the actual point of a global tag database
+  const UNDO_LIMIT = 50; // caps memory use; losing very old history is an acceptable trade-off for an in-session editor
+  function snapshotForUndo() {
+    // Called BEFORE a structural change (add/remove block, wire connect
+    // or disconnect, Clear All) so the snapshot captures the state to
+    // return TO -- deep-cloned since blocks is plain data (no functions,
+    // no circular refs), so JSON round-trip is a safe, simple clone.
+    undoStack.push(JSON.parse(JSON.stringify(blocks)));
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    redoStack = []; // a fresh change invalidates whatever redo history existed
+    samaPages[samaCurrentPageIdx].redoStack = redoStack;
+  }
+  function undo() {
+    if (undoStack.length === 0) return;
+    redoStack.push(JSON.parse(JSON.stringify(blocks)));
+    blocks = undoStack.pop();
+    if (selectedId && !blocks.some((b) => b.id === selectedId)) selectedId = null;
+    syncCurrentPageState();
+    structureChanged();
+  }
+  function redo() {
+    if (redoStack.length === 0) return;
+    undoStack.push(JSON.parse(JSON.stringify(blocks)));
+    blocks = redoStack.pop();
+    if (selectedId && !blocks.some((b) => b.id === selectedId)) selectedId = null;
+    syncCurrentPageState();
+    structureChanged();
+  }
+  function syncCurrentPageState() {
+    // Writes the local working variables back into the module-level page
+    // record -- called after anything that might reassign `blocks`
+    // wholesale (undo/redo, import, Clear All), so switching pages or
+    // navigating away and back doesn't lose or revert those changes.
+    const page = samaPages[samaCurrentPageIdx];
+    page.blocks = blocks;
+    page.undoStack = undoStack;
+    page.redoStack = redoStack;
+  }
   let simulation = null;
   let simTimer = null;
   let simRunning = false;
+  let staticRunning = false; // gates evaluation for a STATIC diagram the same way Run/Pause gates a dynamic one -- nothing is computed or displayed until Run is actually pressed
   const SIM_DT = 0.15;
+  let simSpeed = 1; // simulated seconds advanced per real second while running
+
+  // ---- Live trend recording ----
+  const trendHistory = new Map();      // blockId -> [{t, v}, ...], trimmed to the visible window
+  const trendedIds = [];               // ordered, so each series keeps a stable color
+  const TREND_COLORS = ['#4ade80', '#f59e0b', '#38bdf8', '#f472b6', '#a78bfa'];
+  const TREND_WINDOW_SEC = 60;
+  const TREND_MAX_SERIES = 5;
   const BW = 168, BH = 66;
   /** A block's actual on-canvas size, from its own scale factor (default
    * 1). Every place that used to read the flat BW/BH constants now calls
@@ -6082,27 +6330,97 @@ function pageSamaLogic() {
   // ---- Toolbar ----
   const toolbar = h(`<div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;">
     <button class="btn" id="toggleBlocksBtn">+ Blocks</button>
-    <select id="loadExampleSelect" style="width:auto;">
-      <option value="">Load Example\u2026</option>
-      <option value="pidLevel">PID Level Control (closed loop)</option>
-      <option value="crossLimit">Combustion Cross-Limiting</option>
-    </select>
     <button class="btn secondary" id="clearAllBtn">Clear All</button>
-    <div id="simControls" style="display:none;align-items:center;gap:10px;margin-left:auto;">
+    <button class="btn secondary" id="undoBtn" title="Undo (Ctrl+Z)">\u21b6 Undo</button>
+    <button class="btn secondary" id="redoBtn" title="Redo (Ctrl+Y)">\u21b7 Redo</button>
+    <button class="btn secondary" id="manageTagsBtn" title="Define instrument tags (FT-101, PIC-201...) to select when configuring a block">Tags</button>
+    <button class="btn secondary" id="exportBtn" title="Save this diagram as a file you can reopen or share">Export</button>
+    <button class="btn secondary" id="importBtn" title="Load a diagram you saved earlier">Import</button>
+    <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
+    <div id="simControls" style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap;">
       <span class="pill" id="simStatusPill" style="background:var(--amber-dim);color:var(--amber);border-color:var(--amber);">READY</span>
       <button class="btn secondary" id="simPlayPause">Run</button>
       <button class="btn secondary" id="simReset">Reset</button>
+      <select id="simSpeedSelect" style="width:auto;" title="Simulated time advanced per real second">
+        <option value="1">1\u00d7</option>
+        <option value="2">2\u00d7</option>
+        <option value="5">5\u00d7</option>
+        <option value="10">10\u00d7</option>
+        <option value="20">20\u00d7</option>
+      </select>
       <span id="simClock" style="font-family:var(--font-mono);color:var(--text-faint);font-size:.8rem;">t = 0.0 s</span>
+      <span id="staticNote" style="color:var(--text-faint);font-size:.78rem;">Static diagram \u2014 computes instantly. Add a dynamic block to enable Run.</span>
     </div>
-    <span id="staticNote" style="color:var(--text-faint);font-size:.78rem;margin-left:auto;">Static diagram — computes instantly. Add a dynamic block to simulate over time.</span>
   </div>`);
   app.appendChild(toolbar);
+
+  // ---- Tag Library modal (reuses the existing donate-modal-* styling
+  // for a consistent look, but is a fully independent modal instance) ----
+  const tagModalBackdrop = h(`<div class="donate-modal-backdrop" id="tagModalBackdrop">
+    <div class="donate-modal" role="dialog" aria-modal="true" aria-labelledby="tagModalTitle" style="max-width:560px;">
+      <button class="donate-modal-close" id="tagModalClose" type="button" aria-label="Close">\u2715</button>
+      <h3 id="tagModalTitle">Instrument Tag Library</h3>
+      <p style="color:var(--text-dim);font-size:.85rem;margin:-8px 0 14px;">Define real instrument tags here (FT-101, PIC-201, XV-301...) once, then select them from a list when configuring a field I/O or final-control block, instead of only ever seeing the generic b1/b2 block id.</p>
+      <div class="input-row">
+        <div class="field"><label>Tag name</label><input type="text" id="newTagName" placeholder="e.g. FT-101"></div>
+        <div class="field"><label>Signal type</label>
+          <select id="newTagType"><option value="analog">Analog</option><option value="digital">Digital</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Description</label><input type="text" id="newTagDesc" placeholder="e.g. Feedwater flow transmitter"></div>
+      <div class="btn-row"><button class="btn" id="addTagBtn">Add Tag</button></div>
+      <div id="tagListBody" style="margin-top:16px;max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div>`);
+  app.appendChild(tagModalBackdrop);
+
+  function renderTagList() {
+    const body = tagModalBackdrop.querySelector('#tagListBody');
+    if (tagLibrary.length === 0) { body.innerHTML = '<div class="empty-state" style="padding:20px 0;">No tags defined yet.</div>'; return; }
+    body.innerHTML = tagLibrary.map((t, i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);">
+        <span style="font-family:var(--font-mono);font-weight:700;color:var(--cyan);min-width:90px;">${t.tag}</span>
+        <span style="color:var(--text-faint);font-size:.72rem;text-transform:uppercase;min-width:56px;">${t.signalType}</span>
+        <span style="color:var(--text-dim);font-size:.85rem;flex:1;">${t.description || ''}</span>
+        <button class="btn secondary" data-remove-tag="${i}" style="padding:4px 10px;font-size:.78rem;">Remove</button>
+      </div>`).join('');
+    body.querySelectorAll('[data-remove-tag]').forEach((btn) => btn.addEventListener('click', () => {
+      const idx = +btn.dataset.removeTag;
+      const removedTag = tagLibrary[idx].tag;
+      tagLibrary.splice(idx, 1);
+      // A block still assigned the now-deleted tag keeps showing SOME
+      // label rather than silently going blank -- falls back to its own
+      // block id, exactly like an unassigned block already does.
+      blocks.forEach((b) => { if (b.tag === removedTag) b.tag = ''; });
+      renderTagList();
+      render();
+    }));
+  }
+  function openTagModal() { renderTagList(); tagModalBackdrop.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  function closeTagModal() { tagModalBackdrop.classList.remove('open'); document.body.style.overflow = ''; }
+  toolbar.querySelector('#manageTagsBtn').addEventListener('click', openTagModal);
+  tagModalBackdrop.querySelector('#tagModalClose').addEventListener('click', closeTagModal);
+  tagModalBackdrop.addEventListener('click', (e) => { if (e.target === tagModalBackdrop) closeTagModal(); });
+  tagModalBackdrop.querySelector('#addTagBtn').addEventListener('click', () => {
+    const nameInput = tagModalBackdrop.querySelector('#newTagName');
+    const tag = nameInput.value.trim();
+    if (!tag) { toast('Enter a tag name first.'); return; }
+    if (tagLibrary.some((t) => t.tag === tag)) { toast(`Tag "${tag}" is already defined.`); return; }
+    const signalType = tagModalBackdrop.querySelector('#newTagType').value;
+    const description = tagModalBackdrop.querySelector('#newTagDesc').value.trim();
+    tagLibrary.push({ tag, signalType, description });
+    nameInput.value = '';
+    tagModalBackdrop.querySelector('#newTagDesc').value = '';
+    renderTagList();
+    render(); // the properties panel's tag dropdown, if open on a block, should offer the new tag immediately
+  });
 
   // ---- Palette (overlay popup, not pushed into the layout -- opening
   // it must never shrink the canvas, which is the whole point of the
   // "use full area" fix below) ----
   const IO_COLOR = '#4ade80';
-  const CATS = [['analog', 'Analog (static)', 'var(--cyan)'], ['logic', 'Logic (static)', 'var(--amber)'], ['dynamic', 'Dynamic (time-stepped)', DYNAMIC_COLOR], ['io', 'Field I/O Terminals (DI/DO/AI/AO)', IO_COLOR]];
+  const FINAL_CONTROL_COLOR = '#fb923c';
+  const CATS = [['analog', 'Analog (static)', 'var(--cyan)'], ['logic', 'Logic (static)', 'var(--amber)'], ['dynamic', 'Dynamic (time-stepped)', DYNAMIC_COLOR], ['io', 'Field I/O Terminals (DI/DO/AI/AO)', IO_COLOR], ['finalControl', 'Final Control Elements', FINAL_CONTROL_COLOR]];
   const paletteAnchor = h('<div style="position:relative;"></div>');
   app.appendChild(paletteAnchor);
   const palette = h(`<div class="card" id="palettePanel" style="display:none;position:absolute;top:6px;left:0;z-index:40;width:min(640px,92vw);max-height:70vh;max-height:70dvh;overflow:auto;box-shadow:0 12px 32px rgba(0,0,0,.45);">
@@ -6129,7 +6447,86 @@ function pageSamaLogic() {
     }
   });
 
+  document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd+Z (undo) and Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z (redo) work
+    // regardless of what's focused, EXCEPT inside a text field -- typing
+    // Ctrl+Z there should undo the user's own typing (native browser
+    // behavior), not reach past it into the diagram's structural history.
+    const tag = document.activeElement?.tagName;
+    const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    if ((e.ctrlKey || e.metaKey) && !inField) {
+      if (e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); redo(); return; }
+    }
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (!selectedId) return;
+    // Never act on Delete/Backspace while the user is actually typing in
+    // a field -- e.g. correcting a typo in a numeric input -- or this
+    // would delete the whole selected block out from under them instead
+    // of just erasing a character.
+    if (inField) return;
+    e.preventDefault();
+    removeBlock(selectedId);
+  });
+
   // ---- Canvas + properties panel ----
+  const pageTabsCard = h(`<div class="card" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:10px;flex-wrap:wrap;">
+    <span style="color:var(--text-faint);font-size:.78rem;white-space:nowrap;">Pages (shared tag database):</span>
+    <div id="pageTabsRow" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
+    <button class="btn secondary" id="addPageBtn" style="padding:6px 12px;font-size:.8rem;white-space:nowrap;">+ Page</button>
+  </div>`);
+  app.appendChild(pageTabsCard);
+
+  function switchToPage(idx) {
+    if (idx === samaCurrentPageIdx) return;
+    syncCurrentPageState();
+    samaCurrentPageIdx = idx;
+    const page = samaPages[samaCurrentPageIdx];
+    blocks = page.blocks;
+    undoStack = page.undoStack;
+    redoStack = page.redoStack;
+    selectedId = null; // a fresh page opens with nothing selected, same as opening a different graphic in a real DCS
+    structureChanged();
+    renderPageTabs();
+  }
+  function renderPageTabs() {
+    const row = pageTabsCard.querySelector('#pageTabsRow');
+    row.innerHTML = samaPages.map((p, i) => `
+      <div class="pill" data-page-tab="${i}" style="cursor:pointer;display:flex;align-items:center;gap:6px;${i === samaCurrentPageIdx ? 'border-color:var(--amber);color:var(--amber);' : ''}">
+        <span data-page-name="${i}">${p.name}</span>
+        ${samaPages.length > 1 ? `<span data-remove-page="${i}" style="color:var(--red);font-weight:700;cursor:pointer;">\u2715</span>` : ''}
+      </div>`).join('');
+    row.querySelectorAll('[data-page-tab]').forEach((el) => el.addEventListener('click', (e) => {
+      if (e.target.dataset.removePage !== undefined) return; // the x click is handled separately below
+      switchToPage(+el.dataset.pageTab);
+    }));
+    row.querySelectorAll('[data-page-name]').forEach((el) => el.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const idx = +el.dataset.pageName;
+      const name = prompt('Rename page:', samaPages[idx].name);
+      if (name && name.trim()) { samaPages[idx].name = name.trim(); renderPageTabs(); }
+    }));
+    row.querySelectorAll('[data-remove-page]').forEach((el) => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = +el.dataset.removePage;
+      if (samaPages.length <= 1) return; // always keep at least one page
+      if (!confirm(`Delete "${samaPages[idx].name}"? This cannot be undone.`)) return;
+      samaPages.splice(idx, 1);
+      if (samaCurrentPageIdx >= samaPages.length) samaCurrentPageIdx = samaPages.length - 1;
+      else if (idx < samaCurrentPageIdx) samaCurrentPageIdx--;
+      const page = samaPages[samaCurrentPageIdx];
+      blocks = page.blocks; undoStack = page.undoStack; redoStack = page.redoStack; selectedId = null;
+      structureChanged();
+      renderPageTabs();
+    }));
+  }
+  pageTabsCard.querySelector('#addPageBtn').addEventListener('click', () => {
+    syncCurrentPageState();
+    samaPages.push({ name: `Page ${samaPages.length + 1}`, blocks: [], undoStack: [], redoStack: [], selectedId: null });
+    switchToPage(samaPages.length - 1);
+  });
+  renderPageTabs();
+
   const layoutRow = h('<div style="display:flex;gap:14px;margin-top:12px;align-items:flex-start;"></div>');
   const canvasCard = h(`<div class="card" style="flex:1;min-width:0;padding:0;overflow:hidden;">
     <div id="samaCanvasWrap" style="position:relative;width:100%;height:calc(100vh - 250px);height:calc(100dvh - 250px);min-height:560px;overflow:auto;background:
@@ -6143,6 +6540,20 @@ function pageSamaLogic() {
   layoutRow.append(canvasCard, propsCard);
   app.appendChild(layoutRow);
 
+  const trendPanel = h(`<div class="card" id="trendPanel" style="margin-top:12px;display:none;">
+    <div class="panel-title">Live Trend</div>
+    <p style="color:var(--text-dim);font-size:.8rem;margin-top:0;">Watch how a signal actually evolves over time, the way a real DCS trend does \u2014 not just its current value. Add any block's output to the chart; it starts recording the moment you press Run.</p>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+      <select id="trendBlockSelect" style="width:auto;min-width:200px;"><option value="">Add a signal to watch\u2026</option></select>
+      <button class="btn secondary" id="trendAddBtn">+ Add to Trend</button>
+      <button class="btn secondary" id="trendClearBtn">Clear Trend</button>
+      <span style="color:var(--text-faint);font-size:.76rem;margin-left:auto;">Last 60 s, scrolling</span>
+    </div>
+    <div style="overflow-x:auto;"><svg id="trendSvg" width="100%" height="240" viewBox="0 0 1000 240" preserveAspectRatio="none" style="background:var(--bg-panel);border:1px solid var(--line);border-radius:6px;min-width:600px;"></svg></div>
+    <div id="trendLegend" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:.78rem;"></div>
+  </div>`);
+  app.appendChild(trendPanel);
+
   const svg = canvasCard.querySelector('#samaSvg');
   const canvasWrap = canvasCard.querySelector('#samaCanvasWrap');
 
@@ -6151,7 +6562,18 @@ function pageSamaLogic() {
   // already-verified sama.* engine)
   // ==================================================================
   function stopTimer() { if (simTimer) { clearInterval(simTimer); simTimer = null; } }
+  function setPillReady(pill) {
+    // Restores the READY (amber) appearance -- needed because the pill
+    // may currently be showing the gray STATIC styling from before a
+    // dynamic block existed, and just changing the text without this
+    // would leave it looking gray while claiming to be READY.
+    pill.textContent = 'READY';
+    pill.style.background = 'var(--amber-dim)';
+    pill.style.color = 'var(--amber)';
+    pill.style.borderColor = 'var(--amber)';
+  }
   function structureChanged() {
+    syncCurrentPageState();
     stopTimer();
     if (sama.hasDynamicBlocks(blocks)) {
       // orderForSimulation resolves any ordinary out-of-order wiring (the
@@ -6170,31 +6592,115 @@ function pageSamaLogic() {
       simRunning = false;
       toolbar.querySelector('#simPlayPause').textContent = 'Run';
       const pill = toolbar.querySelector('#simStatusPill');
-      if (pill) pill.textContent = 'READY';
+      if (pill) setPillReady(pill);
     } else {
       simulation = null;
+      // A structural change (adding a block, rewiring, editing a
+      // parameter's shape) invalidates whatever was last evaluated --
+      // same "you're always the one who presses Run" rule dynamic
+      // diagrams already follow. Without this, editing an already-Run
+      // static diagram would keep showing results computed against the
+      // diagram as it existed BEFORE the edit.
+      staticRunning = false;
+      toolbar.querySelector('#simPlayPause').textContent = 'Run';
     }
+    trendPanel.style.display = simulation ? '' : 'none';
+    // A structural change means a fresh LogicSimulation with time reset to
+    // zero -- the old history's time values no longer line up with
+    // anything, so it's cleared. The SELECTION of which blocks to watch is
+    // kept (rebuilding a diagram shouldn't make you re-pick your trends),
+    // except for any block that no longer exists.
+    trendHistory.clear();
+    for (let i = trendedIds.length - 1; i >= 0; i--) {
+      if (!blocks.some((b) => b.id === trendedIds[i])) trendedIds.splice(i, 1);
+    }
+    refreshTrendBlockSelect();
+    renderTrend();
     render();
+  }
+  function refreshTrendBlockSelect() {
+    const sel = document.getElementById('trendBlockSelect');
+    if (!sel) return;
+    const available = blocks.filter((b) => !trendedIds.includes(b.id));
+    sel.innerHTML = '<option value="">Add a signal to watch\u2026</option>' +
+      available.map((b) => `<option value="${b.id}">${sama.SAMA_BLOCK_TYPES[b.type]?.label || b.type} (${b.id})</option>`).join('');
+  }
+  function syncTagRefsFromGlobal() {
+    // A Tag Reference block's whole purpose is to mirror whatever value
+    // is currently held for that tag globally -- refreshed right before
+    // every evaluation (static or each dynamic tick) so it never lags
+    // behind a source page that just ran.
+    blocks.forEach((b) => { if (b.type === 'tagRef') b.params.value = samaGlobalTagValues[b.params.tag] ?? 0; });
+  }
+  function publishTaggedValuesToGlobal(results) {
+    // Any block with a real instrument tag assigned publishes its
+    // computed value into the shared tag database -- this is the other
+    // half of the cross-page mechanism: a Tag Reference block anywhere
+    // (this page or another) reads exactly what gets written here.
+    blocks.forEach((b) => {
+      if (!b.tag) return;
+      const r = results.get(b.id);
+      if (r && !r.error && r.value !== null) samaGlobalTagValues[b.tag] = r.value;
+    });
   }
   function startTimer() {
     stopTimer();
     if (!simulation) return;
-    simTimer = setInterval(() => { simulation.step(); updateLiveValues(); }, SIM_DT * 1000);
+    simTimer = setInterval(() => {
+      // At speed > 1x this steps several times per tick, correctly
+      // advancing more SIMULATED time per real second, rather than just
+      // firing the timer more often (which would risk overwhelming the
+      // browser and doesn't actually mean the same thing).
+      for (let i = 0; i < simSpeed; i++) { syncTagRefsFromGlobal(); simulation.step(); }
+      publishTaggedValuesToGlobal(simulation.lastOutputs || new Map());
+      updateLiveValues();
+    }, SIM_DT * 1000);
   }
   function currentResults() {
+    syncTagRefsFromGlobal();
     if (simulation) return simulation.lastOutputs || new Map();
+    if (!staticRunning) return new Map(); // nothing evaluates until Run is pressed, even for a static diagram -- same gating a dynamic one already has
     // A purely static chain has no valid notion of a feedback cycle --
     // orderForEvaluation resolves ordinary out-of-order wiring; if it
     // returns null the wiring is a genuine cycle with nothing dynamic to
     // break it, so fall back to the raw array and let evaluateChain's
     // normal per-block error surface that clearly instead of masking it.
-    try { return sama.evaluateChain(sama.orderForEvaluation(blocks) || blocks); } catch (e) { return new Map(); }
+    const order = sama.orderForEvaluation(blocks) || blocks;
+    let results;
+    try { results = sama.evaluateChain(order); } catch (e) { return new Map(); }
+    publishTaggedValuesToGlobal(results);
+    // A Tag Reference block synced its value from the global store
+    // BEFORE this evaluation ran, so if the tag it reads was written by
+    // a block earlier in this very pass, it just used a value from
+    // before that write -- one stale step. Re-syncing and evaluating a
+    // second time resolves that within a single Run press for the
+    // common case (same page, or a page already run earlier); it's a
+    // harmless no-op once everything is already stable.
+    if (blocks.some((b) => b.type === 'tagRef')) {
+      syncTagRefsFromGlobal();
+      try { results = sama.evaluateChain(order); publishTaggedValuesToGlobal(results); } catch (e) { return new Map(); }
+    }
+    return results;
+  }
+  function recordTrend(results) {
+    if (trendedIds.length === 0) return;
+    const t = simulation.time;
+    trendedIds.forEach((id) => {
+      const r = results.get(id);
+      if (!r || r.value === null || r.error) return;
+      const series = trendHistory.get(id) || [];
+      series.push({ t, v: r.value });
+      while (series.length && series[0].t < t - TREND_WINDOW_SEC) series.shift();
+      trendHistory.set(id, series);
+    });
+    renderTrend();
   }
   function updateLiveValues() {
     if (!simulation) return;
     const clockEl = document.getElementById('simClock');
     if (clockEl) clockEl.textContent = `t = ${simulation.time.toFixed(1)} s`;
     refreshDisplayValues();
+    recordTrend(currentResults());
   }
 
   /** Updates every place a computed VALUE is shown -- diagram node text
@@ -6214,14 +6720,82 @@ function pageSamaLogic() {
     blocks.forEach((block) => {
       const def = sama.SAMA_BLOCK_TYPES[block.type];
       const r = results.get(block.id) || { value: null, error: null };
-      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : 'var(--cyan)';
+      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : def.category === 'finalControl' ? FINAL_CONTROL_COLOR : 'var(--cyan)';
       const g = svg.querySelector(`[data-block-id="${block.id}"]`);
       if (g) {
         const shapeEl = g.querySelector('ellipse, rect, polygon');
         if (shapeEl) shapeEl.setAttribute('stroke', color);
         const valEl = g.querySelector(`[data-diagram-value="${block.id}"]`);
         if (valEl) { valEl.textContent = r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 3)); valEl.setAttribute('fill', r.error ? 'var(--red)' : 'var(--text)'); }
+        // Motor/valve/SOV/lamp symbols carry their own color, fill, and
+        // OPEN/CLOSED-style text that a generic value update can't
+        // touch -- regenerate the whole symbol from the same function
+        // the initial render uses, so live edits (a slider, a const
+        // value, a running simulation tick) never leave them stale.
+        if (['motor', 'controlValve', 'sov', 'bulb'].includes(block.type)) {
+          const fcEl = g.querySelector(`[data-fc-symbol="${block.id}"]`);
+          if (fcEl) {
+            const scale = block.scale ?? 1;
+            const { bw } = blockSize(block);
+            const cx = block.x + bw / 2;
+            fcEl.innerHTML = finalControlSymbolSVG(block, r, cx, scale);
+          }
+        }
+        // A real 4-20mA field signal's loop current is exactly as live
+        // as its engineering value -- dragging the AI slider or editing
+        // its range must update the shown mA reading immediately, not
+        // just on the next full re-render.
+        if (block.type === 'ai' || block.type === 'ao_') {
+          const maEl = g.querySelector(`[data-ma-value="${block.id}"]`);
+          if (maEl) {
+            const lo = Math.min(block.params.min ?? 0, block.params.max ?? 100);
+            const hi = Math.max(block.params.min ?? 0, block.params.max ?? 100);
+            maEl.textContent = r.error ? '' : `${fmt(sama.milliamps(r.value, lo, hi), 2)} mA`;
+          }
+        }
       }
+      // Wires read their color/dash/label from the SOURCE block's live
+      // result too -- without this, editing a value via the properties
+      // panel (which calls this function, not a full render(), so a
+      // slider drag stays smooth) would leave every wire showing a
+      // stale value and a stale digital TRUE/FALSE color until the next
+      // structural change happened to trigger a full redraw.
+      block.inputs.forEach((inp, i) => {
+        if (inp.source !== 'block') return;
+        const src = blocks.find((b) => b.id === inp.blockId);
+        if (!src) return;
+        const srcDef = sama.SAMA_BLOCK_TYPES[src.type];
+        const srcResult = results.get(src.id) || { value: null, error: null };
+        const isDigital = srcDef.signalType === 'digital';
+        const key = `${block.id}:${i}`;
+        const wireEl = svg.querySelector(`[data-wire-visible="${key}"]`);
+        if (wireEl) {
+          let stroke, marker, dash = '';
+          if (srcResult.error) { stroke = 'var(--red)'; marker = 'arrow-err'; }
+          else if (isDigital) {
+            const isTrue = srcResult.value >= 0.5;
+            stroke = isTrue ? 'var(--green)' : 'var(--text-faint)';
+            marker = isTrue ? 'arrow-true' : 'arrow-false';
+            dash = '4,3';
+          } else { stroke = 'var(--cyan)'; marker = 'arrow'; }
+          wireEl.setAttribute('stroke', stroke);
+          wireEl.setAttribute('marker-end', `url(#${marker})`);
+          if (dash) wireEl.setAttribute('stroke-dasharray', dash); else wireEl.removeAttribute('stroke-dasharray');
+        }
+        const labelEl = svg.querySelector(`[data-wire-label="${key}"]`);
+        const labelBgEl = svg.querySelector(`[data-wire-label-bg="${key}"]`);
+        if (!isDigital && !srcResult.error && srcResult.value !== null) {
+          const label = fmt(srcResult.value, 2);
+          if (labelEl) labelEl.textContent = label;
+          if (labelBgEl) {
+            const oldX = +labelBgEl.getAttribute('x'), oldW = +labelBgEl.getAttribute('width');
+            const centerX = oldX + oldW / 2;
+            const labelW = Math.max(30, label.length * 6.5 + 8);
+            labelBgEl.setAttribute('width', labelW);
+            labelBgEl.setAttribute('x', centerX - labelW / 2);
+          }
+        }
+      });
     });
     if (selectedId) {
       const block = blocks.find((b) => b.id === selectedId);
@@ -6233,9 +6807,115 @@ function pageSamaLogic() {
     }
   }
 
+  function renderTrend() {
+    const svgEl = document.getElementById('trendSvg');
+    const legendEl = document.getElementById('trendLegend');
+    if (!svgEl || !legendEl) return;
+    const W = 1000, H = 240, padL = 44, padR = 10, padT = 10, padB = 24;
+    const now = simulation ? simulation.time : 0;
+    const windowStart = Math.max(0, now - TREND_WINDOW_SEC);
+    const windowEnd = Math.max(now, windowStart + 5); // never divide by a near-zero window right at t=0
+
+    const visibleSeries = trendedIds.map((id) => ({ id, points: (trendHistory.get(id) || []).filter((p) => p.t >= windowStart) }));
+    let yMin = 0, yMax = 1;
+    const allVals = visibleSeries.flatMap((s) => s.points.map((p) => p.v));
+    if (allVals.length) {
+      yMin = Math.min(...allVals); yMax = Math.max(...allVals);
+      if (yMin === yMax) { yMin -= 1; yMax += 1; } // a flat signal still needs a visible span
+      const pad = (yMax - yMin) * 0.1;
+      yMin -= pad; yMax += pad;
+    }
+    const xOf = (t) => padL + ((t - windowStart) / (windowEnd - windowStart)) * (W - padL - padR);
+    const yOf = (v) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
+
+    let content = '';
+    // Gridlines + Y-axis labels (4 horizontal bands)
+    for (let i = 0; i <= 4; i++) {
+      const v = yMin + (yMax - yMin) * (i / 4);
+      const y = yOf(v);
+      content += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`;
+      content += `<text x="${padL - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="var(--text-faint)">${fmt(v, 2)}</text>`;
+    }
+    content += `<text x="${W - padR}" y="${H - 6}" text-anchor="end" font-size="10" fill="var(--text-faint)">t = ${fmt(now, 1)} s</text>`;
+    content += `<text x="${padL}" y="${H - 6}" text-anchor="start" font-size="10" fill="var(--text-faint)">${fmt(windowStart, 1)} s</text>`;
+
+    visibleSeries.forEach((s, i) => {
+      if (s.points.length < 2) return;
+      const color = TREND_COLORS[i % TREND_COLORS.length];
+      const d = s.points.map((p, j) => `${j === 0 ? 'M' : 'L'} ${xOf(p.t).toFixed(1)} ${yOf(p.v).toFixed(1)}`).join(' ');
+      content += `<path d="${d}" fill="none" stroke="${color}" stroke-width="2"/>`;
+    });
+    svgEl.innerHTML = content;
+
+    legendEl.innerHTML = trendedIds.map((id, i) => {
+      const block = blocks.find((b) => b.id === id);
+      const label = block ? `${sama.SAMA_BLOCK_TYPES[block.type]?.label || block.type} (${id})` : id;
+      const color = TREND_COLORS[i % TREND_COLORS.length];
+      return `<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;"></span>${label}<span data-remove-trend="${id}" style="cursor:pointer;color:var(--red);margin-left:2px;" title="Remove from trend">\u2715</span></span>`;
+    }).join('');
+    legendEl.querySelectorAll('[data-remove-trend]').forEach((el) => el.addEventListener('click', () => {
+      const id = el.dataset.removeTrend;
+      const idx = trendedIds.indexOf(id);
+      if (idx >= 0) trendedIds.splice(idx, 1);
+      trendHistory.delete(id);
+      refreshTrendBlockSelect();
+      renderTrend();
+    }));
+  }
+
   // ==================================================================
   // Canvas rendering: blocks (with input/output ports) + wires
   // ==================================================================
+  function finalControlSymbolSVG(block, r, cx, scale) {
+    // Shared by the initial render AND the live-refresh path -- the
+    // whole point of extracting this is that a motor/valve/SOV/lamp's
+    // visual state (color, fill, OPEN/CLOSED text) must update on every
+    // live value change, not just on a full re-render, exactly like
+    // wires needed the same treatment for the same reason.
+    if (block.type === 'motor') {
+      const on = !r.error && r.value >= 0.5;
+      const ry = 18 * scale, ycenter = block.y + 40 * scale;
+      return `<circle cx="${cx}" cy="${ycenter}" r="${ry}" fill="${on ? 'var(--green)' : 'var(--bg-dark, #0d1117)'}" fill-opacity="${on ? 0.25 : 1}" stroke="${on ? 'var(--green)' : 'var(--text-faint)'}" stroke-width="2"/>
+        <text x="${cx}" y="${ycenter + 6 * scale}" text-anchor="middle" font-size="${(16 * scale).toFixed(1)}" font-weight="700" fill="${on ? 'var(--green)' : 'var(--text-faint)'}" style="pointer-events:none;">M</text>
+        <text x="${cx}" y="${ycenter + ry + 13 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${on ? 'var(--green)' : 'var(--text-faint)'}" font-weight="700" style="pointer-events:none;">${on ? 'RUNNING' : 'STOPPED'}</text>`;
+    }
+    if (block.type === 'controlValve') {
+      const pct = r.error ? 0 : Math.max(0, Math.min(100, r.value ?? 0));
+      const bodyY = block.y + 38 * scale, bodyH = 16 * scale, bodyHalfW = 15 * scale;
+      const stemTopY = bodyY - 14 * scale;
+      const actY = stemTopY - 10 * scale;
+      const fillColor = r.error ? 'var(--red)' : pct > 0 ? 'var(--cyan)' : 'var(--text-faint)';
+      const fillOpacity = 0.15 + 0.55 * (pct / 100);
+      return `<rect x="${cx - 9 * scale}" y="${actY}" width="${18 * scale}" height="${10 * scale}" rx="2" fill="var(--bg-panel)" stroke="${fillColor}" stroke-width="1.5"/>
+        <line x1="${cx}" y1="${actY + 10 * scale}" x2="${cx}" y2="${stemTopY}" stroke="${fillColor}" stroke-width="2"/>
+        <polygon points="${cx - bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx - bodyHalfW},${bodyY + bodyH}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${fillColor}" stroke-width="1.5"/>
+        <polygon points="${cx + bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx + bodyHalfW},${bodyY + bodyH}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${fillColor}" stroke-width="1.5"/>
+        <text x="${cx}" y="${bodyY + bodyH + 15 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${fillColor}" font-weight="700" style="pointer-events:none;">${r.error ? 'ERR' : fmt(pct, 1) + '% OPEN'}</text>`;
+    }
+    if (block.type === 'sov') {
+      const on = !r.error && r.value >= 0.5;
+      const color = on ? 'var(--green)' : 'var(--text-faint)';
+      const bodyY = block.y + 38 * scale, bodyH = 16 * scale, bodyHalfW = 15 * scale;
+      const stemTopY = bodyY - 14 * scale;
+      const coilY = stemTopY - 12 * scale;
+      return `<path d="M ${cx - 10 * scale} ${coilY + 6 * scale} l 4 -6 l 4 12 l 4 -12 l 4 12 l 4 -6" fill="none" stroke="${color}" stroke-width="1.5"/>
+        <line x1="${cx}" y1="${coilY + 6 * scale}" x2="${cx}" y2="${stemTopY}" stroke="${color}" stroke-width="2"/>
+        <polygon points="${cx - bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx - bodyHalfW},${bodyY + bodyH}" fill="${on ? color : 'var(--bg-panel)'}" fill-opacity="${on ? 0.35 : 1}" stroke="${color}" stroke-width="1.5"/>
+        <polygon points="${cx + bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx + bodyHalfW},${bodyY + bodyH}" fill="${on ? color : 'var(--bg-panel)'}" fill-opacity="${on ? 0.35 : 1}" stroke="${color}" stroke-width="1.5"/>
+        <text x="${cx}" y="${bodyY + bodyH + 15 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${color}" font-weight="700" style="pointer-events:none;">${on ? 'OPEN' : 'CLOSED'}</text>`;
+    }
+    if (block.type === 'bulb') {
+      const on = !r.error && r.value >= 0.5;
+      const ycenter = block.y + 40 * scale, r1 = 15 * scale;
+      const color = r.error ? 'var(--red)' : on ? '#fbbf24' : 'var(--text-faint)';
+      return `${on ? `<circle cx="${cx}" cy="${ycenter}" r="${r1 + 6 * scale}" fill="${color}" fill-opacity="0.25" style="pointer-events:none;"/>` : ''}
+        <circle cx="${cx}" cy="${ycenter}" r="${r1}" fill="${on ? color : 'var(--bg-dark, #0d1117)'}" fill-opacity="${on ? 0.3 : 1}" stroke="${color}" stroke-width="2"/>
+        <path d="M ${cx - 6 * scale} ${ycenter - 6 * scale} L ${cx + 6 * scale} ${ycenter + 6 * scale} M ${cx - 6 * scale} ${ycenter + 6 * scale} L ${cx + 6 * scale} ${ycenter - 6 * scale}" stroke="${color}" stroke-width="1.5"/>
+        <text x="${cx}" y="${ycenter + r1 + 13 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${color}" font-weight="700" style="pointer-events:none;">${r.error ? 'ERR' : on ? 'LIT' : 'DARK'}</text>`;
+    }
+    return '';
+  }
+
   function portPositions(block) {
     const n = block.inputs.length;
     const rot = block.rotation || 0;
@@ -6274,8 +6954,43 @@ function pageSamaLogic() {
    * re-attach listeners in a clean, consistent state. */
   function renderDiagramContent() {
     const results = currentResults();
-    toolbar.querySelector('#simControls').style.display = simulation ? 'flex' : 'none';
-    toolbar.querySelector('#staticNote').style.display = simulation ? 'none' : '';
+    // Run/Reset are now enabled for BOTH static and dynamic diagrams --
+    // a static diagram genuinely needs Run pressed before it computes
+    // anything too (see currentResults() and staticRunning above), the
+    // same "nothing evaluates until you press Run" rule a dynamic
+    // diagram already followed. They're only disabled when there is
+    // nothing at all on the canvas to evaluate.
+    const playBtn = toolbar.querySelector('#simPlayPause');
+    const resetBtn = toolbar.querySelector('#simReset');
+    const speedSel = toolbar.querySelector('#simSpeedSelect');
+    const staticNote = toolbar.querySelector('#staticNote');
+    const pill = toolbar.querySelector('#simStatusPill');
+    const hasBlocks = blocks.length > 0;
+    playBtn.disabled = !hasBlocks;
+    resetBtn.disabled = !hasBlocks;
+    speedSel.disabled = !simulation; // simulated-time speed only means anything for a dynamic (time-stepped) diagram
+    const undoBtn = toolbar.querySelector('#undoBtn');
+    const redoBtn = toolbar.querySelector('#redoBtn');
+    if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+    playBtn.title = hasBlocks ? '' : 'Add a block to the canvas first';
+    staticNote.style.display = simulation ? 'none' : (hasBlocks ? 'none' : '');
+    if (!simulation) {
+      if (!hasBlocks) {
+        pill.textContent = 'STATIC';
+        pill.style.background = 'var(--bg-panel)';
+        pill.style.color = 'var(--text-faint)';
+        pill.style.borderColor = 'var(--line)';
+      } else if (staticRunning) {
+        pill.textContent = 'EVALUATED';
+        pill.style.background = 'var(--green-dim, rgba(74,222,128,.12))';
+        pill.style.color = 'var(--green)';
+        pill.style.borderColor = 'var(--green)';
+      } else {
+        setPillReady(pill);
+      }
+      playBtn.textContent = staticRunning ? 'Stop' : 'Run';
+    }
 
     // The SVG's own width/height must always cover every block's actual
     // position, or a block dragged past the previous fixed bounds gets
@@ -6293,7 +7008,12 @@ function pageSamaLogic() {
     svg.setAttribute('width', maxX);
     svg.setAttribute('height', maxY);
 
-    let svgContent = `<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>`;
+    let svgContent = `<defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker>
+      <marker id="arrow-true" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"/></marker>
+      <marker id="arrow-false" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--text-faint)"/></marker>
+      <marker id="arrow-err" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"/></marker>
+    </defs>`;
 
     // Wires
     blocks.forEach((block) => {
@@ -6305,6 +7025,7 @@ function pageSamaLogic() {
           const { out } = portPositions(src);
           const to = ins[i];
           const midX = (out.x + to.x) / 2;
+          const midY = (out.y + to.y) / 2;
           const wireD = `M ${out.x} ${out.y} C ${midX} ${out.y}, ${midX} ${to.y}, ${to.x} ${to.y}`;
           // A wire's actual clickable area used to be exactly its 2px
           // stroke -- genuinely hard to hit on a curved path, which is
@@ -6313,7 +7034,33 @@ function pageSamaLogic() {
           // data-wire-to/data-wire-idx, giving a forgiving ~18px hit
           // margin around the visible line without changing how it looks.
           svgContent += `<path d="${wireD}" fill="none" stroke="transparent" stroke-width="18" data-wire-to="${block.id}" data-wire-idx="${i}" style="cursor:pointer;"/>`;
-          svgContent += `<path d="${wireD}" fill="none" stroke="var(--cyan)" stroke-width="2" marker-end="url(#arrow)" opacity="0.8" style="pointer-events:none;"/>`;
+
+          // Wire style follows the SOURCE block's actual signal type, the
+          // way a real functional diagram distinguishes an on/off signal
+          // continuation from a continuously variable one (see the
+          // MCAA/ISA processed-signal-continuation symbols): a digital
+          // source draws a dotted line, colored by its live TRUE/FALSE
+          // state, while an analog source draws a solid line and shows
+          // its current value right on the wire.
+          const srcDef = sama.SAMA_BLOCK_TYPES[src.type];
+          const srcResult = results.get(src.id) || { value: null, error: null };
+          const isDigital = srcDef.signalType === 'digital';
+          let stroke, marker, dash = '';
+          if (srcResult.error) { stroke = 'var(--red)'; marker = 'arrow-err'; }
+          else if (isDigital) {
+            const isTrue = srcResult.value >= 0.5;
+            stroke = isTrue ? 'var(--green)' : 'var(--text-faint)';
+            marker = isTrue ? 'arrow-true' : 'arrow-false';
+            dash = 'stroke-dasharray="4,3"';
+          } else { stroke = 'var(--cyan)'; marker = 'arrow'; }
+          svgContent += `<path data-wire-visible="${block.id}:${i}" data-wire-src="${src.id}" d="${wireD}" fill="none" stroke="${stroke}" stroke-width="2" marker-end="url(#${marker})" opacity="0.85" ${dash} style="pointer-events:none;"/>`;
+
+          if (!isDigital && !srcResult.error && srcResult.value !== null) {
+            const label = fmt(srcResult.value, 2);
+            const labelW = Math.max(30, label.length * 6.5 + 8);
+            svgContent += `<rect data-wire-label-bg="${block.id}:${i}" x="${midX - labelW / 2}" y="${midY - 9}" width="${labelW}" height="16" rx="3" fill="var(--bg-panel)" stroke="var(--cyan)" stroke-width="1" opacity="0.95" style="pointer-events:none;"/>`;
+            svgContent += `<text data-wire-label="${block.id}:${i}" x="${midX}" y="${midY + 3}" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)" fill="var(--cyan)" font-weight="600" style="pointer-events:none;">${label}</text>`;
+          }
         }
       });
     });
@@ -6322,24 +7069,39 @@ function pageSamaLogic() {
     blocks.forEach((block) => {
       const def = sama.SAMA_BLOCK_TYPES[block.type];
       const r = results.get(block.id) || { value: null, error: null };
-      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : 'var(--cyan)';
+      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : def.category === 'finalControl' ? FINAL_CONTROL_COLOR : 'var(--cyan)';
       const { bw, bh } = blockSize(block);
       const scale = block.scale ?? 1;
       const cx = block.x + bw / 2, cy = block.y + bh / 2;
       const isSelected = block.id === selectedId;
       let shape;
-      if (def.category === 'analog') {
+      // Enclosure shapes follow the actual MCAA/ISA functional-diagramming
+      // standard (Section 4.1.2), not just a category color: circle for
+      // measuring/readout, rectangle for automatic signal processing,
+      // diamond for manual signal processing, isosceles trapezoid for
+      // final controlling, and square specifically for timers (distinct
+      // from the general rectangle used for other processing blocks).
+      if (block.type === 'di' || block.type === 'ai') {
+        // Circle -- measuring/readout function.
         shape = `<ellipse cx="${cx}" cy="${cy}" rx="${bw / 2}" ry="${bh / 2}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
-      } else if (def.category === 'dynamic') {
-        const cut = 20 * scale;
-        shape = `<polygon points="${block.x + cut},${block.y} ${block.x + bw - cut},${block.y} ${block.x + bw},${cy} ${block.x + bw - cut},${block.y + bh} ${block.x + cut},${block.y + bh} ${block.x},${cy}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
-      } else if (def.category === 'io') {
-        // "House"/pentagon terminal shape, the common convention for
-        // marking a real field I/O termination point as visually
-        // distinct from an internal calculation block.
+      } else if (['do_', 'ao_', 'motor', 'controlValve', 'sov', 'bulb'].includes(block.type)) {
+        // Isosceles trapezoid -- final controlling function.
         const peak = 16 * scale;
         shape = `<polygon points="${block.x},${block.y} ${block.x + bw},${block.y} ${block.x + bw},${block.y + bh - peak} ${cx},${block.y + bh} ${block.x},${block.y + bh - peak}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+      } else if (block.type === 'transfer' || block.type === 'manualValue') {
+        // Diamond -- manual signal processing function. The standard
+        // specifically says the diamond enclosure holds the A, B, or T
+        // symbol (Section 4.1.2.3): A is this Manual Value / Variable
+        // Signal Generator, T is Transfer, both belong here together.
+        shape = `<polygon points="${cx},${block.y} ${block.x + bw},${cy} ${cx},${block.y + bh} ${block.x},${cy}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+      } else if (block.type === 'timeDelay' || block.type === 'pulseTimer' || block.type === 'pulseGenerator') {
+        // Square -- timer function, distinct from the general rectangle.
+        shape = `<rect x="${block.x}" y="${block.y}" width="${bw}" height="${bh}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
       } else {
+        // Rectangle -- automatic signal processing function, the
+        // standard's enclosure for the great majority of blocks:
+        // summers, gains, selects, limiters, PID, lag, integrator, and
+        // all the other computation/logic blocks.
         shape = `<rect x="${block.x}" y="${block.y}" width="${bw}" height="${bh}" rx="4" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
       }
       const { ins, out } = portPositions(block);
@@ -6347,14 +7109,51 @@ function pageSamaLogic() {
       svgContent += `<g data-block-id="${block.id}" class="sama-node" style="cursor:grab;touch-action:none;">
         ${shape}
         <text x="${cx}" y="${block.y + 20 * scale}" text-anchor="middle" font-size="${(10.5 * scale).toFixed(1)}" fill="${color}" font-weight="600" style="pointer-events:none;">${def.label}</text>
-        <text x="${cx}" y="${block.y + 34 * scale}" text-anchor="middle" font-size="${(8.5 * scale).toFixed(1)}" fill="var(--text-faint)" style="pointer-events:none;">${block.id}</text>
-        <text x="${cx}" y="${block.y + 52 * scale}" text-anchor="middle" font-size="${(13 * scale).toFixed(1)}" fill="${r.error ? 'var(--red)' : 'var(--text)'}" font-weight="700" data-diagram-value="${block.id}" style="pointer-events:none;">${r.error ? 'ERR' : (r.value === null ? '—' : fmt(r.value, 3))}</text>
+        <text x="${cx}" y="${block.y + 34 * scale}" text-anchor="middle" font-size="${(8.5 * scale).toFixed(1)}" fill="${block.tag || block.type === 'tagRef' ? 'var(--cyan)' : 'var(--text-faint)'}" font-weight="${block.tag || block.type === 'tagRef' ? '700' : '400'}" style="pointer-events:none;">${block.type === 'tagRef' ? (block.params.tag ? '\u2192 ' + block.params.tag : block.id) : (block.tag || block.id)}</text>
+        ${block.type === 'di' ? (() => {
+          const on = !r.error && r.value >= 0.5;
+          const pillW = 54 * scale, pillH = 22 * scale, pillY = block.y + 40 * scale;
+          return `<g data-di-toggle="${block.id}" style="cursor:pointer;">
+            <rect x="${cx - pillW / 2}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${on ? 'var(--green)' : 'var(--bg-dark, #0d1117)'}" stroke="${on ? 'var(--green)' : 'var(--text-faint)'}" stroke-width="1.5"/>
+            <circle cx="${on ? cx + pillW / 2 - pillH / 2 : cx - pillW / 2 + pillH / 2}" cy="${pillY + pillH / 2}" r="${pillH / 2 - 3}" fill="${on ? '#0d1117' : 'var(--text-faint)'}"/>
+            <text x="${cx}" y="${pillY + pillH + 12 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${on ? 'var(--green)' : 'var(--text-faint)'}" font-weight="700" style="pointer-events:none;">${on ? 'ON' : 'OFF'}</text>
+          </g>`;
+        })() : (block.type === 'ai' && block.params.sliderEnabled) ? (() => {
+          // The live slider, embedded right on the canvas instead of
+          // only in the properties panel -- the whole point of turning
+          // it on is to drag a process value around WHILE watching the
+          // diagram react, and needing to open a side panel first to do
+          // that defeats the purpose.
+          const lo = Math.min(block.params.min ?? 0, block.params.max ?? 100);
+          const hi = Math.max(block.params.min ?? 0, block.params.max ?? 100);
+          const sliderW = Math.max(70, bw - 20) * scale, sliderY = block.y + 40 * scale;
+          const mA = r.error ? null : sama.milliamps(r.value, lo, hi);
+          return `<foreignObject x="${cx - sliderW / 2}" y="${sliderY}" width="${sliderW}" height="${22 * scale}" style="overflow:visible;">
+            <input xmlns="http://www.w3.org/1999/xhtml" type="range" data-ai-slider="${block.id}" min="${lo}" max="${hi}" step="any" value="${block.params.value ?? 0}" style="width:100%;height:${18 * scale}px;cursor:pointer;touch-action:none;">
+          </foreignObject>
+          <text x="${cx}" y="${sliderY + 22 * scale + 12 * scale}" text-anchor="middle" font-size="${(11 * scale).toFixed(1)}" fill="${r.error ? 'var(--red)' : 'var(--text)'}" font-weight="700" data-diagram-value="${block.id}" style="pointer-events:none;">${r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 3))}</text>
+          ${mA !== null ? `<text data-ma-value="${block.id}" x="${cx}" y="${sliderY + 22 * scale + 25 * scale}" text-anchor="middle" font-size="${(8.5 * scale).toFixed(1)}" fill="var(--text-faint)" font-family="var(--font-mono)" style="pointer-events:none;">${fmt(mA, 2)} mA</text>` : ''}`;
+        })() : (block.type === 'ai' || block.type === 'ao_') ? (() => {
+          // A real 4-20mA field signal is exactly this: an engineering
+          // value AND the loop current it corresponds to are the SAME
+          // physical signal, not two different things -- showing only
+          // the engineering number hides that this represents actual
+          // current on an actual pair of wires, clamped to what the
+          // instrument or output card is calibrated for.
+          const lo = Math.min(block.params.min ?? 0, block.params.max ?? 100);
+          const hi = Math.max(block.params.min ?? 0, block.params.max ?? 100);
+          const mA = r.error ? null : sama.milliamps(r.value, lo, hi);
+          return `<text x="${cx}" y="${block.y + 46 * scale}" text-anchor="middle" font-size="${(13 * scale).toFixed(1)}" fill="${r.error ? 'var(--red)' : 'var(--text)'}" font-weight="700" data-diagram-value="${block.id}" style="pointer-events:none;">${r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 3))}</text>
+          ${mA !== null ? `<text data-ma-value="${block.id}" x="${cx}" y="${block.y + 59 * scale}" text-anchor="middle" font-size="${(9 * scale).toFixed(1)}" fill="var(--text-faint)" font-family="var(--font-mono)" style="pointer-events:none;">${fmt(mA, 2)} mA</text>` : ''}`;
+        })() : ['motor', 'controlValve', 'sov', 'bulb'].includes(block.type) ? `<g data-fc-symbol="${block.id}">${finalControlSymbolSVG(block, r, cx, scale)}</g>`
+        : `<text x="${cx}" y="${block.y + 52 * scale}" text-anchor="middle" font-size="${(13 * scale).toFixed(1)}" fill="${r.error ? 'var(--red)' : 'var(--text)'}" font-weight="700" data-diagram-value="${block.id}" style="pointer-events:none;">${r.error ? 'ERR' : (r.value === null ? '—' : fmt(r.value, 3))}</text>`}
         <circle data-port="out" data-block-id="${block.id}" cx="${out.x}" cy="${out.y}" r="${portR}" fill="var(--bg-panel)" stroke="var(--cyan)" stroke-width="2" style="pointer-events:none;"/>
         <circle data-port="out" data-block-id="${block.id}" cx="${out.x}" cy="${out.y}" r="${hitR}" fill="transparent" style="cursor:crosshair;touch-action:none;"/>
         ${ins.map((p, i) => `
         <circle data-port="in" data-block-id="${block.id}" data-input-idx="${i}" cx="${p.x}" cy="${p.y}" r="${portR}" fill="${block.inputs[i].source === 'block' ? CONNECT_OK_COLOR : 'var(--bg-panel)'}" stroke="${block.inputs[i].source === 'block' ? CONNECT_OK_COLOR : 'var(--cyan)'}" stroke-width="2" style="pointer-events:none;"/>
-        <circle data-port="in" data-block-id="${block.id}" data-input-idx="${i}" cx="${p.x}" cy="${p.y}" r="${hitR}" fill="transparent" style="cursor:crosshair;touch-action:none;"/>`).join('')}
-        <text x="${block.x + bw - 4}" y="${block.y - 6}" text-anchor="end" font-size="13" fill="var(--red)" data-remove-block="${block.id}" style="cursor:pointer;font-weight:700;">✕</text>
+        <circle data-port="in" data-block-id="${block.id}" data-input-idx="${i}" cx="${p.x}" cy="${p.y}" r="${hitR}" fill="transparent" style="cursor:crosshair;touch-action:none;"/>
+        ${def.inputLabels?.[i] ? `<text x="${p.x - hitR - 3}" y="${p.y + 3}" text-anchor="end" font-size="${(8 * scale).toFixed(1)}" fill="var(--text-faint)" style="pointer-events:none;">${def.inputLabels[i]}</text>` : ''}`).join('')}
+        <text x="${block.x + bw - 4}" y="${block.y - 6}" text-anchor="end" font-size="13" fill="var(--red)" class="remove-btn" data-remove-block="${block.id}" style="cursor:pointer;font-weight:700;opacity:${isSelected ? 1 : 0};">✕</text>
       </g>`;
     });
 
@@ -6397,12 +7196,33 @@ function pageSamaLogic() {
     const r = results.get(block.id) || { value: null, error: null };
     body.innerHTML = `
       <div style="font-weight:600;margin-bottom:4px;">${def.label} <span style="color:var(--text-faint);font-weight:400;font-size:.78rem;">(${block.id})</span></div>
+      ${['di', 'ai', 'do_', 'ao_', 'motor', 'controlValve', 'sov', 'bulb'].includes(block.type) ? `
+      <div class="field"><label>Instrument tag</label>
+        <select data-block-tag>
+          <option value="">(none \u2014 shows ${block.id})</option>
+          ${tagLibrary.map((t) => `<option value="${t.tag}"${block.tag === t.tag ? ' selected' : ''}>${t.tag}${t.description ? ' \u2014 ' + t.description : ''}</option>`).join('')}
+        </select>
+      </div>
+      ${tagLibrary.length === 0 ? '<div class="hint" style="margin-top:-6px;margin-bottom:10px;">No tags defined yet \u2014 use the Tags button in the toolbar to add real instrument tags like FT-101.</div>' : ''}
+      ` : ''}
+      ${block.type === 'tagRef' ? `
+      <div class="field"><label>Reading tag</label>
+        <select data-tagref-select>
+          <option value="">(select a tag)</option>
+          ${tagLibrary.map((t) => `<option value="${t.tag}"${block.params.tag === t.tag ? ' selected' : ''}>${t.tag}${t.description ? ' \u2014 ' + t.description : ''}</option>`).join('')}
+        </select>
+      </div>
+      <div class="hint" style="margin-top:-6px;margin-bottom:10px;">${tagLibrary.length === 0 ? 'No tags defined yet \u2014 use the Tags button in the toolbar first, then assign that tag to a real I/O block somewhere so this has a value to read.' : 'Mirrors whatever value is currently held for this tag, wherever it was last computed \u2014 this page or another.'}</div>
+      ` : ''}
       <div class="readout" style="margin:6px 0;"><span class="value" style="font-size:1.4rem;color:${r.error ? 'var(--red)' : 'var(--cyan)'};">${r.error ? 'ERR' : (r.value === null ? '—' : fmt(r.value, 4))}</span></div>
       ${r.error ? `<div class="assumptions-note" style="font-size:.74rem;">${r.error}</div>` : ''}
       <div style="color:var(--text-faint);font-size:.74rem;margin:6px 0;">${def.description}</div>
-      ${block.inputs.map((inp, i) => inp.source === 'const' ? `
-        <div class="field"><label>Input ${i + 1} (constant)</label><input type="number" step="any" data-const-idx="${i}" value="${inp.value}"></div>
-      ` : `<div class="field"><label>Input ${i + 1}</label><div style="color:var(--cyan);font-size:.82rem;padding:6px 0;">← wired from ${inp.blockId}</div></div>`).join('')}
+      ${block.inputs.map((inp, i) => {
+        const label = def.inputLabels?.[i] || `Input ${i + 1}`;
+        return inp.source === 'const' ? `
+        <div class="field"><label>${label} (constant)</label><input type="number" step="any" data-const-idx="${i}" value="${inp.value}"></div>
+      ` : `<div class="field"><label>${label}</label><div style="color:var(--cyan);font-size:.82rem;padding:6px 0;">← wired from ${inp.blockId}</div></div>`;
+      }).join('')}
       ${def.inputs.min !== def.inputs.max ? `<div class="btn-row">
         ${block.inputs.length < def.inputs.max ? '<button class="btn secondary" id="propAddInput" style="font-size:.76rem;">+ Input</button>' : ''}
         ${block.inputs.length > def.inputs.min ? '<button class="btn secondary" id="propRemoveInput" style="font-size:.76rem;">− Input</button>' : ''}
@@ -6412,6 +7232,17 @@ function pageSamaLogic() {
       <button class="btn secondary" id="propRotateBlock" style="margin-top:8px;width:100%;">Rotate 90\u00b0 (currently ${block.rotation || 0}\u00b0)</button>
       <button class="btn secondary" id="propRemoveBlock" style="margin-top:8px;width:100%;">Remove Block</button>
     `;
+    const tagSelect = body.querySelector('[data-block-tag]');
+    if (tagSelect) tagSelect.addEventListener('change', () => {
+      block.tag = tagSelect.value;
+      render(); // the canvas sub-label reads block.tag, so it needs a real redraw, not just refreshDisplayValues()
+    });
+    const tagRefSelect = body.querySelector('[data-tagref-select]');
+    if (tagRefSelect) tagRefSelect.addEventListener('change', () => {
+      block.params.tag = tagRefSelect.value;
+      block.params.value = samaGlobalTagValues[block.params.tag] ?? 0; // pick up whatever the tag is already holding immediately, rather than waiting for the next evaluation
+      render();
+    });
     // Guard against NaN (typing a lone "-" as the first character of a
     // negative number parses to NaN) and, critically, do NOT call render()
     // or structureChanged() here -- those rebuild the whole properties
@@ -6460,7 +7291,7 @@ function pageSamaLogic() {
       refreshDisplayValues();
     }));
     const addBtn = body.querySelector('#propAddInput');
-    if (addBtn) addBtn.addEventListener('click', () => { block.inputs.push({ source: 'const', value: 0 }); structureChanged(); });
+    if (addBtn) addBtn.addEventListener('click', () => { snapshotForUndo(); block.inputs.push({ source: 'const', value: 0 }); structureChanged(); });
     const remBtn = body.querySelector('#propRemoveInput');
     if (remBtn) remBtn.addEventListener('click', () => { block.inputs.pop(); structureChanged(); });
     body.querySelector('#propRotateBlock').addEventListener('click', () => {
@@ -6476,6 +7307,7 @@ function pageSamaLogic() {
   }
 
   function removeBlock(id) {
+    snapshotForUndo();
     blocks.forEach((b) => b.inputs.forEach((inp) => { if (inp.source === 'block' && inp.blockId === id) { inp.source = 'const'; inp.value = 0; } }));
     blocks = blocks.filter((b) => b.id !== id);
     if (selectedId === id) selectedId = null;
@@ -6501,10 +7333,47 @@ function pageSamaLogic() {
       removeBlock(el.dataset.removeBlock);
     }));
 
+    svg.querySelectorAll('[data-di-toggle]').forEach((el) => el.addEventListener('pointerdown', (e) => {
+      // A quick click-to-flip for DI blocks specifically -- the single
+      // most common thing you do while testing logic interactively is
+      // flip a digital input on and off, and needing to open the
+      // properties panel every time for that is exactly the kind of
+      // friction that makes exploring a diagram feel slow.
+      // Always a full render(), not refreshDisplayValues() -- the ON/OFF
+      // switch is a small drawn shape (pill + knob), not a plain text
+      // node refreshDisplayValues() knows how to update in place, and
+      // this is a discrete, user-initiated click rather than a per-tick
+      // simulation update, so the cost of a full re-render is a non-issue.
+      e.stopPropagation();
+      const block = blocks.find((b) => b.id === el.dataset.diToggle);
+      if (!block) return;
+      block.params.state = block.params.state >= 0.5 ? 0 : 1;
+      render();
+    }));
+
+    svg.querySelectorAll('[data-ai-slider]').forEach((el) => {
+      // 'pointerdown' must not bubble to the block's own drag-start
+      // handler, or dragging the slider would also drag the whole block
+      // around the canvas.
+      el.addEventListener('pointerdown', (e) => e.stopPropagation());
+      el.addEventListener('input', (e) => {
+        // 'input' fires continuously while dragging, not just on
+        // release, and refreshDisplayValues() (not render()) updates the
+        // downstream values live without recreating this slider element
+        // mid-drag -- a full render() here would destroy and rebuild the
+        // very element the pointer is currently gripping.
+        const block = blocks.find((b) => b.id === el.dataset.aiSlider);
+        if (!block) return;
+        block.params.value = +e.target.value;
+        refreshDisplayValues();
+      });
+    });
+
     svg.querySelectorAll('path[data-wire-to]').forEach((path) => path.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       const toId = path.dataset.wireTo, idx = +path.dataset.wireIdx;
       const block = blocks.find((b) => b.id === toId);
+      snapshotForUndo();
       block.inputs[idx] = { source: 'const', value: 0 };
       structureChanged();
     }));
@@ -6539,12 +7408,28 @@ function pageSamaLogic() {
         if (el) { el.setAttribute('stroke', CONNECT_OK_COLOR); el.setAttribute('stroke-width', '4'); el.setAttribute('opacity', '1'); }
         hoveredEl = el;
       }
+      let rafPending = false;
+      let lastEv = null;
       function onMove(ev) {
+        // The line itself redraws on every event -- that part is cheap
+        // (one SVG attribute set) and must stay perfectly smooth. The
+        // hover hit-test below is the expensive part: elementFromPoint()
+        // does real DOM hit-testing across the page, and a fast mouse or
+        // trackpad can fire pointermove far more often than the screen
+        // even repaints. Running that expensive check on every single
+        // event, rather than once per animation frame, was the actual
+        // cause of the cursor-follow feeling choppy during a drag.
         const p = svgPoint(ev.clientX, ev.clientY);
         tempLine.setAttribute('d', `M ${out.x} ${out.y} L ${p.x} ${p.y}`);
-        const target = document.elementFromPoint(ev.clientX, ev.clientY);
-        const isValid = target && target.dataset && target.dataset.port === 'in' && target.dataset.blockId !== fromId;
-        setHover(isValid ? target : null);
+        lastEv = ev;
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+          rafPending = false;
+          const target = document.elementFromPoint(lastEv.clientX, lastEv.clientY);
+          const isValid = target && target.dataset && target.dataset.port === 'in' && target.dataset.blockId !== fromId;
+          setHover(isValid ? target : null);
+        });
       }
       function onUp(ev) {
         document.removeEventListener('pointermove', onMove);
@@ -6563,6 +7448,7 @@ function pageSamaLogic() {
           const toId = target.dataset.blockId, idx = +target.dataset.inputIdx;
           if (toId !== fromId) {
             const toBlock = blocks.find((b) => b.id === toId);
+            snapshotForUndo();
             toBlock.inputs[idx] = { source: 'block', blockId: fromId };
             connected = true;
           }
@@ -6591,6 +7477,7 @@ function pageSamaLogic() {
       const block = blocks.find((b) => b.id === toId);
       const existing = block.inputs[idx];
       if (existing.source !== 'block') return; // unconnected input dot -- nothing to pick up
+      snapshotForUndo();
       block.inputs[idx] = { source: 'const', value: 0 };
       render();
       const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -6606,14 +7493,22 @@ function pageSamaLogic() {
         if (el) { el.setAttribute('stroke', CONNECT_OK_COLOR); el.setAttribute('stroke-width', '4'); el.setAttribute('opacity', '1'); }
         hoveredEl = el;
       }
+      let rafPending2 = false;
+      let lastEv2 = null;
       function onMove(ev) {
         const { ins } = portPositions(block);
         const to = ins[idx];
         const p = svgPoint(ev.clientX, ev.clientY);
         tempLine.setAttribute('d', `M ${to.x} ${to.y} L ${p.x} ${p.y}`);
-        const target = document.elementFromPoint(ev.clientX, ev.clientY);
-        const isValid = target && target.dataset && target.dataset.port === 'out' && target.dataset.blockId !== toId;
-        setHover(isValid ? target : null);
+        lastEv2 = ev;
+        if (rafPending2) return;
+        rafPending2 = true;
+        requestAnimationFrame(() => {
+          rafPending2 = false;
+          const target = document.elementFromPoint(lastEv2.clientX, lastEv2.clientY);
+          const isValid = target && target.dataset && target.dataset.port === 'out' && target.dataset.blockId !== toId;
+          setHover(isValid ? target : null);
+        });
       }
       function onUp(ev) {
         document.removeEventListener('pointermove', onMove);
@@ -6682,6 +7577,7 @@ function pageSamaLogic() {
           def.params.forEach((p) => { params[p.id] = p.default; });
           const inputs = Array.from({ length: def.inputs.min }, () => ({ source: 'const', value: 0 }));
           const p = svgPoint(ev.clientX, ev.clientY);
+          snapshotForUndo();
           blocks.push({ id, type, params, inputs, x: Math.max(0, p.x - BW / 2), y: Math.max(0, p.y - BH / 2), rotation: 0, scale: 1 });
           selectedId = id;
           structureChanged();
@@ -6693,17 +7589,137 @@ function pageSamaLogic() {
   });
 
   toolbar.querySelector('#clearAllBtn').addEventListener('click', () => {
+    if (blocks.length === 0) return; // nothing to snapshot or clear
+    snapshotForUndo();
     blocks = []; selectedId = null; structureChanged();
   });
+  toolbar.querySelector('#undoBtn').addEventListener('click', () => undo());
+  toolbar.querySelector('#redoBtn').addEventListener('click', () => redo());
+  toolbar.querySelector('#exportBtn').addEventListener('click', () => {
+    syncCurrentPageState();
+    if (samaPages.every((p) => p.blocks.length === 0)) { toast('Nothing to export yet \u2014 add some blocks first.'); return; }
+    const payload = {
+      samaDiagram: 2, // format version 2: multi-page. A version-1 file (single "blocks" array) is still accepted on import for backward compatibility.
+      exportedAt: new Date().toISOString(),
+      pages: samaPages.map((p) => ({ name: p.name, blocks: p.blocks })), // undo/redo history isn't meaningful to save/restore across a save/load boundary
+      tagLibrary: samaTagLibrary,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sama-diagram-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast(`Exported ${samaPages.length} page${samaPages.length === 1 ? '' : 's'} \u2014 check your downloads.`);
+  });
+  toolbar.querySelector('#importBtn').addEventListener('click', () => {
+    toolbar.querySelector('#importFileInput').click();
+  });
+  toolbar.querySelector('#importFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        function validateBlocks(list, context) {
+          if (!Array.isArray(list)) throw new Error(`${context} doesn\u2019t contain a recognizable diagram (expected a "blocks" array).`);
+          for (const b of list) {
+            if (!b.id || !b.type || !sama.SAMA_BLOCK_TYPES[b.type]) {
+              throw new Error(`Unrecognized block type "${b.type || '(missing)'}" \u2014 this file may be from a newer version, or isn\u2019t a diagram export at all.`);
+            }
+          }
+        }
+        if (Array.isArray(parsed.pages)) {
+          // Format version 2 (multi-page): replace every page wholesale.
+          // Undo/redo history is deliberately NOT restored -- it belongs
+          // to an editing session, not to the saved diagram itself.
+          parsed.pages.forEach((p) => validateBlocks(p.blocks, `Page "${p.name || '?'}"`));
+          syncCurrentPageState();
+          samaPages = parsed.pages.map((p) => ({ name: p.name || 'Page', blocks: p.blocks, undoStack: [], redoStack: [] }));
+          if (samaPages.length === 0) samaPages = [{ name: 'Page 1', blocks: [], undoStack: [], redoStack: [] }];
+          samaCurrentPageIdx = 0;
+          blocks = samaPages[0].blocks;
+          undoStack = samaPages[0].undoStack;
+          redoStack = samaPages[0].redoStack;
+          if (Array.isArray(parsed.tagLibrary)) { samaTagLibrary = parsed.tagLibrary; tagLibrary = samaTagLibrary; }
+          selectedId = null;
+          structureChanged();
+          renderPageTabs();
+          const totalBlocks = samaPages.reduce((n, p) => n + p.blocks.length, 0);
+          toast(`Imported ${samaPages.length} page${samaPages.length === 1 ? '' : 's'}, ${totalBlocks} block${totalBlocks === 1 ? '' : 's'} total.`);
+          return;
+        }
+        // Accept both the older wrapped format (samaDiagram: 1 + blocks)
+        // and a bare array, in case someone hand-edits or generates a
+        // file without the wrapper. Replaces only the CURRENT page, so
+        // other pages already open in this session are left untouched.
+        const importedBlocks = Array.isArray(parsed) ? parsed : parsed.blocks;
+        validateBlocks(importedBlocks, 'This file');
+        blocks = importedBlocks;
+        counter = Math.max(counter, blocks.reduce((max, b) => Math.max(max, +String(b.id).replace(/\D/g, '') || 0), 0));
+        // Bare-array imports (no wrapper) won't have a tag library at
+        // all -- keep whatever tags are already defined in THIS session
+        // rather than wiping them out, since an old export predating
+        // this feature is not evidence the user wants their current
+        // tags cleared.
+        if (Array.isArray(parsed.tagLibrary)) { samaTagLibrary = parsed.tagLibrary; tagLibrary = samaTagLibrary; }
+        selectedId = null;
+        structureChanged();
+        toast(`Imported ${blocks.length} block${blocks.length === 1 ? '' : 's'} into the current page.`);
+      } catch (err) {
+        toast(`Import failed: ${err.message}`);
+      } finally {
+        e.target.value = ''; // allow re-selecting the same file name later
+      }
+    };
+    reader.readAsText(file);
+  });
   toolbar.querySelector('#simPlayPause').addEventListener('click', () => {
-    simRunning = !simRunning;
-    toolbar.querySelector('#simPlayPause').textContent = simRunning ? 'Pause' : 'Run';
     const pill = toolbar.querySelector('#simStatusPill');
-    if (pill) pill.textContent = simRunning ? 'SIMULATING' : 'PAUSED';
-    if (simRunning) startTimer(); else stopTimer();
+    if (simulation) {
+      simRunning = !simRunning;
+      toolbar.querySelector('#simPlayPause').textContent = simRunning ? 'Pause' : 'Run';
+      if (pill) pill.textContent = simRunning ? 'SIMULATING' : 'PAUSED';
+      if (simRunning) startTimer(); else stopTimer();
+    } else {
+      // A static diagram has no ongoing process to pause -- Run/Stop
+      // simply gates whether it has been evaluated at all yet, matching
+      // the same "you're always the one who presses Run" rule dynamic
+      // diagrams already follow, rather than computing continuously the
+      // moment a block exists.
+      staticRunning = !staticRunning;
+      toolbar.querySelector('#simPlayPause').textContent = staticRunning ? 'Stop' : 'Run';
+      if (pill) {
+        if (staticRunning) {
+          pill.textContent = 'EVALUATED';
+          pill.style.background = 'var(--green-dim, rgba(74,222,128,.12))';
+          pill.style.color = 'var(--green)';
+          pill.style.borderColor = 'var(--green)';
+        } else {
+          setPillReady(pill);
+        }
+      }
+      render();
+    }
+  });
+  toolbar.querySelector('#simSpeedSelect').addEventListener('change', (e) => {
+    simSpeed = +e.target.value;
+    if (simRunning) startTimer(); // pick up the new speed immediately instead of waiting for the next Pause/Run
   });
   toolbar.querySelector('#simReset').addEventListener('click', () => {
-    if (!simulation) return;
+    if (!simulation) {
+      // Static reset: just clears back to the not-yet-evaluated state.
+      staticRunning = false;
+      toolbar.querySelector('#simPlayPause').textContent = 'Run';
+      const pill = toolbar.querySelector('#simStatusPill');
+      if (pill) setPillReady(pill);
+      render();
+      return;
+    }
     simulation.reset();
     updateLiveValues();
     // Reset stops the clock too -- deliberately does not resume on its
@@ -6713,61 +7729,31 @@ function pageSamaLogic() {
     stopTimer();
     toolbar.querySelector('#simPlayPause').textContent = 'Run';
     const pill = toolbar.querySelector('#simStatusPill');
-    if (pill) pill.textContent = 'READY';
+    if (pill) setPillReady(pill);
+    // Trend history is time-stamped against the simulation clock, which
+    // Reset just zeroed -- old points would otherwise appear to be from
+    // the future once time starts advancing from 0 again.
+    trendHistory.clear();
+    renderTrend();
   });
 
-  // ==================================================================
-  // Real, complete example circuits -- both independently verified
-  // against hand/engine calculations before being wired in here (see
-  // the build notes): a genuine closed-loop level control (PID against
-  // a true integrating process, matching how level control is modeled
-  // everywhere else in this app -- not a simplified lag), and the same
-  // combustion cross-limiting philosophy used in the Control Loops
-  // section, demonstrating the actual safety behavior (fuel demand held
-  // back to what air can support during a load increase).
-  // ==================================================================
-  const EXAMPLES = {
-    pidLevel: {
-      label: 'PID Level Control (closed loop)',
-      about: 'A real closed-loop level controller. The Level Setpoint (50) and the actual Level are compared by the PID, which outputs a valve demand. That demand is combined with a fixed Outflow disturbance (45) by the Summer \u2014 inflow minus outflow \u2014 and the result accumulates in the Integrator, which IS the level (a tank has no self-regulation: any lasting imbalance between in and out just keeps ramping the level, exactly like the real drum-level physics used elsewhere in this app).',
-      watch: 'Watch the Integrator (\u222b) block, labeled "level" \u2014 it should settle at 50 (the setpoint), and once it does, the PID\u2019s own output will have settled at exactly 45 \u2014 matching the outflow disturbance. That match is the real physics: at a steady level, inflow must equal outflow.',
-      blocks: [
-        { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }], x: 20, y: 20, rotation: 0 },
-        { id: 'outflow', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 45 }], x: 20, y: 220, rotation: 0 },
-        { id: 'pid', type: 'pid', params: { kp: 2, ki: 0.3, kd: 0, outMin: 0, outMax: 100 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'level' }], x: 300, y: 20, rotation: 0 },
-        { id: 'net', type: 'summer', params: { bias: 0 }, gains: [1, -1], inputs: [{ source: 'block', blockId: 'pid' }, { source: 'block', blockId: 'outflow' }], x: 620, y: 130, rotation: 0 },
-        { id: 'level', type: 'integrator', params: { gain: 0.3, min: -100, max: 100 }, inputs: [{ source: 'block', blockId: 'net' }], x: 940, y: 130, rotation: 0 },
-      ],
-    },
-    crossLimit: {
-      label: 'Combustion Cross-Limiting',
-      about: 'The safety logic that keeps a boiler from ever running fuel-rich. Fuel Demand and Air Feedforward normally track together. The Air Demand output is a HIGH SELECT of the two \u2014 air is never allowed to fall below what fuel needs. The Fuel Demand output is a LOW SELECT of the same two \u2014 fuel is never allowed to exceed what air can actually support.',
-      watch: 'Both start equal (75, 75) so both outputs read 75. Select the "fuel" block and raise its value to, say, 90 \u2014 Air Demand rises to 90 immediately (air leads), but Fuel Demand stays pinned at 75 (fuel is held back) until air actually catches up. That gap is the entire point of cross-limiting.',
-      blocks: [
-        { id: 'fuel', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 75 }], x: 20, y: 20, rotation: 0 },
-        { id: 'air', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 75 }], x: 20, y: 220, rotation: 0 },
-        { id: 'airDemand', type: 'highSelect', params: {}, inputs: [{ source: 'block', blockId: 'fuel' }, { source: 'block', blockId: 'air' }], x: 380, y: 20, rotation: 0 },
-        { id: 'fuelDemand', type: 'lowSelect', params: {}, inputs: [{ source: 'block', blockId: 'fuel' }, { source: 'block', blockId: 'air' }], x: 380, y: 220, rotation: 0 },
-      ],
-    },
-  };
-  const exampleInfo = h('<div class="card" id="exampleInfo" style="display:none;margin-top:10px;"></div>');
-  app.appendChild(exampleInfo);
-  toolbar.querySelector('#loadExampleSelect').addEventListener('change', (e) => {
-    const key = e.target.value;
-    if (!key || !EXAMPLES[key]) return;
-    const ex = EXAMPLES[key];
-    blocks = ex.blocks.map((b) => ({ ...b, inputs: b.inputs.map((i) => ({ ...i })) }));
-    counter = blocks.length;
-    selectedId = null;
-    exampleInfo.style.display = '';
-    exampleInfo.innerHTML = `
-      <div class="panel-title" style="margin-bottom:2px;">${ex.label}</div>
-      <p style="color:var(--text-dim);font-size:.86rem;line-height:1.6;margin:6px 0;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">${ex.about}</p>
-      <div class="assumptions-note" style="margin-top:8px;">${ex.watch}</div>
-    `;
-    structureChanged();
-    e.target.value = '';
+  trendPanel.querySelector('#trendAddBtn').addEventListener('click', () => {
+    const sel = trendPanel.querySelector('#trendBlockSelect');
+    const id = sel.value;
+    if (!id || trendedIds.includes(id)) return;
+    if (trendedIds.length >= TREND_MAX_SERIES) {
+      toast(`Trend is limited to ${TREND_MAX_SERIES} signals at once \u2014 remove one before adding another.`);
+      return;
+    }
+    trendedIds.push(id);
+    refreshTrendBlockSelect();
+    renderTrend();
+  });
+  trendPanel.querySelector('#trendClearBtn').addEventListener('click', () => {
+    trendedIds.length = 0;
+    trendHistory.clear();
+    refreshTrendBlockSelect();
+    renderTrend();
   });
 
   render();
@@ -7904,6 +8890,7 @@ function pageTransformerProt() {
       <div class="field"><label>Grounding</label><select id="grounding">${ec.GROUNDING_TYPES.map((g) => `<option${g === 'solid' ? ' selected' : ''}>${g}</option>`).join('')}</select></div>
     </div>
     <div class="field"><label>NGR let-through (A)</label><input type="number" id="ngr" step="any" placeholder="if resistance/reactance grounded"></div>
+    <div class="field" style="flex-direction:row;align-items:center;gap:8px;"><label style="margin:0;">Fitted with an on-load tap changer (OLTC)</label><input type="checkbox" id="hasOltc" style="width:auto;"></div>
     <div class="btn-row"><button class="btn" id="calc">Generate Settings</button></div>
   </div>`);
   const right = h('<div class="card"><div class="empty-state">Enter transformer data and generate.</div></div>');
@@ -7922,11 +8909,12 @@ function pageTransformerProt() {
         sourceFaultMVA: +left.querySelector('#srcMva').value || undefined,
         groundingType: left.querySelector('#grounding').value,
         ngrLetThroughA: ngrRaw === '' ? undefined : +ngrRaw,
+        hasOltc: left.querySelector('#hasOltc').checked,
       };
       const r = tfProt.autoGenerate(basic);
       const bp = r.basicParameters;
       const blocks = Object.entries(r.protection).map(([k, v]) => {
-        const titles = { oc: 'Overcurrent', ef: 'Earth Fault', diff: 'Differential', ref: 'Restricted Earth Fault', thermal: 'Thermal', overfluxing: 'Over-fluxing' };
+        const titles = { oc: 'Overcurrent', ef: 'Earth Fault', diff: 'Differential (87T, two-stage)', ref: 'Restricted Earth Fault', thermal: 'Thermal', overfluxing: 'Over-fluxing', avr: 'On-Load Tap Changer AVR' };
         return protectionBlock(titles[k] || k, v);
       }).join('');
 
@@ -7999,7 +8987,7 @@ function pageMotorProt() {
       };
       const r = motProt.autoGenerate(basic);
       const bp = r.basicParameters;
-      const titles = { thermal: 'Thermal Overload', oc: 'Overcurrent', ef: 'Earth Fault', negSeq: 'Negative Sequence', lockedRotor: 'Locked Rotor', underCurrent: 'Under-current', voltage: 'Voltage' };
+      const titles = { thermal: 'Thermal Overload Replica (49M)', oc: 'Overcurrent', ef: 'Earth Fault', negSeq: 'Negative Sequence (46M)', lockedRotor: 'Locked Rotor / Start-Up Supervision', underCurrent: 'Loss of Load / Under-current', voltage: 'Voltage', jam: 'Load Jam Protection', phaseReversal: 'Phase Reversal Protection', motorDiff: 'Motor Differential (87M)' };
       const blocks = Object.entries(r.protection).map(([k, v]) => protectionBlock(titles[k] || k, v)).join('');
 
       right.innerHTML = `
@@ -8818,6 +9806,258 @@ function pageCavitation() {
   });
 }
 
+// ---------- Pressure Gauge Range Selection ----------
+function pageGaugeRange() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>Pressure Gauge Range Selection</h1>
+    <p class="lead">A gauge sized purely for "big enough" is usually wrong. ASME B40.100 calls for normal operating pressure to read in the middle third of the dial \u2014 legible, and gentle on the Bourdon tube over years of continuous flexing.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Service Conditions</div>
+    <div class="field"><label>Units</label>
+      <select id="unit"><option value="bar">bar</option><option value="psi">psi</option></select>
+    </div>
+    <div class="field"><label>Normal operating pressure</label><input type="number" id="normalP" step="any" value="6"></div>
+    <div class="field"><label>Maximum / upset pressure (optional)</label><input type="number" id="maxP" step="any" placeholder="leave blank if none"></div>
+    <div class="hint">If the line can see an occasional upset or surge above normal, enter it \u2014 the gauge also has to survive that without its needle burying past full scale.</div>
+    <div class="btn-row"><button class="btn" id="calc">Select Range</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter service conditions and select a range.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const unit = left.querySelector('#unit').value;
+    const normalPressure = +left.querySelector('#normalP').value;
+    const maxRaw = left.querySelector('#maxP').value.trim();
+    try {
+      const r = lu.selectGaugeRange({ normalPressure, maxPressure: maxRaw === '' ? undefined : +maxRaw, unit });
+      const badge = r.inRecommendedBand ? 'normal' : 'warning';
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.6rem;font-weight:700;color:var(--cyan);">0\u2013${fmt(r.fullScale, 4)} ${r.unit}</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">recommended gauge full-scale range</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Normal pressure position', fmt(r.normalPct, 1) + ' % of full scale')}
+          ${r.maxPct !== null ? resultRow('Max/upset pressure position', fmt(r.maxPct, 1) + ' % of full scale') : ''}
+          ${resultRow('Within recommended 25\u201375% band?', r.inRecommendedBand ? '<span class="badge normal">Yes</span>' : `<span class="badge ${badge}">No</span>`)}
+        </div>
+        <div class="assumptions-note" style="margin-top:14px;">${r.note}</div>
+        <div class="formula-box" style="margin-top:12px;">Rule (ASME B40.100): normal operating pressure should read 25\u201375% of full scale.<br>Sizing guide: full scale \u2248 2\u00d7 normal operating pressure centers the needle at mid-scale.</div>
+        <div class="hint" style="margin-top:8px;">Standard ${r.unit} ranges checked: ${r.standardRanges.join(', ')}. Confirm the exact range against your chosen manufacturer's catalog \u2014 not every range is stocked by every vendor.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('gauge-range', `Gauge range \u2014 0\u2013${fmt(r.fullScale, 4)} ${r.unit}`, { normalPressure, maxPressure: maxRaw, unit }, { fullScale: r.fullScale, normalPct: r.normalPct }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Pressure Gauge Range Selection',
+        inputs: { 'Normal pressure': `${normalPressure} ${unit}`, 'Max pressure': maxRaw === '' ? 'not specified' : `${maxRaw} ${unit}` },
+        result: { 'Full scale': `0\u2013${fmt(r.fullScale, 4)} ${unit}`, 'Normal %': fmt(r.normalPct, 1) + '%' },
+        assumptions: { note: r.note },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Interface Level (Two-Liquid DP) ----------
+function pageInterfaceLevel() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>Interface Level (Two-Liquid DP)</h1>
+    <p class="lead">A DP transmitter measuring the interface between two immiscible liquids of different density \u2014 an oil-water separator, a boot, a decanter \u2014 needs its own calibration math, not the single-liquid DP level formula. This gives the 0%/100% calibration span and, if you have a live reading, the current interface position.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Liquids &amp; Geometry</div>
+    <div class="input-row">
+      <div class="field"><label>SG \u2014 heavy liquid (bottom)</label><input type="number" id="sgHeavy" step="any" value="1.0"></div>
+      <div class="field"><label>SG \u2014 light liquid (top)</label><input type="number" id="sgLight" step="any" value="0.8"></div>
+    </div>
+    <div class="field"><label>Tap-to-tap span height (m)</label><input type="number" id="span" step="any" value="2"></div>
+    <div class="hint">Span is the vertical distance between the LP tap (above all liquid) and the HP tap (at the bottom of the measured range) \u2014 the same span you'd use for a single-liquid DP level range.</div>
+    <div class="field" style="margin-top:10px;"><label>Measured DP (kPa, optional)</label><input type="number" id="measDp" step="any" placeholder="leave blank for calibration only"></div>
+    <div class="hint">Enter a live or test DP reading to back-calculate the current interface position; leave blank to just get the 0%/100% calibration values.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter liquid and geometry data to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const sgHeavy = +left.querySelector('#sgHeavy').value;
+    const sgLight = +left.querySelector('#sgLight').value;
+    const spanHeight = +left.querySelector('#span').value;
+    const measRaw = left.querySelector('#measDp').value.trim();
+    try {
+      const r = lu.interfaceLevelCalibration({ sgHeavy, sgLight, spanHeight, measuredDp: measRaw === '' ? undefined : +measRaw });
+      right.innerHTML = `
+        <div class="panel-title">Calibration Span</div>
+        <div class="result-grid">
+          ${resultRow('DP at 0% (interface at top tap \u2014 all heavy liquid)', fmt(r.dpAllHeavy, 4) + ' kPa')}
+          ${resultRow('DP at 100% (interface at bottom tap \u2014 all light liquid)', fmt(r.dpAllLight, 4) + ' kPa')}
+          ${resultRow('Calibrated span', fmt(r.spanKpa, 4) + ' kPa')}
+        </div>
+        <div class="hint" style="margin-top:8px;">DP falls as the light layer thickens \u2014 configure the transmitter's 4mA/20mA points to match whichever of these two values corresponds to your 0%/100% convention.</div>
+        ${r.measured ? `
+        <div class="panel-title" style="margin-top:16px;">Current Interface Position</div>
+        <div class="result-grid">
+          ${resultRow('Light-liquid layer height', fmt(r.measured.lightHeight, 4) + ' m')}
+          ${resultRow('Light-liquid layer, % of span', fmt(r.measured.lightPct, 1) + ' %')}
+          ${resultRow('Interface height above bottom tap', fmt(r.measured.interfaceHeightFromBottom, 4) + ' m')}
+        </div>` : ''}
+        <div class="formula-box" style="margin-top:12px;">DP = SG_heavy\u00b7K\u00b7H \u2212 (SG_heavy\u2212SG_light)\u00b7K\u00b7h_light, K = 9.80665 kPa/m water<br>Derived from hydrostatic balance between the two taps.</div>
+        <div class="assumptions-note" style="margin-top:12px;">Assumes a dry (unpurged) leg on both sides and that any vapour-space pressure is common to both taps and cancels out of the differential, the same assumption a plain single-liquid DP level measurement makes. A wet reference leg or a pressurized vessel with an uncompensated vapour space needs an additional correction term this tool does not include.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('interface-level', `Interface level \u2014 span ${fmt(r.spanKpa, 2)} kPa`, { sgHeavy, sgLight, spanHeight }, { dpAllHeavy: r.dpAllHeavy, dpAllLight: r.dpAllLight }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Interface Level (Two-Liquid DP) Calculator',
+        inputs: { 'SG heavy': sgHeavy, 'SG light': sgLight, 'Span height': `${spanHeight} m` },
+        result: { 'DP @ 0%': fmt(r.dpAllHeavy, 4) + ' kPa', 'DP @ 100%': fmt(r.dpAllLight, 4) + ' kPa', Span: fmt(r.spanKpa, 4) + ' kPa' },
+        assumptions: { note: 'Dry-leg assumption; vapour space pressure common to both taps.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- 4-20mA Loop Power Budget ----------
+function pageLoopPower() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>4\u201320 mA Loop Power Budget</h1>
+    <p class="lead">A transmitter that reads fine on the bench can still fail in the field if the loop simply doesn't have enough voltage left over once every series resistance has taken its share \u2014 checked here at 20 mA, the worst case for voltage drop.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Supply &amp; Transmitter</div>
+    <div class="input-row">
+      <div class="field"><label>Supply voltage (V)</label><input type="number" id="supplyV" step="any" value="24"></div>
+      <div class="field"><label>Transmitter min. operating voltage (V)</label><input type="number" id="txMinV" step="any" value="12"></div>
+    </div>
+    <div class="hint">Minimum operating (compliance) voltage is on the transmitter's datasheet \u2014 typically 10\u201312 V for a basic 4-20mA device, higher for HART or advanced diagnostics.</div>
+    <div class="panel-title" style="margin-top:14px;">Series Loop Resistances</div>
+    <div class="input-row">
+      <div class="field"><label>Wiring resistance, round trip (\u03a9)</label><input type="number" id="wireR" step="any" value="100"></div>
+      <div class="field"><label>Receiver / PLC-DCS input (\u03a9)</label><input type="number" id="rxR" step="any" value="250"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>IS barrier / isolator (\u03a9, optional)</label><input type="number" id="barrierR" step="any" value="0"></div>
+      <div class="field"><label>Other series devices (\u03a9, optional)</label><input type="number" id="otherR" step="any" value="0"></div>
+    </div>
+    <div class="hint">A 250\u03a9 receiver resistance is the common value for a HART-compatible analog input (needed for the HART signal to develop enough voltage to be read); check your actual card's input impedance.</div>
+    <div class="btn-row"><button class="btn" id="calc">Check Budget</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter loop data and check the power budget.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const supplyVoltage = +left.querySelector('#supplyV').value;
+    const transmitterMinVoltage = +left.querySelector('#txMinV').value;
+    const wireResistance = +left.querySelector('#wireR').value;
+    const receiverResistance = +left.querySelector('#rxR').value;
+    const barrierResistance = +left.querySelector('#barrierR').value;
+    const otherResistance = +left.querySelector('#otherR').value;
+    try {
+      const r = lu.loopPowerBudget({ supplyVoltage, transmitterMinVoltage, wireResistance, receiverResistance, barrierResistance, otherResistance });
+      const badge = r.ok ? 'normal' : 'out';
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <span class="badge ${badge}" style="font-size:1.1rem;padding:8px 20px;">${r.ok ? 'Loop has adequate voltage' : 'INSUFFICIENT \u2014 loop will not operate correctly at 20 mA'}</span>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Total series resistance', fmt(r.totalResistance, 1) + ' \u03a9')}
+          ${resultRow('Voltage drop at 20 mA', fmt(r.dropAtMaxCurrent, 3) + ' V')}
+          ${resultRow('Required supply voltage', fmt(r.requiredSupply, 3) + ' V')}
+          ${resultRow('Margin', (r.margin >= 0 ? '+' : '') + fmt(r.margin, 3) + ' V')}
+          ${resultRow('Max. permissible loop resistance', fmt(r.maxLoopResistance, 1) + ' \u03a9')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Required supply = V_min(transmitter) + I_max \u00b7 R_total, evaluated at I_max = 20 mA (Ohm's law, worst case for drop)</div>
+        <div class="assumptions-note" style="margin-top:12px;">${r.ok ? 'This checks steady-state DC voltage only \u2014 also confirm the supply can handle any transmitter startup surge current, and that HART communication (if used) has enough loop resistance (typically 230\u2013600\u03a9) to develop a readable signal, not just enough voltage.' : 'Increase supply voltage, reduce wiring resistance (shorter run or larger conductor), or remove a series load \u2014 the loop cannot deliver 20 mA reliably as configured.'}</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('loop-power', `Loop power budget \u2014 ${r.ok ? 'OK' : 'INSUFFICIENT'}`, { supplyVoltage, transmitterMinVoltage, wireResistance, receiverResistance }, { margin: r.margin, ok: r.ok }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: '4-20mA Loop Power Budget Calculator',
+        inputs: { 'Supply voltage': `${supplyVoltage} V`, 'Transmitter min voltage': `${transmitterMinVoltage} V`, 'Wiring resistance': `${wireResistance} \u03a9`, 'Receiver resistance': `${receiverResistance} \u03a9` },
+        result: { 'Required supply': fmt(r.requiredSupply, 3) + ' V', Margin: fmt(r.margin, 3) + ' V', Status: r.ok ? 'OK' : 'INSUFFICIENT' },
+        assumptions: { note: 'Steady-state DC check at 20mA only.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- SIL / PFDavg Verification ----------
+function pageSILVerification() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>SIL / PFDavg Verification</h1>
+    <p class="lead">Calculates PFDavg for each subsystem of a safety instrumented function \u2014 sensor, logic solver, final element \u2014 and the overall achievable SIL, using the standard IEC 61508-6 Annex B simplified low-demand equations. This checks the probability side only; a complete IEC 61511 SIL verification also confirms architectural constraints (SFF/HFT) and systematic capability, which this tool does not evaluate.</p></div>`));
+
+  function subsystemFieldset(name, defaults) {
+    return `<div class="panel-title" style="margin-top:14px;">${name}</div>
+      <div class="input-row">
+        <div class="field"><label>Architecture</label>
+          <select data-f="${name}-arch">
+            <option value="1oo1"${defaults.arch === '1oo1' ? ' selected' : ''}>1oo1</option>
+            <option value="1oo2"${defaults.arch === '1oo2' ? ' selected' : ''}>1oo2</option>
+            <option value="2oo3"${defaults.arch === '2oo3' ? ' selected' : ''}>2oo3</option>
+          </select>
+        </div>
+        <div class="field"><label>\u03bb\u1d05\u1d41 (FIT = per 10\u2079 h)</label><input type="number" data-f="${name}-fit" step="any" value="${defaults.fit}"></div>
+      </div>
+      <div class="input-row">
+        <div class="field"><label>Proof test interval (years)</label><input type="number" data-f="${name}-ti" step="any" value="${defaults.ti}"></div>
+        <div class="field"><label>\u03b2 common cause (%, 1oo2/2oo3 only)</label><input type="number" data-f="${name}-beta" step="any" value="${defaults.beta}"></div>
+      </div>`;
+  }
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    ${subsystemFieldset('Sensor', { arch: '1oo1', fit: 500, ti: 1, beta: 5 })}
+    ${subsystemFieldset('Logic Solver', { arch: '1oo1', fit: 100, ti: 3, beta: 0 })}
+    ${subsystemFieldset('Final Element', { arch: '1oo1', fit: 1000, ti: 1, beta: 5 })}
+    <div class="hint" style="margin-top:10px;">\u03bb\u1d05\u1d41 (dangerous undetected failure rate) is normally taken straight from the component's SIL certificate, in FIT (failures per 10\u2079 hours). \u03b2 only matters for a redundant (1oo2/2oo3) architecture \u2014 it's the fraction of failures that hit every channel at once (e.g. a shared power supply, a common calibration error) and so aren't protected by the redundancy at all.</div>
+    <div class="btn-row"><button class="btn" id="calc">Verify SIL</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter subsystem data and verify.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  function readSubsystem(name) {
+    const arch = left.querySelector(`[data-f="${name}-arch"]`).value;
+    const fit = +left.querySelector(`[data-f="${name}-fit"]`).value;
+    const tiYears = +left.querySelector(`[data-f="${name}-ti"]`).value;
+    const betaPct = +left.querySelector(`[data-f="${name}-beta"]`).value;
+    return { architecture: arch, lambdaDU: fit / 1e9, tiHours: tiYears * 8760, beta: betaPct / 100 };
+  }
+
+  function silBadgeClass(sil) { return sil >= 2 ? 'normal' : sil === 1 ? 'warning' : 'out'; }
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    try {
+      const sensor = fsafe.evaluateSubsystem(readSubsystem('Sensor'));
+      const logic = fsafe.evaluateSubsystem(readSubsystem('Logic Solver'));
+      const finalElement = fsafe.evaluateSubsystem(readSubsystem('Final Element'));
+      const sif = fsafe.evaluateSIF([sensor, logic, finalElement]);
+      const rows = [['Sensor', sensor], ['Logic Solver', logic], ['Final Element', finalElement]]
+        .map(([label, s]) => resultRow(`${label} (${s.label})`, `PFDavg = ${s.pfdAvg.toExponential(2)} \u2014 <span class="badge ${silBadgeClass(s.sil)}">${s.sil > 0 ? 'SIL ' + s.sil : 'Below SIL 1'}</span>`))
+        .join('');
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <span class="badge ${silBadgeClass(sif.sil)}" style="font-size:1.1rem;padding:8px 20px;">${sif.sil > 0 ? 'Achieves SIL ' + sif.sil : 'Does not meet SIL 1'}</span>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Total SIF PFDavg', sif.totalPfd.toExponential(3))}
+          ${resultRow('Risk Reduction Factor (1/PFDavg)', fmt(sif.rrf, 0))}
+        </div>
+        <div class="panel-title" style="margin-top:14px;">Subsystem Breakdown</div>
+        <div class="result-grid">${rows}</div>
+        <div class="formula-box" style="margin-top:12px;">1oo1: PFDavg = \u03bb\u1d05\u1d41\u00b7TI/2<br>1oo2: PFDavg = (1\u2212\u03b2)\u00b2\u00b7\u03bb\u1d05\u1d41\u00b2\u00b7TI\u00b2/3 + \u03b2\u00b7\u03bb\u1d05\u1d41\u00b7TI/2<br>2oo3: PFDavg = (1\u2212\u03b2)\u00b2\u00b7\u03bb\u1d05\u1d41\u00b2\u00b7TI\u00b2 + \u03b2\u00b7\u03bb\u1d05\u1d41\u00b7TI/2 \u2014 IEC 61508-6 Annex B</div>
+        <div class="assumptions-note" style="margin-top:12px;">2oo3's real advantage over 1oo2 is fewer spurious trips (nuisance shutdowns), not necessarily a lower PFDavg \u2014 its PFDavg is often slightly higher than an equivalent 1oo2, since there are more ways for 2-of-3 channels to fail together than for 2-of-2 to fail together. This tool verifies the probability (PFDavg) side of SIL only. A complete IEC 61511 verification also checks the architectural constraint (SFF/HFT limits the SIL a given hardware fault tolerance can claim, independent of how good its PFDavg is) and systematic capability \u2014 both require the full component SIL certificate, not just its failure rate.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('sil-verification', `SIL verification \u2014 ${sif.sil > 0 ? 'SIL ' + sif.sil : 'below SIL 1'}`, {}, { totalPfd: sif.totalPfd, sil: sif.sil }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'SIL / PFDavg Verification (IEC 61508/61511)',
+        inputs: { Sensor: `${sensor.label}, PFDavg ${sensor.pfdAvg.toExponential(2)}`, 'Logic Solver': `${logic.label}, PFDavg ${logic.pfdAvg.toExponential(2)}`, 'Final Element': `${finalElement.label}, PFDavg ${finalElement.pfdAvg.toExponential(2)}` },
+        result: { 'Total PFDavg': sif.totalPfd.toExponential(3), 'Achieved SIL': sif.sil > 0 ? 'SIL ' + sif.sil : 'Below SIL 1', RRF: fmt(sif.rrf, 0) },
+        assumptions: { note: 'Probability (PFDavg) verification only \u2014 does not check architectural constraints (SFF/HFT) or systematic capability.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
 // ---------- Cable & Gland Sizing ----------
 function pageCableGland() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Instrumentation</div><h1>Cable &amp; Gland Size Calculator</h1>
@@ -9069,7 +10309,7 @@ if (adminLoginLink) {
 // build -- the version.json update-check mechanism depends on that file
 // being stamped correctly -- only the visible "build XXXXXXXX" text in
 // the footer has been removed, since it was just clutter for a visitor.)
-const APP_BUILD = '20260911191310';
+const APP_BUILD = '20260913170837';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('causeTag')) {

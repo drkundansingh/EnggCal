@@ -6,6 +6,15 @@
 // etc.) is a widely-used typical starting point, always shown alongside the
 // assumption used, and tagged RECOMMENDED rather than CALCULATED — the
 // distinction the spec explicitly requires (Section 22).
+//
+// The differential (87T) and on-load tap-changer AVR parameter names and
+// structure are aligned to a real numerical transformer protection relay
+// (ABB Relion RET620/630 series) — two independently settable differential
+// stages (a stabilized/biased low-set stage plus an instantaneous
+// high-set stage, the high-set specified by ABB at <25ms operate time for
+// severe internal faults) and standard AVR target/bandwidth/time-delay
+// settings for a motor-driven on-load tap changer, verified against ABB's
+// own published RET620 documentation during development.
 
 import { sqrt3, SETTING_STATUS } from './electricalCommon.js';
 import * as sc from './shortCircuit.js';
@@ -20,13 +29,19 @@ export function defaultPhilosophy() {
     efPickupPctOfFLC: 30,             // 50N/51N EF pickup, typical 20-40% of FLC
     efCurve: 'VI',
     efTMS: 0.2,
-    diffSlopePct: 25,                 // 87T differential slope, typical 20-30%
+    diffLowOperatePctIr: 20,          // 87T stabilized/biased low-set stage, %Ir -- ABB RET620 typical 15-30%
+    diffSlopePct: 25,                 // 87T differential slope (restraint characteristic), typical 20-30%
+    diffHighOperatePctIr: 800,        // 87T instantaneous high-set stage, %Ir -- clears severe internal faults in <25ms regardless of harmonic content, ABB typical 500-1000%
     refStabilityFactorK: 2,
     thermalAlarmPct: 105,             // 49 thermal alarm, typical 100-110% of rating
     thermalTripPct: 120,              // 49 thermal trip, typical 115-130% of rating
     voltsPerHertzAlarmPct: 110,       // 24 V/Hz alarm, typical 105-110%
     voltsPerHertzTripPct: 120,        // 24 V/Hz trip, typical 118-125%
     voltsPerHertzTripDelayS: 6,
+    avrTargetPct: 100,                // AVR target LV bus voltage, % of rated -- the on-load tap changer's regulation setpoint
+    avrBandwidthPct: 1.5,             // AVR bandwidth/deadband, typical 1-2% -- the tap changer does not operate for excursions within this band, avoiding tap "hunting"
+    avrTimeDelayS: 30,                // AVR initial time delay before the first tap command, typical 20-60s -- rides through short voltage dips without unnecessary tap operations
+    avrTapStepPct: 1.25,              // typical OLTC step size, commonly 1.25-2.5% per tap for HT/MV distribution transformers
   };
 }
 
@@ -91,7 +106,17 @@ export function autoGenerate(basic, philosophy = {}) {
     ansi: '87T',
     hvCtSecondaryA: hvCtSec, lvCtSecondaryA: lvCtSec,
     ratioMismatchNote: hvCtSec && lvCtSec ? `HV/LV CT secondary ratio is ${(hvCtSec / lvCtSec).toFixed(3)} at rated load — vector-group and ratio compensation (relay-configured) must match the transformer's actual vector group, not assumed here.` : 'Supply both HV and LV CT ratios to check differential balance.',
+    // Two independently settable stages, matching real numerical
+    // transformer relay practice: a stabilized/biased low-set stage that
+    // stays secure through CT saturation and ratio-mismatch error during
+    // heavy through-faults, plus an unrestrained instantaneous high-set
+    // stage for severe internal faults, set well above any credible
+    // through-fault or inrush current so it only ever sees a genuine
+    // internal fault.
+    lowSetOperatePctIr: p.diffLowOperatePctIr,
     slopePct: p.diffSlopePct,
+    highSetOperatePctIr: p.diffHighOperatePctIr,
+    highSetTypicalOperateTimeMs: 25,
     status: SETTING_STATUS.RECOMMENDED,
   };
 
@@ -108,6 +133,17 @@ export function autoGenerate(basic, philosophy = {}) {
     status: SETTING_STATUS.RECOMMENDED,
   };
 
+  // On-load tap-changer automatic voltage regulation -- only meaningful
+  // for a transformer actually fitted with a motor-driven OLTC, which
+  // basic.hasOltc makes an explicit choice rather than an assumption.
+  const avr = basic.hasOltc ? {
+    function: 'AVR (on-load tap changer)',
+    targetPct: p.avrTargetPct, bandwidthPct: p.avrBandwidthPct,
+    timeDelayS: p.avrTimeDelayS, tapStepPct: p.avrTapStepPct,
+    note: 'Bandwidth is a deadband, not a trip setting — the tap changer only operates once the LV bus voltage excursion exceeds it, avoiding unnecessary tap "hunting" on normal load swings. Confirm the tap step % against the transformer\u2019s actual nameplate tap chart; this is a typical value, not read from a specific transformer.',
+    status: SETTING_STATUS.RECOMMENDED,
+  } : { function: 'AVR (on-load tap changer)', note: 'Not applicable — this transformer was specified without an on-load tap changer.' };
+
   const overfluxing = {
     ansi: '24',
     alarmPct: p.voltsPerHertzAlarmPct,
@@ -120,7 +156,7 @@ export function autoGenerate(basic, philosophy = {}) {
 
   return {
     basicParameters: { hvFLC, lvFLC, turnsRatio, hvFaultKA, lvFaultKA, hvCtSecondaryA: hvCtSec, lvCtSecondaryA: lvCtSec },
-    protection: { oc, ef, diff, ref, thermal, overfluxing },
+    protection: { oc, ef, diff, ref, thermal, overfluxing, avr },
     equipmentProtection,
     philosophy: p,
   };

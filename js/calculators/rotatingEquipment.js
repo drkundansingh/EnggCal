@@ -197,3 +197,30 @@ export function pumpSpecificSpeed({ speedRpm, flowGpm, headFt, numberOfStages = 
     note: `${note} This indicates the impeller geometry FAMILY typically used at this duty point \u2014 it is a selection guide, not a guarantee of which type a specific manufacturer will offer.`,
   };
 }
+
+// Adiabatic (isentropic) gas compressor power, ideal-gas relations. This
+// is the standard shortcut method (Method 2 in the industry references):
+// PVk = constant along an isentropic path, giving compression work per
+// unit mass and the isentropic discharge temperature directly from inlet
+// conditions, the pressure ratio, and the gas's specific heat ratio (k).
+// A real compressor's actual discharge temperature runs hotter than the
+// isentropic value because of irreversibilities -- captured here with an
+// isentropic (adiabatic) efficiency, applied as extra work/heating rather
+// than assuming a perfect process.
+export function adiabaticCompressorPower({ p1Pa, p2Pa, t1K, k, molarMassKgPerKmol, massFlowKgS, efficiency = 1 }) {
+  if (p1Pa <= 0 || p2Pa <= 0) throw new Error('Both pressures must be greater than zero (absolute).');
+  if (p2Pa <= p1Pa) throw new Error('Discharge pressure must exceed suction pressure for a compressor.');
+  if (t1K <= 0) throw new Error('Suction temperature must be a positive absolute temperature.');
+  if (k <= 1) throw new Error('Specific heat ratio (k = Cp/Cv) must be greater than 1.');
+  if (efficiency <= 0 || efficiency > 1) throw new Error('Efficiency must be between 0 (exclusive) and 1.');
+  const R_UNIVERSAL = 8314.462618; // J/(kmol.K)
+  const R = R_UNIVERSAL / molarMassKgPerKmol; // specific gas constant, J/(kg.K)
+  const pressureRatio = p2Pa / p1Pa;
+  const exponent = (k - 1) / k;
+  const wIsentropicJKg = (k / (k - 1)) * R * t1K * (Math.pow(pressureRatio, exponent) - 1);
+  const wActualJKg = wIsentropicJKg / efficiency;
+  const t2IsentropicK = t1K * Math.pow(pressureRatio, exponent);
+  const t2ActualK = t1K + (t2IsentropicK - t1K) / efficiency;
+  const powerKW = (massFlowKgS * wActualJKg) / 1000;
+  return { R, pressureRatio, wIsentropicJKg, wActualJKg, t2IsentropicK, t2ActualK, powerKW };
+}

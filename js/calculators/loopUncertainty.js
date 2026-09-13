@@ -261,3 +261,92 @@ export function cavitationCheck({ p1, p2, pv, pc, fl, sigmaIncipient, sigmaDamag
       : 'No manufacturer sigma indices were supplied, so only choked-flow and flashing conditions could be evaluated. Cavitation onset genuinely cannot be assessed without valve-specific sigma data — this result is not a cavitation-free confirmation.',
   };
 }
+
+// Pressure gauge range selection per ASME B40.100 — the standard rule is
+// that normal operating pressure should read in the middle third of the
+// dial (25-75% of full scale), both so the needle position is legible and
+// so the Bourdon tube isn't continuously flexed near its full deflection
+// (which shortens gauge life). A common design rule of thumb is to size
+// the full scale at roughly 2x normal operating pressure, which centers
+// normal operation at 50% of the dial.
+export const STANDARD_GAUGE_RANGES_BAR = [1, 1.6, 2.5, 4, 6, 10, 16, 25, 40, 60, 100, 160, 250, 400, 600, 1000];
+export const STANDARD_GAUGE_RANGES_PSI = [15, 30, 60, 100, 160, 200, 300, 400, 600, 1000, 1500, 2000, 3000, 5000, 10000, 15000];
+
+export function selectGaugeRange({ normalPressure, maxPressure, unit = 'bar' }) {
+  if (normalPressure <= 0) throw new Error('Normal operating pressure must be greater than zero.');
+  if (maxPressure !== undefined && maxPressure < normalPressure) throw new Error('Maximum (upset) pressure cannot be less than normal operating pressure.');
+  const standardRanges = unit === 'psi' ? STANDARD_GAUGE_RANGES_PSI : STANDARD_GAUGE_RANGES_BAR;
+  // The full scale must be large enough that normal pressure sits at or
+  // below 75% of scale, AND (if given) that the upset pressure doesn't
+  // exceed the gauge's safe overrange -- 100% for an occasional excursion,
+  // no more than 75% for a SUSTAINED upset condition.
+  const minFullScaleForNormal = normalPressure / 0.75;
+  const minFullScaleForMax = maxPressure !== undefined ? maxPressure / 1.0 : 0;
+  const minFullScale = Math.max(minFullScaleForNormal, minFullScaleForMax);
+  const fullScale = standardRanges.find((r) => r >= minFullScale) ?? standardRanges[standardRanges.length - 1];
+  const normalPct = (normalPressure / fullScale) * 100;
+  const maxPct = maxPressure !== undefined ? (maxPressure / fullScale) * 100 : null;
+  const inRecommendedBand = normalPct >= 25 && normalPct <= 75;
+  let note;
+  if (fullScale < minFullScale) {
+    note = `No standard range in this list is large enough for the given pressures \u2014 the largest available range (0\u2013${fullScale} ${unit}) is shown, but confirm against the actual gauge manufacturer's range list.`;
+  } else if (normalPct < 25) {
+    note = 'Normal operating pressure reads in the lower quarter of the dial \u2014 a smaller full-scale range would give a more legible reading, but this may be unavoidable if a larger upset pressure must also be accommodated within a safe overrange.';
+  } else if (!inRecommendedBand) {
+    note = 'Normal operating pressure exceeds 75% of full scale \u2014 the Bourdon tube would be continuously flexed near its limit, shortening gauge life. Select a larger range.';
+  } else {
+    note = 'Normal operating pressure falls within the recommended 25\u201375% of full scale, per ASME B40.100.';
+  }
+  return { fullScale, unit, normalPct, maxPct, inRecommendedBand, note, standardRanges };
+}
+
+// Two-liquid interface level via a DP transmitter (e.g. an oil-water
+// interface in a separator or boot). Derived from a hydrostatic balance
+// between the LP tap (above all liquid, at the top of the vessel span)
+// and the HP tap (at the bottom): DP = SGheavy*K*H - (SGheavy-SGlight)*K*hLight,
+// where hLight is the height of the light-liquid layer sitting above the
+// interface, K = 9.80665 kPa per metre of water column (SG=1), and H is
+// the total tap-to-tap span. Assumes a dry (unpurged) leg on both sides
+// and that any vapour space pressure is common to both taps and so
+// cancels out of the differential — the same assumption a plain single-
+// liquid DP level measurement already makes.
+const KPA_PER_M_WATER = 9.80665;
+
+export function interfaceDpAtLightHeight({ sgHeavy, sgLight, spanHeight, lightHeight }) {
+  if (sgHeavy <= sgLight) throw new Error('Interface level measurement needs the heavy liquid to genuinely be denser than the light liquid.');
+  if (lightHeight < 0 || lightHeight > spanHeight) throw new Error('Light-liquid height must be between 0 and the total span height.');
+  return sgHeavy * KPA_PER_M_WATER * spanHeight - (sgHeavy - sgLight) * KPA_PER_M_WATER * lightHeight;
+}
+
+export function interfaceLightHeightFromDp({ sgHeavy, sgLight, spanHeight, dp }) {
+  if (sgHeavy <= sgLight) throw new Error('Interface level measurement needs the heavy liquid to genuinely be denser than the light liquid.');
+  return (sgHeavy * KPA_PER_M_WATER * spanHeight - dp) / ((sgHeavy - sgLight) * KPA_PER_M_WATER);
+}
+
+export function interfaceLevelCalibration({ sgHeavy, sgLight, spanHeight, measuredDp }) {
+  const dpAllHeavy = interfaceDpAtLightHeight({ sgHeavy, sgLight, spanHeight, lightHeight: 0 }); // 0% light liquid -- interface at the very top tap
+  const dpAllLight = interfaceDpAtLightHeight({ sgHeavy, sgLight, spanHeight, lightHeight: spanHeight }); // 100% light liquid -- interface at the very bottom tap
+  let measured = null;
+  if (measuredDp !== undefined) {
+    const lightHeight = interfaceLightHeightFromDp({ sgHeavy, sgLight, spanHeight, dp: measuredDp });
+    const lightPct = (lightHeight / spanHeight) * 100;
+    measured = { lightHeight, lightPct, interfaceHeightFromBottom: spanHeight - lightHeight };
+  }
+  return { dpAllHeavy, dpAllLight, spanKpa: Math.abs(dpAllHeavy - dpAllLight), measured };
+}
+
+// 4-20mA two-wire loop power budget: the supply voltage must cover the
+// transmitter's own minimum operating (compliance) voltage PLUS the
+// voltage dropped across every resistance in the series loop, evaluated
+// at 20mA -- the worst case for voltage drop, since more current means
+// more drop across a fixed resistance (Ohm's law, V=IR).
+export function loopPowerBudget({ supplyVoltage, transmitterMinVoltage, wireResistance = 0, receiverResistance = 0, barrierResistance = 0, otherResistance = 0 }) {
+  if (supplyVoltage <= 0) throw new Error('Supply voltage must be greater than zero.');
+  const maxCurrentA = 0.020; // 20 mA, the worst case for voltage drop
+  const totalResistance = wireResistance + receiverResistance + barrierResistance + otherResistance;
+  const dropAtMaxCurrent = totalResistance * maxCurrentA;
+  const requiredSupply = transmitterMinVoltage + dropAtMaxCurrent;
+  const margin = supplyVoltage - requiredSupply;
+  const maxLoopResistance = transmitterMinVoltage >= supplyVoltage ? 0 : (supplyVoltage - transmitterMinVoltage) / maxCurrentA;
+  return { totalResistance, dropAtMaxCurrent, requiredSupply, margin, ok: margin >= 0, maxLoopResistance };
+}

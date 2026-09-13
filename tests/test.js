@@ -19,6 +19,7 @@ import * as trip from '../js/calculators/tripProtection.js';
 import * as flow from '../js/calculators/flowEngine.js';
 import * as sc from '../js/calculators/shortCircuit.js';
 import * as lu from '../js/calculators/loopUncertainty.js';
+import * as fsafe from '../js/calculators/functionalSafety.js';
 import * as ed from '../js/calculators/electricalDesign.js';
 import * as steam from '../js/calculators/steamTable.js';
 import * as idmt from '../js/calculators/idmt.js';
@@ -39,6 +40,7 @@ import * as vt from '../js/calculators/vesselsTanks.js';
 import * as pt from '../js/calculators/processThermal.js';
 import * as pipe from '../js/calculators/piping.js';
 import * as rot from '../js/calculators/rotatingEquipment.js';
+import * as ppOps from '../js/calculators/powerPlantOps.js';
 import * as ctEngine from '../js/calculators/ctEngine.js';
 import * as tfProt from '../js/calculators/transformerProtection.js';
 import * as motProt from '../js/calculators/motorProtection.js';
@@ -842,6 +844,19 @@ test('autoGenerate: every protection function carries equipment-level items for 
   const r = tfProt.autoGenerate({ ratingMVA: 10, hvKV: 33, lvKV: 11, impedancePct: 8, sourceFaultMVA: 500 });
   assert.ok(r.equipmentProtection.some((x) => /Buchholz/i.test(x)));
 });
+test('autoGenerate: differential (87T) reports two independently settable stages, matching real ABB RET620 practice', () => {
+  const r = tfProt.autoGenerate({ ratingMVA: 20, hvKV: 33, lvKV: 11, impedancePct: 10, hvCtPrimary: 400, lvCtPrimary: 1200, sourceFaultMVA: 500, groundingType: 'solid' });
+  assert.ok(r.protection.diff.lowSetOperatePctIr > 0);
+  assert.ok(r.protection.diff.highSetOperatePctIr > r.protection.diff.lowSetOperatePctIr, 'expected the instantaneous high-set stage to be well above the biased low-set stage');
+  assert.equal(r.protection.diff.highSetTypicalOperateTimeMs, 25);
+});
+test('autoGenerate: AVR settings are only produced when the transformer is specified with an on-load tap changer', () => {
+  const withOltc = tfProt.autoGenerate({ ratingMVA: 20, hvKV: 33, lvKV: 11, impedancePct: 10, hasOltc: true });
+  const withoutOltc = tfProt.autoGenerate({ ratingMVA: 20, hvKV: 33, lvKV: 11, impedancePct: 10, hasOltc: false });
+  assert.ok(withOltc.protection.avr.targetPct > 0);
+  assert.equal(withoutOltc.protection.avr.targetPct, undefined);
+  assert.ok(withoutOltc.protection.avr.note);
+});
 
 console.log('\n--- motorProtection.mjs ---');
 test("autoGenerate: matches the spec's own worked example (11kV, 5MW, PF=0.88, eff=95%, 6xFLC start, 8s start, 250MVA fault)", () => {
@@ -854,7 +869,7 @@ test("autoGenerate: matches the spec's own worked example (11kV, 5MW, PF=0.88, e
   approx(r.basicParameters.faultKA, 13.12, 0.02);
   approx(r.protection.lockedRotor.tripDelayS, 8 + 3, 1e-9); // starting time + default 3s margin
   assert.equal(r.protection.thermal.status, 'RECOMMENDED');
-  assert.equal(r.protection.negSeq.ansi, '46');
+  assert.equal(r.protection.negSeq.ansi, '46M');
 });
 test('autoGenerate: rejects an impossible power factor or efficiency rather than producing nonsense current', () => {
   assert.throws(() => motProt.autoGenerate({ ratingKW: 5000, voltageKV: 11, powerFactor: 1.5, efficiencyPct: 95 }));
@@ -873,7 +888,47 @@ test('autoGenerate: without starting time, locked-rotor element reports what is 
 test('autoGenerate: negative-sequence and undercurrent pickups scale with FLC as expected', () => {
   const r = motProt.autoGenerate({ ratingKW: 5000, voltageKV: 11, powerFactor: 0.88, efficiencyPct: 95 });
   approx(r.protection.negSeq.pickupA, r.basicParameters.flc * 0.15, 1e-6);
-  approx(r.protection.underCurrent.pickupA, r.basicParameters.flc * 0.5, 1e-6);
+  approx(r.protection.underCurrent.pickupHighA, r.basicParameters.flc * 0.5, 1e-6);
+  approx(r.protection.underCurrent.pickupLowA, r.basicParameters.flc * 0.3, 1e-6);
+  assert.ok(r.protection.underCurrent.pickupLowA < r.protection.underCurrent.pickupHighA, 'expected the low floor to sit below the main undercurrent pickup');
+});
+
+console.log('\n--- motorProtection.mjs: real-ABB-aligned additions (thermal replica, jam, phase reversal, differential) ---');
+test('thermalTripTimeS: matches independently-verified reference points (150% FLC / 115% threshold / 600s tau, and 600% FLC starting-scale)', () => {
+  approx(motProt.thermalTripTimeS(1.5, 1.15, 600), 531.7, 0.5);
+  approx(motProt.thermalTripTimeS(6.0, 1.15, 600), 22.5, 0.5);
+});
+test('thermalTripTimeS: a current at or below the trip threshold never trips (Infinity)', () => {
+  assert.equal(motProt.thermalTripTimeS(1.05, 1.15, 600), Infinity);
+});
+test('thermalTripTimeS: rejects non-positive inputs', () => {
+  assert.throws(() => motProt.thermalTripTimeS(0, 1.15, 600));
+  assert.throws(() => motProt.thermalTripTimeS(1.5, 0, 600));
+  assert.throws(() => motProt.thermalTripTimeS(1.5, 1.15, 0));
+});
+test('autoGenerate: thermal replica reports a finite trip time at a real sustained overload, using the philosophy\u2019s own time constant', () => {
+  const r = motProt.autoGenerate({ ratingKW: 5000, voltageKV: 11, powerFactor: 0.88, efficiencyPct: 95 });
+  assert.ok(typeof r.protection.thermal.overloadTripTime === 'string' && r.protection.thermal.overloadTripTime.includes('s at 120% FLC'));
+  assert.equal(r.protection.thermal.ansi, '49M');
+});
+test('autoGenerate: motor load jam protection sits above full load and below the main OC pickup, per real ABB JAMPTOC practice', () => {
+  const r = motProt.autoGenerate({ ratingKW: 5000, voltageKV: 11, powerFactor: 0.88, efficiencyPct: 95 });
+  assert.ok(r.protection.jam.pickupA > r.basicParameters.flc, 'expected jam pickup above full load current');
+  assert.ok(r.protection.jam.pickupA < r.protection.oc.pickupA, 'expected jam pickup below the main OC pickup, so it trips first for a running-jam fault');
+});
+test('autoGenerate: motor differential (87M) is recommended as applicable for a large (>=1.5MW) motor and not for a small one', () => {
+  const large = motProt.autoGenerate({ ratingKW: 5000, voltageKV: 11, powerFactor: 0.88, efficiencyPct: 95 });
+  const small = motProt.autoGenerate({ ratingKW: 200, voltageKV: 6.6, powerFactor: 0.85, efficiencyPct: 93 });
+  assert.equal(large.protection.motorDiff.applicable, true);
+  assert.equal(small.protection.motorDiff.applicable, false);
+});
+test('autoGenerate: locked-rotor element includes a real restart-inhibit time (STTPMSU), not just the trip delay', () => {
+  const r = motProt.autoGenerate({ ratingKW: 5000, voltageKV: 11, powerFactor: 0.88, efficiencyPct: 95, startingTimeS: 8 });
+  assert.ok(r.protection.lockedRotor.restartInhibitTimeMin > 0);
+});
+test('autoGenerate: phase reversal protection is present and reports its ANSI/function designation', () => {
+  const r = motProt.autoGenerate({ ratingKW: 5000, voltageKV: 11, powerFactor: 0.88, efficiencyPct: 95 });
+  assert.equal(r.protection.phaseReversal.ansi, 'PREV');
 });
 
 console.log('\n--- lsigEngine.mjs ---');
@@ -2358,11 +2413,17 @@ test('AI: clamping still works correctly even if min/max were accidentally enter
 test('AI: full chain still evaluates correctly through an AO with a realistic process range', () => {
   const blocks = [
     { id: 'ai1', type: 'ai', params: { value: 537, min: 0, max: 500, paramType: 'temperature' }, inputs: [] },
-    { id: 'ao1', type: 'ao_', params: {}, inputs: [{ source: 'block', blockId: 'ai1' }] },
+    { id: 'ao1', type: 'ao_', params: { min: 0, max: 500 }, inputs: [{ source: 'block', blockId: 'ai1' }] },
   ];
   const r = sama.evaluateChain(blocks);
   assert.equal(r.get('ai1').value, 500);
   assert.equal(r.get('ao1').value, 500);
+});
+test('AO: clamps to its own configured range independently of what is wired into it, matching a real output card channel', () => {
+  const def = sama.SAMA_BLOCK_TYPES.ao_;
+  assert.equal(def.compute([150], { min: 0, max: 100 }), 100);
+  assert.equal(def.compute([-10], { min: 0, max: 100 }), 0);
+  assert.equal(def.compute([50], { min: 0, max: 100 }), 50);
 });
 
 console.log('\n--- cableGland.js: cable OD build-up and gland size selection ---');
@@ -2515,6 +2576,349 @@ test('evaluateStatusWithDelay: matches the plain evaluateStatus() result wheneve
   for (const [val, alarm, tripSp, dir] of cases) {
     assert.equal(trip.evaluateStatusWithDelay(val, alarm, tripSp, dir, 2, 999), trip.evaluateStatus(val, alarm, tripSp, dir));
   }
+});
+
+console.log('\n--- samaLogic.js: new dynamic blocks (toggle, counter, peakHold) ---');
+test('toggle: alternates output on each independent rising edge, matching duty/standby alternation logic', () => {
+  const def = sama.SAMA_BLOCK_TYPES.toggle;
+  const state = def.createState();
+  const seq = [1, 0, 1, 0, 1];
+  const outs = seq.map((v) => def.stepCompute(state, [v]));
+  assert.deepEqual(outs, [1, 1, 0, 0, 1]);
+});
+test('toggle: holding the input high does not re-toggle -- needs a fresh rising edge', () => {
+  const def = sama.SAMA_BLOCK_TYPES.toggle;
+  const state = def.createState();
+  def.stepCompute(state, [1]);
+  const held = def.stepCompute(state, [1]);
+  assert.equal(held, 1);
+});
+test('counter: counts rising edges on Count and ignores level (no double-count while held high)', () => {
+  const def = sama.SAMA_BLOCK_TYPES.counter;
+  const state = def.createState();
+  const seq = [[1,0],[1,0],[0,0],[1,0],[0,0]];
+  const outs = seq.map(([c,r]) => def.stepCompute(state, [c, r]));
+  assert.deepEqual(outs, [1, 1, 1, 2, 2]);
+});
+test('counter: Reset zeroes the count and is reset-dominant (both true at once clears)', () => {
+  const def = sama.SAMA_BLOCK_TYPES.counter;
+  const state = def.createState();
+  def.stepCompute(state, [1, 0]);
+  def.stepCompute(state, [0, 0]);
+  def.stepCompute(state, [1, 0]);
+  const beforeReset = def.stepCompute(state, [0, 0]);
+  const afterReset = def.stepCompute(state, [1, 1]);
+  assert.equal(beforeReset, 2);
+  assert.equal(afterReset, 0);
+});
+test('peakHold: holds the maximum value seen and ignores a lower subsequent value', () => {
+  const def = sama.SAMA_BLOCK_TYPES.peakHold;
+  const state = def.createState();
+  def.stepCompute(state, [5, 0]);
+  def.stepCompute(state, [3, 0]);
+  const out = def.stepCompute(state, [8, 0]);
+  const afterLower = def.stepCompute(state, [2, 0]);
+  assert.equal(out, 8);
+  assert.equal(afterLower, 8);
+});
+test('peakHold: Reset restarts tracking from the current value, not a placeholder like zero', () => {
+  const def = sama.SAMA_BLOCK_TYPES.peakHold;
+  const state = def.createState();
+  def.stepCompute(state, [8, 0]);
+  const out = def.stepCompute(state, [6, 1]);
+  assert.equal(out, 6);
+});
+
+console.log('\n--- samaLogic.js: pulseGenerator (free-running repeating pulse train) ---');
+test('pulseGenerator: produces a repeating ON/OFF pattern matching the configured on/off times', () => {
+  const def = sama.SAMA_BLOCK_TYPES.pulseGenerator;
+  const state = def.createState();
+  const params = { onTimeSec: 0.5, offTimeSec: 0.3 };
+  let trace = '';
+  for (let i = 0; i < 16; i++) trace += def.stepCompute(state, [1], params, 0.1);
+  assert.equal(trace, '1111100011111000');
+});
+test('pulseGenerator: Enable FALSE holds output at 0 and resets so re-enabling starts a fresh ON phase', () => {
+  const def = sama.SAMA_BLOCK_TYPES.pulseGenerator;
+  const state = def.createState();
+  const params = { onTimeSec: 0.3, offTimeSec: 0.3 };
+  let trace = '';
+  for (let i = 0; i < 4; i++) trace += def.stepCompute(state, [1], params, 0.1);
+  for (let i = 0; i < 3; i++) trace += def.stepCompute(state, [0], params, 0.1);
+  for (let i = 0; i < 4; i++) trace += def.stepCompute(state, [1], params, 0.1);
+  assert.equal(trace, '11100001110');
+});
+test('pulseGenerator: distinct from pulseTimer -- it keeps cycling on its own rather than firing once per edge', () => {
+  const def = sama.SAMA_BLOCK_TYPES.pulseGenerator;
+  const state = def.createState();
+  const params = { onTimeSec: 0.2, offTimeSec: 0.2 };
+  let ones = 0;
+  for (let i = 0; i < 40; i++) ones += def.stepCompute(state, [1], params, 0.1);
+  assert.ok(ones > 5, `expected multiple ON pulses over a sustained Enable, got only ${ones} ON steps`);
+});
+
+console.log('\n--- samaLogic.js: MCAA/SAMA standard functions added from Functional Diagramming spec ---');
+test('average: divides the sum by the input count, distinct from Summer', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.average.compute([2, 4, 6]), 4);
+});
+test('power: raises the input to the configured exponent, n=0.5 matches sqrt', () => {
+  const def = sama.SAMA_BLOCK_TYPES.power;
+  assert.equal(def.compute([2], { n: 3 }), 8);
+  approx(def.compute([9], { n: 0.5 }), 3, 1e-9);
+});
+test('power: rejects a negative input with a fractional exponent', () => {
+  assert.throws(() => sama.SAMA_BLOCK_TYPES.power.compute([-4], { n: 0.5 }));
+});
+
+console.log('\n--- samaLogic.js: functionBlock (5-point piecewise-linear characterizer) ---');
+test('functionBlock: default points describe a straight y=x line, passing input through unchanged', () => {
+  const def = sama.SAMA_BLOCK_TYPES.functionBlock;
+  approx(def.compute([37.5], {}), 37.5, 1e-9);
+  assert.equal(def.compute([0], {}), 0);
+  assert.equal(def.compute([100], {}), 100);
+});
+test('functionBlock: holds flat at the first/last point outside the defined range, rather than extrapolating', () => {
+  const def = sama.SAMA_BLOCK_TYPES.functionBlock;
+  assert.equal(def.compute([-10], {}), 0);
+  assert.equal(def.compute([150], {}), 100);
+});
+test('functionBlock: interpolates linearly between two custom points on a genuinely nonlinear curve', () => {
+  const def = sama.SAMA_BLOCK_TYPES.functionBlock;
+  const eqPercent = { x1: 0, y1: 0, x2: 25, y2: 5, x3: 50, y3: 15, x4: 75, y4: 40, x5: 100, y5: 100 };
+  assert.equal(def.compute([60], eqPercent), 25); // halfway between (50,15) and (75,40) on x -> halfway between 15 and 40 on y
+  assert.equal(def.compute([50], eqPercent), 15); // exactly on a defined point
+});
+test('functionBlock: correctly handles points supplied out of x order', () => {
+  const def = sama.SAMA_BLOCK_TYPES.functionBlock;
+  const scrambled = { x1: 100, y1: 100, x2: 0, y2: 0, x3: 50, y3: 50, x4: 25, y4: 25, x5: 75, y5: 75 };
+  approx(def.compute([37.5], scrambled), 37.5, 1e-9);
+});
+test('transfer: outputs Auto when Select is FALSE and Manual when Select is TRUE', () => {
+  const def = sama.SAMA_BLOCK_TYPES.transfer;
+  assert.equal(def.compute([5, 8, 0]), 5);
+  assert.equal(def.compute([5, 8, 1]), 8);
+});
+test('derivative: reports zero on the first step (no prior sample) and the correct rate afterward', () => {
+  const def = sama.SAMA_BLOCK_TYPES.derivative;
+  const state = def.createState();
+  const first = def.stepCompute(state, [5], { td: 1 }, 0.1);
+  const second = def.stepCompute(state, [6], { td: 1 }, 0.1);
+  assert.equal(first, 0);
+  approx(second, 10, 1e-9);
+});
+test('ramp: climbs toward Target at the configured rate and holds once it arrives, without overshoot', () => {
+  const def = sama.SAMA_BLOCK_TYPES.ramp;
+  const state = def.createState();
+  let trace = [];
+  for (let i = 0; i < 12; i++) trace.push(def.stepCompute(state, [1, 10], { rate: 2 }, 0.5));
+  assert.equal(trace[trace.length - 1], 10);
+  assert.ok(trace.every((v) => v <= 10), 'expected no overshoot past the target');
+});
+test('ramp: Enable FALSE freezes the current value rather than resetting to zero', () => {
+  const def = sama.SAMA_BLOCK_TYPES.ramp;
+  const state = def.createState();
+  def.stepCompute(state, [1, 10], { rate: 2 }, 0.5);
+  def.stepCompute(state, [1, 10], { rate: 2 }, 0.5);
+  const frozen = def.stepCompute(state, [0, 10], { rate: 2 }, 0.5);
+  assert.equal(frozen, state.value);
+  assert.ok(frozen > 0, 'expected the frozen value to be the progress made so far, not zero');
+});
+test('srLatchSetDominant: Set wins when both Set and Reset are TRUE at once (opposite of the Reset-dominant latch)', () => {
+  const def = sama.SAMA_BLOCK_TYPES.srLatchSetDominant;
+  const state = def.createState();
+  assert.equal(def.stepCompute(state, [1, 1]), 1);
+});
+test('srLatchSetDominant: still behaves like a normal latch outside the simultaneous case', () => {
+  const def = sama.SAMA_BLOCK_TYPES.srLatchSetDominant;
+  const state = def.createState();
+  def.stepCompute(state, [1, 0]);
+  const held = def.stepCompute(state, [0, 0]);
+  const reset = def.stepCompute(state, [0, 1]);
+  assert.equal(held, 1);
+  assert.equal(reset, 0);
+});
+
+console.log('\n--- samaLogic.js: manualValue (Variable Signal Generator, accepts any +/- number) ---');
+test('manualValue: passes a positive value straight through', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.manualValue.compute([], { value: 42 }), 42);
+});
+test('manualValue: passes a negative value straight through, unlike AI which is clamped to a calibrated range', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.manualValue.compute([], { value: -17.5 }), -17.5);
+});
+test('manualValue: defaults to 0 with no params supplied', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.manualValue.compute([], {}), 0);
+});
+
+console.log('\n--- samaLogic.js: real final control elements (Motor, Control Valve, SOV, Indicator Lamp) ---');
+test('motor: rounds a run command to a clean digital RUNNING/STOPPED state and passes it through', () => {
+  const def = sama.SAMA_BLOCK_TYPES.motor;
+  assert.equal(def.compute([1]), 1);
+  assert.equal(def.compute([0]), 0);
+  assert.equal(def.compute([0.7]), 1);
+});
+test('controlValve: passes a continuous 0-100 position through unchanged, unlike the discrete final elements', () => {
+  const def = sama.SAMA_BLOCK_TYPES.controlValve;
+  assert.equal(def.compute([37.5]), 37.5);
+  assert.equal(def.compute([0]), 0);
+  assert.equal(def.compute([100]), 100);
+});
+test('sov: genuinely discrete -- rounds to fully open or fully closed, no partial position', () => {
+  const def = sama.SAMA_BLOCK_TYPES.sov;
+  assert.equal(def.compute([1]), 1);
+  assert.equal(def.compute([0]), 0);
+  assert.equal(def.compute([0.6]), 1);
+});
+test('bulb: lit/dark state matches a digital TRUE/FALSE input', () => {
+  const def = sama.SAMA_BLOCK_TYPES.bulb;
+  assert.equal(def.compute([1]), 1);
+  assert.equal(def.compute([0]), 0);
+});
+test('motor, sov, and bulb are all tagged digital signalType; controlValve is analog (no tag)', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.motor.signalType, 'digital');
+  assert.equal(sama.SAMA_BLOCK_TYPES.sov.signalType, 'digital');
+  assert.equal(sama.SAMA_BLOCK_TYPES.bulb.signalType, 'digital');
+  assert.equal(sama.SAMA_BLOCK_TYPES.controlValve.signalType, undefined);
+});
+
+console.log('\n--- functionalSafety.js: SIL/PFDavg verification per IEC 61508-6 Annex B ---');
+test('pfd1oo2: matches a documented worked example exactly (independent + common-cause terms)', () => {
+  const r = fsafe.pfd1oo2({ lambdaDU: 2e-6, ti: 8760, beta: 0.15 });
+  approx(r, 7.4e-5 + 1.31e-3, 5e-6);
+});
+test('pfd1oo1: simple linear relationship, doubling TI doubles PFDavg', () => {
+  const a = fsafe.pfd1oo1({ lambdaDU: 2e-6, ti: 8760 });
+  const b = fsafe.pfd1oo1({ lambdaDU: 2e-6, ti: 17520 });
+  approx(b, a * 2, 1e-12);
+});
+test('pfd1oo2 with beta=0 reduces to the pure independent-failure term (no common-cause contribution)', () => {
+  const r = fsafe.pfd1oo2({ lambdaDU: 2e-6, ti: 8760, beta: 0 });
+  approx(r, Math.pow(2e-6 * 8760, 2) / 3, 1e-15);
+});
+test('silForPfd: correctly places a PFDavg value into its IEC 61508 low-demand SIL band', () => {
+  assert.equal(fsafe.silForPfd(0.05), 1);
+  assert.equal(fsafe.silForPfd(0.00876), 2); // falls in [1e-3, 1e-2), not SIL 1 -- a common off-by-one mistake to check for
+  assert.equal(fsafe.silForPfd(5e-4), 3);
+  assert.equal(fsafe.silForPfd(0.5), 0); // worse than SIL 1's upper bound: does not meet SIL 1 at all
+});
+test('evaluateSubsystem: rejects a non-positive proof-test interval and an out-of-range beta', () => {
+  assert.throws(() => fsafe.evaluateSubsystem({ architecture: '1oo1', lambdaDU: 1e-6, tiHours: 0 }));
+  assert.throws(() => fsafe.evaluateSubsystem({ architecture: '1oo2', lambdaDU: 1e-6, tiHours: 8760, beta: 1.5 }));
+});
+test('evaluateSIF: sums subsystem PFDavgs in series and reports the weaker overall SIL', () => {
+  const sensor = fsafe.evaluateSubsystem({ architecture: '1oo1', lambdaDU: 1e-6, tiHours: 8760 });
+  const logic = fsafe.evaluateSubsystem({ architecture: '1oo1', lambdaDU: 5e-7, tiHours: 8760 });
+  const finalElement = fsafe.evaluateSubsystem({ architecture: '1oo1', lambdaDU: 2e-6, tiHours: 8760 });
+  const sif = fsafe.evaluateSIF([sensor, logic, finalElement]);
+  approx(sif.totalPfd, sensor.pfdAvg + logic.pfdAvg + finalElement.pfdAvg, 1e-15);
+  assert.equal(sif.sil, fsafe.silForPfd(sif.totalPfd));
+});
+
+console.log('\n--- loopUncertainty.js: selectGaugeRange (ASME B40.100) ---');
+test('selectGaugeRange: picks a standard range that puts normal pressure at or below 75% of scale', () => {
+  const r = lu.selectGaugeRange({ normalPressure: 6, unit: 'bar' });
+  assert.equal(r.fullScale, 10);
+  approx(r.normalPct, 60, 1e-9);
+  assert.equal(r.inRecommendedBand, true);
+});
+test('selectGaugeRange: an upset (max) pressure constrains the range even when normal pressure alone would need less', () => {
+  const r = lu.selectGaugeRange({ normalPressure: 6, maxPressure: 12, unit: 'bar' });
+  assert.equal(r.fullScale, 16); // 12 bar max needs a range >= 12; 16 is the next standard step up
+  approx(r.maxPct, 75, 1e-9);
+});
+test('selectGaugeRange: works with the US psi standard range list too', () => {
+  const r = lu.selectGaugeRange({ normalPressure: 150, unit: 'psi' });
+  assert.equal(r.fullScale, 200);
+});
+test('selectGaugeRange: rejects a non-positive normal pressure and a max below normal', () => {
+  assert.throws(() => lu.selectGaugeRange({ normalPressure: 0, unit: 'bar' }));
+  assert.throws(() => lu.selectGaugeRange({ normalPressure: 10, maxPressure: 5, unit: 'bar' }));
+});
+
+console.log('\n--- loopUncertainty.js: interfaceLevelCalibration (two-liquid DP interface level) ---');
+test('interfaceLevelCalibration: DP at 0% (all heavy liquid) and 100% (all light liquid) match the hydrostatic derivation', () => {
+  const r = lu.interfaceLevelCalibration({ sgHeavy: 1.0, sgLight: 0.8, spanHeight: 2 });
+  approx(r.dpAllHeavy, 1.0 * 9.80665 * 2, 1e-9);
+  approx(r.dpAllLight, 0.8 * 9.80665 * 2, 1e-9);
+});
+test('interfaceLevelCalibration: round-trips a measured DP back to the same light-liquid height it was generated from', () => {
+  const dp = lu.interfaceDpAtLightHeight({ sgHeavy: 1.0, sgLight: 0.8, spanHeight: 2, lightHeight: 1.2 });
+  const r = lu.interfaceLevelCalibration({ sgHeavy: 1.0, sgLight: 0.8, spanHeight: 2, measuredDp: dp });
+  approx(r.measured.lightHeight, 1.2, 1e-9);
+});
+test('interfaceLevelCalibration: rejects a heavy liquid that is not actually denser than the light liquid', () => {
+  assert.throws(() => lu.interfaceLevelCalibration({ sgHeavy: 0.8, sgLight: 1.0, spanHeight: 2 }));
+});
+
+console.log('\n--- loopUncertainty.js: loopPowerBudget (4-20mA loop supply voltage check) ---');
+test('loopPowerBudget: matches a manual Ohm\'s law calculation for a typical loop', () => {
+  const r = lu.loopPowerBudget({ supplyVoltage: 24, transmitterMinVoltage: 12, wireResistance: 100, receiverResistance: 250 });
+  assert.equal(r.totalResistance, 350);
+  assert.equal(r.dropAtMaxCurrent, 7);
+  assert.equal(r.requiredSupply, 19);
+  assert.equal(r.margin, 5);
+  assert.equal(r.ok, true);
+});
+test('loopPowerBudget: correctly flags an insufficient supply as not ok, with a negative margin', () => {
+  const r = lu.loopPowerBudget({ supplyVoltage: 15, transmitterMinVoltage: 12, wireResistance: 100, receiverResistance: 250 });
+  assert.equal(r.ok, false);
+  approx(r.margin, 15 - 19, 1e-9);
+});
+test('loopPowerBudget: maxLoopResistance matches the available headroom divided by 20mA', () => {
+  const r = lu.loopPowerBudget({ supplyVoltage: 24, transmitterMinVoltage: 12, wireResistance: 0, receiverResistance: 0 });
+  approx(r.maxLoopResistance, (24 - 12) / 0.020, 1e-9);
+});
+
+console.log('\n--- rotatingEquipment.js: adiabaticCompressorPower ---');
+test('adiabaticCompressorPower: matches a first-principles adiabatic compression worked example (air, 1->5 bar)', () => {
+  const r = rot.adiabaticCompressorPower({ p1Pa: 100000, p2Pa: 500000, t1K: 293.15, k: 1.4, molarMassKgPerKmol: 28.97, massFlowKgS: 1 });
+  approx(r.wIsentropicJKg / 1000, 171.9, 0.5);
+  approx(r.R, 287, 0.5);
+  approx(r.t2IsentropicK - 273.15, 191.1, 0.5);
+});
+test('adiabaticCompressorPower: an efficiency below 100% increases actual work and discharge temperature above the isentropic ideal', () => {
+  const ideal = rot.adiabaticCompressorPower({ p1Pa: 100000, p2Pa: 500000, t1K: 293.15, k: 1.4, molarMassKgPerKmol: 28.97, massFlowKgS: 1, efficiency: 1 });
+  const real = rot.adiabaticCompressorPower({ p1Pa: 100000, p2Pa: 500000, t1K: 293.15, k: 1.4, molarMassKgPerKmol: 28.97, massFlowKgS: 1, efficiency: 0.75 });
+  assert.ok(real.wActualJKg > ideal.wIsentropicJKg);
+  assert.ok(real.t2ActualK > real.t2IsentropicK);
+});
+test('adiabaticCompressorPower: rejects a discharge pressure not exceeding suction pressure', () => {
+  assert.throws(() => rot.adiabaticCompressorPower({ p1Pa: 500000, p2Pa: 100000, t1K: 293.15, k: 1.4, molarMassKgPerKmol: 28.97, massFlowKgS: 1 }));
+});
+
+console.log('\n--- powerPlantOps.js: boilerBlowdownRate ---');
+test('boilerBlowdownRate: matches a documented worked example exactly (5000 kg/h steam, 100/3000 ppm TDS)', () => {
+  const r = ppOps.boilerBlowdownRate({ steamRateKgH: 5000, feedwaterTdsPpm: 100, maxBoilerTdsPpm: 3000 });
+  approx(r.blowdownKgH, 172.41, 0.01);
+});
+test('boilerBlowdownRate: rejects a maximum boiler TDS that is not actually above the feedwater TDS', () => {
+  assert.throws(() => ppOps.boilerBlowdownRate({ steamRateKgH: 5000, feedwaterTdsPpm: 100, maxBoilerTdsPpm: 100 }));
+});
+test('boilerBlowdownRate: cycles of concentration is the simple ratio of the two TDS limits', () => {
+  const r = ppOps.boilerBlowdownRate({ steamRateKgH: 5000, feedwaterTdsPpm: 100, maxBoilerTdsPpm: 3000 });
+  approx(r.cyclesOfConcentration, 30, 1e-9);
+});
+
+console.log('\n--- powerPlantOps.js: coolingTowerPerformance ---');
+test('coolingTowerPerformance: matches a documented worked example exactly (40/32/25 C)', () => {
+  const r = ppOps.coolingTowerPerformance({ hotWaterInC: 40, coldWaterOutC: 32, wetBulbC: 25 });
+  assert.equal(r.range, 8);
+  assert.equal(r.approach, 7);
+  approx(r.effectivenessPct, 53.333, 0.01);
+});
+test('coolingTowerPerformance: rejects a leaving water temperature below the thermodynamically-impossible wet-bulb limit', () => {
+  assert.throws(() => ppOps.coolingTowerPerformance({ hotWaterInC: 40, coldWaterOutC: 20, wetBulbC: 25 }));
+});
+
+console.log('\n--- samaLogic.js: tagRef (DCS-style cross-page tag reference) ---');
+test('tagRef: passes through whatever value is synced into its params.value, mirroring the global tag store', () => {
+  const def = sama.SAMA_BLOCK_TYPES.tagRef;
+  assert.equal(def.compute([], { value: 55 }), 55);
+  assert.equal(def.compute([], { value: 0 }), 0);
+});
+test('tagRef: has no inputs, matching a real DCS tag reference which is a read-only mirror, not a computed value', () => {
+  const def = sama.SAMA_BLOCK_TYPES.tagRef;
+  assert.equal(def.inputs.min, 0);
+  assert.equal(def.inputs.max, 0);
 });
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
