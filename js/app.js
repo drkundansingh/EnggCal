@@ -98,11 +98,15 @@ function toast(msg) {
 const NAV = [
   { group: 'Overview', items: [{ id: '', label: 'Dashboard', icon: '▣' }] },
   {
+    group: 'Logic Simulator', items: [
+      { id: 'sama-logic', label: 'Simulator', icon: '⌗' },
+    ]
+  },
+  {
     group: 'Power Plant', items: [
       { id: 'thermal-plant', label: 'Thermal Plant Estimator', icon: '⚡' },
       { id: 'protection', label: 'Turbine & Boiler Protection', icon: '🛡' },
       { id: 'control-loops', label: 'Control Loops', icon: '↻' },
-      { id: 'sama-logic', label: 'SAMA Logic Simulator', icon: '⌗' },
       { id: 'boiler-blowdown', label: 'Boiler Blowdown Rate', icon: '≣' },
       { id: 'cooling-tower', label: 'Cooling Tower Performance', icon: '❄' },
     ]
@@ -6255,7 +6259,7 @@ function pageSamaLogic() {
   const DYNAMIC_COLOR = '#a78bfa';
   const CONNECT_OK_COLOR = '#4ade80'; // distinct "connected" green -- separate from the wire's own cyan, so a successful/live connection reads clearly at a glance
   app.appendChild(h(`<div class="page-head" style="margin-bottom:12px;padding-bottom:12px;">
-    <div class="eyebrow">Power Plant</div><h1>SAMA Logic Diagram Simulator</h1>
+    <div class="eyebrow">Logic Simulator</div><h1>SAMA Logic Diagram Simulator</h1>
     <p class="lead">Click <b>+ Blocks</b>, drag a block onto the canvas, then drag from a block's output dot to another block's input dot to wire it up. Add any dynamic block (lag, integrator, PID...) and Simulate runs it live over time; a purely static diagram computes instantly.</p></div>`));
 
   // ---- State. Every block now carries its own x,y directly (this is a
@@ -10309,7 +10313,7 @@ if (adminLoginLink) {
 // build -- the version.json update-check mechanism depends on that file
 // being stamped correctly -- only the visible "build XXXXXXXX" text in
 // the footer has been removed, since it was just clutter for a visitor.)
-const APP_BUILD = '20260913170837';
+const APP_BUILD = '20260913174206';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('causeTag')) {
