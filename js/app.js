@@ -1369,6 +1369,23 @@ function renderConfidenceTier(route) {
   head.appendChild(badge);
 }
 
+let adSenseScriptLoaded = false;
+/** Injects the AdSense loader script into <head> exactly once, on first
+ * genuine need (the first time applySeo() reaches a non-noindex page) --
+ * never as static markup in index.html. Keeping the script itself out of
+ * the raw HTML means a crawler that only reads the initial page source,
+ * or that doesn't wait for this app's JavaScript to finish rendering,
+ * never sees an ad-serving script paired with an empty #content -- see
+ * the longer note in index.html's <head> for the full reasoning. */
+function ensureAdSenseScriptLoaded() {
+  if (adSenseScriptLoaded) return;
+  adSenseScriptLoaded = true;
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509';
+  script.crossOrigin = 'anonymous';
+  document.head.appendChild(script);
+}
 function applySeo(route) {
   const meta = SEO_META[route] || SEO_META[''];
   const fullTitle = route === '' ? meta.title : `${meta.title} | ${SITE_NAME}`;
@@ -1386,10 +1403,32 @@ function applySeo(route) {
   // already marked noindex (admin login, calculation history) are
   // exactly those thin/utility screens, so the same flag that already
   // tells search engines "don't index this" also tells the ad unit
-  // "don't show here", rather than showing the identical global ad
-  // block on every route regardless of what's actually on the page.
+  // "don't show here". Because render() always calls applySeo() AFTER
+  // the current page's real content has already been built into the
+  // DOM (see render()), and the ad <ins> itself is only ever created
+  // right here -- never as static markup -- an ad can never exist in
+  // this app's DOM before the content it sits alongside does.
   const adUnit = document.getElementById('mainAdUnit');
-  if (adUnit) adUnit.style.display = meta.noindex ? 'none' : '';
+  if (adUnit) {
+    if (meta.noindex) {
+      adUnit.style.display = 'none';
+      adUnit.innerHTML = ''; // never let a stale ad linger in the DOM on a thin/utility page either
+    } else {
+      adUnit.style.display = '';
+      if (!adUnit.querySelector('.adsbygoogle')) {
+        ensureAdSenseScriptLoaded();
+        const ins = document.createElement('ins');
+        ins.className = 'adsbygoogle';
+        ins.style.display = 'block';
+        ins.setAttribute('data-ad-client', 'ca-pub-6794299102016509');
+        ins.setAttribute('data-ad-slot', '2008953298');
+        ins.setAttribute('data-ad-format', 'auto');
+        ins.setAttribute('data-full-width-responsive', 'true');
+        adUnit.appendChild(ins);
+        try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* adsbygoogle.js hasn't finished loading yet -- safe to ignore, it fills the ins tag once it does */ }
+      }
+    }
+  }
   setMeta('link[rel="canonical"]', 'href', url);
   setMeta('meta[property="og:title"]', 'content', fullTitle);
   setMeta('meta[property="og:description"]', 'content', meta.description);
@@ -11508,7 +11547,7 @@ if (adminLoginLink) {
 // build -- the version.json update-check mechanism depends on that file
 // being stamped correctly -- only the visible "build XXXXXXXX" text in
 // the footer has been removed, since it was just clutter for a visitor.)
-const APP_BUILD = '20260919182814';
+const APP_BUILD = '20260919191009';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('causeTag')) {

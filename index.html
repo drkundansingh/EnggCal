@@ -14,12 +14,21 @@
 
 <!-- ============================================================
      Google AdSense
-     Replace BOTH placeholders below with your real values from your
-     AdSense account before this goes live — see the notes at the end
-     of this changeset for exactly where and how.
+     The adsbygoogle.js loader script and the actual <ins> ad unit are
+     intentionally NOT placed here as static markup. This app renders
+     its content client-side into #content (see js/app.js), so a
+     script tag and ad container sitting here in the raw HTML would
+     exist in the DOM before any real page content does -- exactly the
+     "ads on screens without publisher content" pattern AdSense's own
+     policy explicitly prohibits, and exactly what a crawler that
+     doesn't fully wait for this app's JavaScript to render would see.
+     Both are instead injected by applySeo() in js/app.js, which only
+     ever runs AFTER the current page's real content has already been
+     rendered into the DOM -- so the ad can never appear without the
+     content it is meant to sit alongside. See applySeo() and
+     ensureAdSenseScriptLoaded() there for the actual injection logic.
      ca-pub-6794299102016509  ->  your AdSense publisher/client ID
      ============================================================ -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
 
 <title>Engineering Calculator Hub — Power Plant & Electrical Tools</title>
 <meta name="description" content="Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers — real formulas, verified against standards, no signup required.">
@@ -84,7 +93,29 @@
         <span class="pill free">FREE PLAN</span>
       </div>
     </div>
-    <main class="content" id="content"></main>
+    <main class="content" id="content">
+      <!-- ==========================================================
+           Static fallback content -- NOT decorative, NOT a loading
+           spinner. This app renders everything else client-side (see
+           render() in js/app.js, which clears and rebuilds this
+           element on load and on every navigation), so without this,
+           a crawler that doesn't execute JavaScript, or that gives up
+           before this app's script has finished loading and running,
+           would see a genuinely empty page here. The text below is
+           accurate and matches what a JS-enabled visitor sees on the
+           dashboard a moment later (see pageDashboard() in js/app.js)
+           -- this is a real description of the site, not a distinct
+           version served only to crawlers, so there is no cloaking
+           concern: the same content, just rendered once here as plain
+           HTML and then replaced by the identical live app.
+           ========================================================== -->
+      <div class="page-head">
+        <div class="eyebrow">Engineering Calculator Hub</div>
+        <h1>Plant, instrumentation &amp; process calculations — in one place</h1>
+        <p class="lead">Modular calculators built on transparent, unit-consistent engineering equations. Every estimate shows its formula and assumptions — nothing is a hardcoded lookup.</p>
+      </div>
+      <p style="color:var(--text-dim);line-height:1.7;max-width:70ch;margin-top:14px;">Engineering Calculator Hub is a free collection of calculators for power plant, instrumentation, electrical, civil, and mechanical engineering work — thermal plant estimation, turbine and boiler protection trip parameters, control loop simulation, 4–20&nbsp;mA and DP-to-flow conversions, RTD and thermocouple tables, PID tuning, short-circuit and relay coordination studies, motor and transformer protection settings, SIL/PFDavg verification, HVAC load estimation, and a full SAMA logic diagram simulator with genuine time-stepped dynamic blocks, alarm management, and a real Auto/Manual PID faceplate. Every calculator states how it was verified — against a published standard, a standard method with its scope noted, or as an order-of-magnitude estimation tool — rather than presenting every result with the same unearned confidence.</p>
+    </main>
     <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="?page=about" style="color:inherit;text-decoration:underline;">About</a> · <a href="?page=privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a></footer>
 
     <!-- ============================================================
@@ -106,27 +137,19 @@
 
     <!-- ============================================================
          Google AdSense — responsive display ad unit.
-         Placed here deliberately: this sits OUTSIDE #content, the
-         element the app's router clears/rebuilds on every page
-         navigation (see js/app.js, `const app = document.getElementById
-         ('content')`), so the ad persists correctly across navigation
-         instead of being wiped out, and it sits below the calculator
-         itself rather than inside or above it.
-         Replace BOTH placeholders below with your real values from
-         your AdSense account — see the notes at the end of this
-         changeset for exactly where and how.
-         data-ad-client: ca-pub-6794299102016509 (same as the <head> script)
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
          data-ad-slot:   2008953298 (your ad unit's slot ID)
          ============================================================ -->
-    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;">
-      <ins class="adsbygoogle"
-           style="display:block"
-           data-ad-client="ca-pub-6794299102016509"
-           data-ad-slot="2008953298"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
-      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-    </div>
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
 
     <!-- Moved out of position:fixed (was overlapping diagram content in
          the Control Loops simulator whenever a node happened to render in
