@@ -1451,6 +1451,53 @@ test('relaySettings: matches hand calculation for a realistic 11kV feeder', () =
   approx(r.stage3.pickupA, 6000 * 1.20, 1e-9);
   assert.equal(r.warnings.length, 0);
 });
+test('relaySettings: earth fault (I0>) on a solidly grounded feeder is far more sensitive than the phase I> stage, matching real practice', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    groundingType: 'solid', efPickupPctOfFlc: 20,
+  });
+  assert.equal(r.earthFault.applicable, true);
+  approx(r.earthFault.stage1.pickupA, 320 * 0.20, 1e-9);
+  assert.ok(r.earthFault.stage1.pickupA < r.stage1.pickupA, 'earth fault pickup must be far more sensitive than the phase pickup');
+  assert.ok(r.earthFault.stage1.operatingTimeS > 0, 'a solidly grounded system should see a real line-to-ground fault current and compute a real operating time');
+});
+test('relaySettings: earth fault on a resistance-grounded system correctly uses the NGR let-through current, not the full three-phase fault level', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    groundingType: 'resistance', ngrLetThroughA: 400,
+  });
+  assert.equal(r.earthFault.applicable, true);
+  approx(r.earthFault.lgFaultCurrentA, 400, 1e-9, 'resistance-grounded LG fault current must be bounded by the NGR, not the 6000 A three-phase level');
+});
+test('relaySettings: earth fault is correctly marked not applicable for an ungrounded system, with a clear explanatory note rather than a bogus pickup', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    groundingType: 'ungrounded',
+  });
+  assert.equal(r.earthFault.applicable, false);
+  assert.ok(r.earthFault.note.toLowerCase().includes('ungrounded'));
+  assert.equal(r.earthFault.stage1, undefined);
+});
+test('relaySettings: resistance-grounded system without a supplied NGR let-through current is correctly reported as unable to calculate, not silently defaulted', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+    groundingType: 'resistance',
+  });
+  assert.equal(r.earthFault.applicable, false);
+  assert.ok(r.earthFault.note.toLowerCase().includes('ngr'));
+});
+test('relaySettings: grounding type defaults to solid when not specified, so earth fault is still computed for a plain call', () => {
+  const r = rs.relaySettings({
+    ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
+    fullLoadCurrentA: 320, maxThroughFaultA: 1200, maxFaultCurrentA: 6000,
+  });
+  assert.equal(r.earthFault.applicable, true);
+  assert.equal(r.earthFault.groundingType, 'solid');
+});
 test('relaySettings: stage ordering makes sense (I> < I>> < I>>>)', () => {
   const r = rs.relaySettings({
     ctPrimaryA: 400, ctSecondaryA: 1, relayInA: 1,
@@ -2127,6 +2174,178 @@ test('AND/OR/NOT: correct boolean truth tables treating >=0.5 as TRUE', () => {
   assert.equal(sama.SAMA_BLOCK_TYPES.not.compute([1]), 0);
   assert.equal(sama.SAMA_BLOCK_TYPES.not.compute([0]), 1);
 });
+test('XOR: TRUE for exactly-one-of-two (the common case) and follows odd-parity for more inputs', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.xor.compute([1, 0]), 1);
+  assert.equal(sama.SAMA_BLOCK_TYPES.xor.compute([0, 1]), 1);
+  assert.equal(sama.SAMA_BLOCK_TYPES.xor.compute([1, 1]), 0, 'both TRUE must NOT be XOR-true');
+  assert.equal(sama.SAMA_BLOCK_TYPES.xor.compute([0, 0]), 0);
+  assert.equal(sama.SAMA_BLOCK_TYPES.xor.compute([1, 1, 1]), 1, 'odd count (3 TRUE) is XOR-true');
+  assert.equal(sama.SAMA_BLOCK_TYPES.xor.compute([1, 1, 0]), 0, 'even count (2 TRUE) is XOR-false');
+});
+test('NAND/NOR: exact logical inverses of AND/OR across the full truth table', () => {
+  for (const combo of [[0, 0], [0, 1], [1, 0], [1, 1]]) {
+    assert.equal(sama.SAMA_BLOCK_TYPES.nand.compute(combo), sama.SAMA_BLOCK_TYPES.and.compute(combo) ? 0 : 1);
+    assert.equal(sama.SAMA_BLOCK_TYPES.nor.compute(combo), sama.SAMA_BLOCK_TYPES.or.compute(combo) ? 0 : 1);
+  }
+});
+test('M-out-of-N Voter: 1oo2 matches OR, 2oo2 matches AND, and 2oo3 correctly tolerates any single disagreeing input', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([1, 0], { votesNeeded: 1 }), 1, '1oo2 with one TRUE');
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([0, 0], { votesNeeded: 1 }), 0, '1oo2 with none TRUE');
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([1, 0], { votesNeeded: 2 }), 0, '2oo2 with only one TRUE must not trip');
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([1, 1], { votesNeeded: 2 }), 1, '2oo2 with both TRUE');
+  // 2oo3: the real point of the architecture -- any ONE sensor disagreeing (in either direction) must not change the result.
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([1, 1, 0], { votesNeeded: 2 }), 1, '2oo3, one stuck LOW, still correctly trips');
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([1, 0, 0], { votesNeeded: 2 }), 0, '2oo3, only one TRUE, correctly does not trip (avoids a single spurious sensor nuisance-tripping)');
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([1, 1, 1], { votesNeeded: 3 }), 1, '3oo3 with all TRUE');
+  assert.equal(sama.SAMA_BLOCK_TYPES.voter.compute([1, 1, 0], { votesNeeded: 3 }), 0, '3oo3 with one FALSE must not trip');
+});
+test('Median Select: outputs the middle of 3, genuinely tolerant of one sensor failing high or low', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.medianSelect.compute([50, 52, 48]), 50, 'all close together -- median is the middle');
+  assert.equal(sama.SAMA_BLOCK_TYPES.medianSelect.compute([50, 999, 48]), 50, 'one sensor failed wildly HIGH -- median ignores it entirely');
+  assert.equal(sama.SAMA_BLOCK_TYPES.medianSelect.compute([50, -999, 48]), 48, 'one sensor failed wildly LOW -- median ignores it entirely');
+  assert.equal(sama.SAMA_BLOCK_TYPES.medianSelect.compute([10, 10, 10]), 10, 'all identical');
+});
+test('Absolute Value: |x| for positive, negative, and zero', () => {
+  assert.equal(sama.SAMA_BLOCK_TYPES.absoluteValue.compute([5]), 5);
+  assert.equal(sama.SAMA_BLOCK_TYPES.absoluteValue.compute([-5]), 5);
+  assert.equal(sama.SAMA_BLOCK_TYPES.absoluteValue.compute([0]), 0);
+});
+test('Totalizer: accumulates a rate correctly according to its time base, and Reset genuinely zeroes it', () => {
+  const blocks = [
+    { id: 'rate', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 100 }] }, // 100 t/h, constant
+    { id: 'resetSig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'tot', type: 'totalizer', params: { rateTimeBase: 3600, gain: 1 }, inputs: [{ source: 'block', blockId: 'rate' }, { source: 'block', blockId: 'resetSig' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 1); // dt = 1 second per step
+  let r;
+  for (let i = 0; i < 3600; i++) r = sim.step(); // 3600 seconds = 1 simulated hour
+  approx(r.get('tot').value, 100, 0.5, '100 t/h for one full simulated hour should total ~100 t');
+
+  // Reset must zero it immediately, not just stop it from growing.
+  const resetBlock = blocks.find((b) => b.id === 'resetSig');
+  resetBlock.inputs[0].value = 1;
+  r = sim.step();
+  assert.equal(r.get('tot').value, 0, 'Reset must zero the total immediately');
+});
+test('Totalizer: the SAME real rate produces the SAME total regardless of which time base it is expressed in', () => {
+  function totalAfterOneSimHour(rateValue, timeBase) {
+    const blocks = [
+      { id: 'rate', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: rateValue }] },
+      { id: 'resetSig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+      { id: 'tot', type: 'totalizer', params: { rateTimeBase: timeBase, gain: 1 }, inputs: [{ source: 'block', blockId: 'rate' }, { source: 'block', blockId: 'resetSig' }] },
+    ];
+    const sim = new sama.LogicSimulation(blocks, 5);
+    let r;
+    for (let i = 0; i < 720; i++) r = sim.step(); // 720 * 5s = 3600s = 1 simulated hour
+    return r.get('tot').value;
+  }
+  const viaHourly = totalAfterOneSimHour(60, 3600); // 60 t/h
+  const viaPerMinute = totalAfterOneSimHour(1, 60); // 1 t/min == 60 t/h
+  const viaPerSecond = totalAfterOneSimHour(60 / 3600, 1); // (1/60) t/s == 60 t/h
+  approx(viaHourly, 60, 0.5);
+  approx(viaPerMinute, viaHourly, 0.5);
+  approx(viaPerSecond, viaHourly, 0.5);
+});
+test('Track/Hold: tracks live while Hold is FALSE, freezes the instant Hold goes TRUE, resumes tracking when Hold clears', () => {
+  const blocks = [
+    { id: 'sig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 10 }] },
+    { id: 'holdSig', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'th', type: 'trackHold', params: {}, inputs: [{ source: 'block', blockId: 'sig' }, { source: 'block', blockId: 'holdSig' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  let r = sim.step();
+  approx(r.get('th').value, 10, 1e-9, 'tracking: should follow the signal immediately');
+
+  const sigBlock = blocks.find((b) => b.id === 'sig');
+  const holdBlock = blocks.find((b) => b.id === 'holdSig');
+  sigBlock.inputs[0].value = 25;
+  r = sim.step();
+  approx(r.get('th').value, 25, 1e-9, 'still tracking: should follow the new value');
+
+  holdBlock.inputs[0].value = 1; // engage Hold
+  r = sim.step();
+  approx(r.get('th').value, 25, 1e-9, 'the instant Hold engages, output = whatever the signal was');
+
+  sigBlock.inputs[0].value = 999; // change the underlying signal while holding
+  r = sim.step();
+  approx(r.get('th').value, 25, 1e-9, 'held: must NOT follow the signal anymore');
+
+  holdBlock.inputs[0].value = 0; // release Hold
+  r = sim.step();
+  approx(r.get('th').value, 999, 1e-9, 'released: should immediately resume tracking the live signal');
+});
+test('On/Off Controller: correct hysteresis -- switches only at the OUTER deadband edge, not at SP, and does not chatter mid-band', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pv', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'ctrl', type: 'onOffController', params: { deadband: 2, action: 0 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  const pvBlock = blocks.find((b) => b.id === 'pv');
+  let r = sim.step();
+  assert.equal(r.get('ctrl').value, 0, 'starts OFF at PV = SP exactly');
+
+  pvBlock.inputs[0].value = 51; // inside the deadband (SP+db = 52) -- must NOT turn on yet
+  r = sim.step();
+  assert.equal(r.get('ctrl').value, 0, 'must stay OFF while still inside the deadband, avoiding chatter near SP');
+
+  pvBlock.inputs[0].value = 53; // now past SP+db
+  r = sim.step();
+  assert.equal(r.get('ctrl').value, 1, 'crosses the OUTER edge -- now ON');
+
+  pvBlock.inputs[0].value = 49; // back down, but still above SP-db (48) -- must STAY on (hysteresis)
+  r = sim.step();
+  assert.equal(r.get('ctrl').value, 1, 'must remain ON until PV crosses back out the OTHER side of the deadband');
+
+  pvBlock.inputs[0].value = 47; // now past SP-db on the low side
+  r = sim.step();
+  assert.equal(r.get('ctrl').value, 0, 'crosses the low outer edge -- now OFF again');
+});
+test('On/Off Controller: reverse (heating-style) action is the mirror image of direct (cooling-style) action', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pv', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 40 }] }, // well below SP-db
+    { id: 'ctrl', type: 'onOffController', params: { deadband: 2, action: 1 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  const r = sim.step();
+  assert.equal(r.get('ctrl').value, 1, 'reverse-acting: PV well below SP-db should turn ON (heater calling for heat)');
+});
+test('First-Out Annunciator: latches the FIRST cause only, ignores later causes until Reset', () => {
+  const blocks = [
+    { id: 'c1', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'c2', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'c3', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'c4', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'rst', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 0 }] },
+    { id: 'fo', type: 'firstOut', params: {}, inputs: [
+      { source: 'block', blockId: 'c1' }, { source: 'block', blockId: 'c2' }, { source: 'block', blockId: 'c3' }, { source: 'block', blockId: 'c4' }, { source: 'block', blockId: 'rst' },
+    ] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  let r = sim.step();
+  assert.equal(r.get('fo').value, 0, 'nothing latched yet');
+
+  // Cause 2 trips first.
+  blocks.find((b) => b.id === 'c2').inputs[0].value = 1;
+  r = sim.step();
+  assert.equal(r.get('fo').value, 2, 'Cause 2 was first -- output is 2');
+
+  // Cause 1 trips a moment later (a real consequential trip) -- must be ignored, still showing 2.
+  blocks.find((b) => b.id === 'c1').inputs[0].value = 1;
+  r = sim.step();
+  assert.equal(r.get('fo').value, 2, 'a later cause must NOT overwrite the first-out latch');
+
+  // Reset clears it.
+  blocks.find((b) => b.id === 'rst').inputs[0].value = 1;
+  r = sim.step();
+  assert.equal(r.get('fo').value, 0, 'Reset clears the latch');
+
+  // With both causes still TRUE and reset released, the next scan latches the LOWEST-numbered active cause (Cause 1, since it's checked first).
+  blocks.find((b) => b.id === 'rst').inputs[0].value = 0;
+  r = sim.step();
+  assert.equal(r.get('fo').value, 1, 'after reset, re-latches to whichever cause is checked first among those still active');
+});
 test('divide: rejects a zero divisor with a clear error rather than returning Infinity', () => {
   assert.throws(() => sama.SAMA_BLOCK_TYPES.divide.compute([10, 0]));
 });
@@ -2237,6 +2456,84 @@ test('LogicSimulation: closed-loop feedback does not diverge or oscillate once s
   const last30 = series.slice(-30);
   const drift = Math.max(...last30) - Math.min(...last30);
   assert.ok(drift < 0.01, `expected the loop to have settled, got drift ${drift}`);
+});
+test('PID: default mode (unset) behaves exactly as before -- pure Auto, no regression from adding Manual mode', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pv', type: 'lag', params: { tau: 5 }, inputs: [{ source: 'block', blockId: 'pidOut' }] },
+    { id: 'pidOut', type: 'pid', params: { kp: 2, ki: 0.5, kd: 0, outMin: 0, outMax: 100 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.2);
+  let r;
+  for (let i = 0; i < 600; i++) r = sim.step();
+  approx(r.get('pv').value, 50, 0.05);
+});
+test('PID: mode=1 (Manual) makes the output track the manualOutput parameter exactly, ignoring SP/PV entirely', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 90 }] },
+    { id: 'pv', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 5 }] }, // huge error -- should be irrelevant in Manual
+    { id: 'pidOut', type: 'pid', params: { kp: 2, ki: 0.5, kd: 0, outMin: 0, outMax: 100, mode: 1, manualOutput: 42 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  let r;
+  for (let i = 0; i < 10; i++) r = sim.step();
+  approx(r.get('pidOut').value, 42, 1e-9);
+});
+test('PID: manualOutput is clamped to outMin/outMax in Manual mode, just like Auto-mode output is', () => {
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pv', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pidOut', type: 'pid', params: { kp: 1, ki: 0, kd: 0, outMin: 0, outMax: 100, mode: 1, manualOutput: 500 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.5);
+  const r = sim.step();
+  approx(r.get('pidOut').value, 100, 1e-9); // clamped to outMax, not the raw 500
+});
+test('PID: switching Manual -> Auto is bumpless when the manual output is near where Auto would already hold (the realistic case)', () => {
+  // Closed loop: PID drives a lagged process that feeds back into PV.
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 50 }] },
+    { id: 'pv', type: 'lag', params: { tau: 5 }, inputs: [{ source: 'block', blockId: 'pidOut' }] },
+    { id: 'pidOut', type: 'pid', params: { kp: 2, ki: 0.5, kd: 0, outMin: 0, outMax: 100, mode: 0 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.2);
+  let r;
+  for (let i = 0; i < 400; i++) r = sim.step(); // let it settle in Auto first
+  const settledOutput = r.get('pidOut').value;
+
+  // Operator switches to Manual and simply holds the output steady at
+  // whatever it already was -- the realistic case, not a deliberate yank.
+  const pidBlock = blocks.find((b) => b.id === 'pidOut');
+  pidBlock.params.mode = 1;
+  pidBlock.params.manualOutput = settledOutput;
+  for (let i = 0; i < 50; i++) r = sim.step();
+  const outputJustBeforeReturn = r.get('pidOut').value;
+  approx(outputJustBeforeReturn, settledOutput, 1e-6); // manual mode should hold it exactly
+
+  // Switch back to Auto -- the very next step must not jump.
+  pidBlock.params.mode = 0;
+  r = sim.step();
+  const outputJustAfterReturn = r.get('pidOut').value;
+  const jump = Math.abs(outputJustAfterReturn - outputJustBeforeReturn);
+  assert.ok(jump < 0.05, `expected a bumpless transfer (jump < 0.05), got jump = ${jump}`);
+});
+test('PID: switching Manual -> Auto correctly begins correcting a genuinely existing error, rather than freezing forever', () => {
+  // If the operator moves the manual output somewhere that does NOT hold
+  // PV at SP, switching back to Auto must let the controller start
+  // correcting immediately -- "bumpless" means no instant discontinuity
+  // at the switch, not that the controller stops responding to reality.
+  const blocks = [
+    { id: 'sp', type: 'gain', params: { k: 1 }, inputs: [{ source: 'const', value: 60 }] },
+    { id: 'pv', type: 'lag', params: { tau: 5 }, inputs: [{ source: 'block', blockId: 'pidOut' }] },
+    { id: 'pidOut', type: 'pid', params: { kp: 2, ki: 0.5, kd: 0, outMin: 0, outMax: 100, mode: 1, manualOutput: 20 }, inputs: [{ source: 'block', blockId: 'sp' }, { source: 'block', blockId: 'pv' }] },
+  ];
+  const sim = new sama.LogicSimulation(blocks, 0.2);
+  for (let i = 0; i < 100; i++) sim.step(); // PV settles toward 20, far from SP=60
+  const pidBlock = blocks.find((b) => b.id === 'pidOut');
+  pidBlock.params.mode = 0; // return to Auto with a large real error present
+  let r;
+  for (let i = 0; i < 400; i++) r = sim.step();
+  approx(r.get('pv').value, 60, 0.05); // it must actually converge back to SP, not stay stuck at 20
 });
 test('evaluateChain (static, instant mode) rejects a dynamic block with a clear, specific error rather than crashing', () => {
   const blocks = [

@@ -146,6 +146,30 @@ export class PID {
     this.integral = output; this.prevPv = null; this.out = output; this.saturated = false;
     return this;
   }
+  trackManual(sp, pv, manualOut, dt) {
+    // Real DCS PID function blocks in Manual mode still track SP/PV so
+    // that switching back to Auto is bumpless: the controller continuously
+    // re-biases its own integral term so P + I + D already equals the
+    // operator's current manual output -- this is the standard "integral
+    // tracking" (a.k.a. manual reset feedback) technique real PID blocks
+    // use, so the very next Auto-mode step picks up exactly where Manual
+    // left off, with no output discontinuity.
+    this.sp = sp; this.pv = pv;
+    let err = sp - pv;
+    if (this.reverse) err = -err;
+    const p = this.kp * err;
+    let d = 0;
+    if (this.kd > 0 && this.prevPv !== null && dt > 0) {
+      const dPv = (pv - this.prevPv) / dt;
+      d = -this.kd * (this.reverse ? -dPv : dPv);
+    }
+    this.prevPv = pv;
+    this.integral = manualOut - p - d;
+    this.out = manualOut;
+    this.saturated = false;
+    this.error = err;
+    return this.out;
+  }
 }
 
 /**

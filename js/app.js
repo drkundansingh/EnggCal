@@ -94,7 +94,110 @@ function toast(msg) {
   setTimeout(() => t.remove(), 2200);
 }
 
+// Used only where a mailto: link is replaced by JS because a real href
+// would trigger a sandboxed preview's "leaving the sandbox" prompt (see
+// isEmbeddedFrame below). A plain location.href assignment to mailto:
+// can be silently blocked by that same sandbox with zero feedback, which
+// is worse than the prompt it was meant to avoid -- so this always shows
+// something the person can act on, whichever of clipboard or mailto:
+// actually goes through in their specific browser/sandbox.
+function copyEmailWithFallback(email) {
+  // Deliberately does NOT attempt location.href = 'mailto:...' here.
+  // This function only ever runs when isEmbeddedFrame is true -- a real
+  // deployed top-level page uses a genuine <a href="mailto:..."> instead
+  // -- and inside a sandboxed preview iframe (Claude.ai's artifact
+  // preview), attempting that mailto: navigation via JavaScript doesn't
+  // just fail quietly: it can trigger the sandbox's own hard navigation
+  // block, replacing the entire app with a blank "this content is
+  // blocked" page. Copying the address and confirming with a toast is
+  // the only action attempted here, so a click can never break the page
+  // it was clicked from.
+  //
+  // navigator.clipboard.writeText() is async and rejects rather than
+  // throwing synchronously when blocked by a permissions policy (as it
+  // is inside some sandboxed iframes) -- a plain try/catch around the
+  // call doesn't see that rejection at all, which was silently reporting
+  // "copied" even on failure. .then()/.catch() reports what actually
+  // happened instead.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(email)
+      .then(() => toast(`Email copied: ${email}`))
+      .catch(() => toast(`Email: ${email}`));
+  } else {
+    toast(`Email: ${email}`);
+  }
+}
+
+// Custom confirm/prompt modals -- replace window.confirm()/window.prompt()
+// everywhere in this app. Native browser dialogs are commonly disabled
+// entirely inside a sandboxed preview iframe (like Claude.ai's artifact
+// preview) unless it's specifically granted the allow-modals permission:
+// calling confirm() there can silently return false immediately with no
+// dialog ever shown at all, which looks exactly like "the delete button
+// doesn't do anything" from the outside. A plain DOM modal has no such
+// dependency and works identically everywhere the app itself renders.
+let modalHost = null;
+function ensureModalHost() {
+  if (modalHost && document.body.contains(modalHost)) return modalHost;
+  modalHost = document.createElement('div');
+  modalHost.id = 'appModalHost';
+  document.body.appendChild(modalHost);
+  return modalHost;
+}
+function showConfirm(message, { confirmLabel = 'Delete', cancelLabel = 'Cancel', danger = true } = {}) {
+  return new Promise((resolve) => {
+    const host = ensureModalHost();
+    const backdrop = h(`<div class="donate-modal-backdrop open">
+      <div class="donate-modal" role="alertdialog" aria-modal="true" style="max-width:420px;">
+        <p style="color:var(--text);font-size:.92rem;line-height:1.6;margin:4px 0 18px;">${message}</p>
+        <div class="btn-row" style="justify-content:flex-end;gap:10px;">
+          <button class="btn secondary" id="appModalCancel" type="button">${cancelLabel}</button>
+          <button class="btn" id="appModalConfirm" type="button" style="${danger ? 'background:var(--red);border-color:var(--red);' : ''}">${confirmLabel}</button>
+        </div>
+      </div>
+    </div>`);
+    host.appendChild(backdrop);
+    document.body.style.overflow = 'hidden';
+    const cleanup = (result) => { backdrop.remove(); document.body.style.overflow = ''; resolve(result); };
+    backdrop.querySelector('#appModalConfirm').addEventListener('click', () => cleanup(true));
+    backdrop.querySelector('#appModalCancel').addEventListener('click', () => cleanup(false));
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) cleanup(false); });
+  });
+}
+function showPrompt(message, defaultValue = '', { type = 'text' } = {}) {
+  return new Promise((resolve) => {
+    const host = ensureModalHost();
+    const backdrop = h(`<div class="donate-modal-backdrop open">
+      <div class="donate-modal" role="dialog" aria-modal="true" style="max-width:420px;">
+        <p style="color:var(--text);font-size:.92rem;line-height:1.6;margin:4px 0 10px;">${message}</p>
+        <div class="field"><input type="${type}" id="appModalInput" value="${(defaultValue || '').replace(/"/g, '&quot;')}"></div>
+        <div class="btn-row" style="justify-content:flex-end;gap:10px;margin-top:10px;">
+          <button class="btn secondary" id="appModalCancel" type="button">Cancel</button>
+          <button class="btn" id="appModalConfirm" type="button">OK</button>
+        </div>
+      </div>
+    </div>`);
+    host.appendChild(backdrop);
+    document.body.style.overflow = 'hidden';
+    const input = backdrop.querySelector('#appModalInput');
+    const cleanup = (result) => { backdrop.remove(); document.body.style.overflow = ''; resolve(result); };
+    backdrop.querySelector('#appModalConfirm').addEventListener('click', () => cleanup(input.value));
+    backdrop.querySelector('#appModalCancel').addEventListener('click', () => cleanup(null));
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) cleanup(null); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') cleanup(input.value); if (e.key === 'Escape') cleanup(null); });
+    setTimeout(() => { input.focus(); input.select(); }, 30);
+  });
+}
+
 // ---------- Nav / routing ----------
+// Detects whether this page itself is running inside another frame (as it
+// is in a Claude.ai artifact preview, or any other embedded-iframe
+// context). window.top throws in a cross-origin sandboxed iframe rather
+// than just comparing unequal, so a thrown error is itself a reliable
+// "yes, embedded" signal, not just window.self !== window.top.
+let isEmbeddedFrame = false;
+try { isEmbeddedFrame = window.self !== window.top; } catch (e) { isEmbeddedFrame = true; }
+
 const NAV = [
   { group: 'Overview', items: [{ id: '', label: 'Dashboard', icon: '▣' }] },
   {
@@ -210,6 +313,9 @@ const NAV = [
       { id: 'history', label: 'Calculation History', icon: '🕘' },
       { id: 'support', label: 'Support the Project', icon: '❤' },
       { id: 'reviews', label: 'Reviews & Ratings', icon: '★' },
+      { id: 'about', label: 'About', icon: 'ℹ' },
+      { id: 'contact', label: 'Contact', icon: '✉' },
+      { id: 'privacy', label: 'Privacy Policy', icon: '⚿' },
     ]
   },
 ];
@@ -222,20 +328,59 @@ function renderNav(active) {
     const g = h(`<div class="nav-group"><div class="nav-label">${group.group}</div></div>`);
     for (const item of visibleItems) {
       const hidden = contentVisibility[item.id] === false;
-      const a = h(`<div class="nav-item ${item.id === active ? 'active' : ''}" role="link" tabindex="0">
+      // A real <a href> (not a bare div+onclick) so search engine crawlers
+      // can discover and follow every calculator from every other page's
+      // sidebar -- Googlebot's link discovery relies on real <a href>
+      // elements, not JS click handlers alone. preventDefault + navigate()
+      // still gives users the fast, no-reload SPA transition; middle-click
+      // and right-click "open in new tab" also keep working correctly
+      // because the browser sees a genuine link underneath.
+      // The dashboard href is built from location.pathname (an absolute,
+      // same-origin path) rather than a relative "./" -- this must match
+      // exactly what navigate()'s own pushState logic produces below, so
+      // there's no discrepancy between what the link says and what normal
+      // in-app navigation does.
+      // isEmbeddedFrame (see top of file): when this page is itself
+      // running inside a sandboxed iframe -- as it is in a Claude.ai
+      // artifact preview -- the parent page's own sandbox monitors real
+      // <a href> clicks for top-level navigation attempts, independent of
+      // this script's own preventDefault(), and shows an "open external
+      // link" confirmation even though the click handler below already
+      // intercepts it correctly. That preview sandbox is not this site's
+      // real deployed environment, so the href is simply omitted there --
+      // navigation still works identically via the click handler, just
+      // without a real address for the sandbox to notice. On the real,
+      // top-level deployed site the full href (and its SEO benefit) is
+      // always present.
+      const href = item.id === '' ? location.pathname : `?page=${encodeURIComponent(item.id)}`;
+      const a = h(`<a class="nav-item ${item.id === active ? 'active' : ''}"${isEmbeddedFrame ? ' tabindex="0"' : ` href="${href}"`}>
         <span class="ic">${item.icon}</span>${item.label}${adminMode && hidden ? ' <span class="badge out" style="margin-left:6px;">hidden</span>' : ''}
-      </div>`);
-      a.addEventListener('click', () => navigate(item.id));
-      a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(item.id); } });
+      </a>`);
+      a.addEventListener('click', (e) => {
+        // Allow a real new-tab/new-window open (ctrl/cmd/middle-click) to
+        // proceed as normal browser navigation instead of hijacking it.
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        navigate(item.id);
+      });
+      if (isEmbeddedFrame) {
+        a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(item.id); } });
+      }
       g.appendChild(a);
     }
     navRoot.appendChild(g);
   }
   if (adminMode) {
     const g = h('<div class="nav-group"><div class="nav-label">Admin</div></div>');
-    const a = h(`<div class="nav-item ${active === 'admin' ? 'active' : ''}" role="link" tabindex="0"><span class="ic">\u2699</span>Admin Panel</div>`);
-    a.addEventListener('click', () => navigate('admin'));
-    a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('admin'); } });
+    const a = h(`<a class="nav-item ${active === 'admin' ? 'active' : ''}"${isEmbeddedFrame ? ' tabindex="0"' : ' href="?page=admin"'}><span class="ic">\u2699</span>Admin Panel</a>`);
+    a.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      navigate('admin');
+    });
+    if (isEmbeddedFrame) {
+      a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('admin'); } });
+    }
     g.appendChild(a);
     navRoot.appendChild(g);
   }
@@ -273,7 +418,7 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 async function attemptAdminLogin() {
-  const pw = prompt('Admin password (this is a local, soft gate only — see Admin Panel for details):');
+  const pw = await showPrompt('Admin password (this is a local, soft gate only \u2014 see Admin Panel for details):', '', { type: 'password' });
   if (pw === null) return;
   const hash = await sha256Hex(pw);
   if (hash === ADMIN_PASSWORD_HASH_PLACEHOLDER) {
@@ -292,34 +437,34 @@ async function attemptAdminLogin() {
 // below). Without this the whole site is one URL and no individual
 // calculator can ever be found or ranked for its own search query.
 const SITE_URL = 'https://engineeringhubcalc.com';
-const SITE_NAME = 'Engineering Calculator Hub';
+const SITE_NAME = 'EngCalc Hub'; // short form for the <title> suffix (matches manifest.webmanifest's short_name) -- the full "Engineering Calculator Hub" name pushes many page titles past Google's ~60-char display limit, truncating keywords mid-word in search results
 const DEFAULT_DESCRIPTION = 'Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers \u2014 real formulas, verified against standards, no signup required.';
 const SEO_META = {
-  '': { title: 'Engineering Calculator Hub \u2014 Free Power Plant & Electrical Calculators', description: DEFAULT_DESCRIPTION },
-  'thermal-plant': { title: 'Thermal Power Plant Heat Rate & Efficiency Estimator', description: 'Estimate thermal power plant heat rate, efficiency, fuel consumption and coal/gas cost from unit MW rating \u2014 free online calculator.' },
-  'protection': { title: 'Turbine & Boiler Protection Parameter Registry (117 Trips)', description: 'Reference registry of 117 turbine and boiler protection trip parameters \u2014 ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.' },
-  'control-loops': { title: 'Power Plant Control Loops \u2014 Live Interactive Simulation', description: 'Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.' },
-  'short-circuit': { title: 'Short Circuit / Fault Current Calculator (IEC 60909)', description: 'Calculate three-phase and single-phase-to-ground short circuit fault current per IEC 60909 \u2014 free online electrical fault calculator.' },
-  'idmt': { title: 'IDMT Relay Curve Calculator (IEC 60255 & IEEE C37.112)', description: 'Calculate IDMT relay operating time for Standard/Very/Extremely Inverse curves per IEC 60255 and IEEE C37.112 \u2014 free relay curve calculator.' },
-  'relay-settings': { title: 'Multi-Stage Overcurrent Relay Setting Calculator', description: 'Calculate I>, I>>, I>>> overcurrent relay pickup settings in primary amps and per-unit \u2014 for ABB, Siemens and equivalent numerical relays.' },
+  '': { title: 'Engineering Calculator Hub \u2014 Power Plant & Electrical Tools', description: DEFAULT_DESCRIPTION },
+  'thermal-plant': { title: 'Power Plant Heat Rate & Efficiency Estimator', description: 'Estimate thermal power plant heat rate, efficiency, fuel consumption and coal/gas cost from unit MW rating \u2014 free online calculator.' },
+  'protection': { title: 'Turbine & Boiler Protection (117 Trips)', description: 'Reference registry of 117 turbine and boiler protection trip parameters \u2014 ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.' },
+  'control-loops': { title: 'Power Plant Control Loop Simulator', description: 'Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.' },
+  'short-circuit': { title: 'Short Circuit Fault Calculator (IEC 60909)', description: 'Calculate three-phase and single-phase-to-ground short circuit fault current per IEC 60909 \u2014 free online electrical fault calculator.' },
+  'idmt': { title: 'IDMT Relay Curve Calculator (IEC 60255)', description: 'Calculate IDMT relay operating time for Standard/Very/Extremely Inverse curves per IEC 60255 and IEEE C37.112 \u2014 free relay curve calculator.' },
+  'relay-settings': { title: 'Overcurrent & Earth Fault Relay Settings', description: 'Calculate I>, I>>, I>>> phase overcurrent and I0>/I0>> earth fault relay pickup settings in primary amps and per-unit \u2014 for ABB, Siemens and equivalent numerical relays.' },
   'ct-sizing': { title: 'CT Sizing & Burden Calculator', description: 'Size current transformers for protection and metering \u2014 knee-point voltage, burden, and accuracy class calculations.' },
   'transformer-prot': { title: 'Transformer Protection Setting Calculator', description: 'Auto-generate transformer overcurrent, earth fault, differential and REF protection settings from nameplate data.' },
   'motor-prot': { title: 'Motor Protection Relay Setting Calculator', description: 'Calculate motor thermal overload, overcurrent and earth fault protection settings from motor nameplate FLC and locked-rotor data.' },
   'lsig': { title: 'LSIG Circuit Breaker Setting Calculator', description: 'Calculate Long-time, Short-time, Instantaneous and Ground fault (LSIG) circuit breaker trip unit settings.' },
   'coordination': { title: 'Relay Coordination & Discrimination Check', description: 'Check time-current coordination and discrimination margin between upstream and downstream protection relays.' },
   'cable-sizing': { title: 'Cable Sizing & Voltage Drop Calculator', description: 'Size power cables for current-carrying capacity and voltage drop, with derating for grouping, temperature and installation method.' },
-  'cable-withstand': { title: 'Cable Short-Circuit Withstand (Adiabatic) Calculator', description: 'Calculate minimum cable cross-sectional area to withstand short-circuit fault current using the adiabatic equation.' },
+  'cable-withstand': { title: 'Cable Short-Circuit Withstand Calculator', description: 'Calculate minimum cable cross-sectional area to withstand short-circuit fault current using the adiabatic equation.' },
   'motor-start': { title: 'Motor Starting Voltage Dip Calculator', description: 'Estimate voltage dip during DOL motor starting and its impact on the supply network and other connected loads.' },
   'pf-correction': { title: 'Power Factor Correction Capacitor Calculator', description: 'Calculate the capacitor bank kVAR needed to correct power factor from an existing value to a target value.' },
   'battery-sizing': { title: 'Battery / DC System Sizing Calculator', description: 'Size a substation DC battery bank for control, protection and emergency load duty cycles.' },
   'tx-loading': { title: 'Transformer Loading & Loss Calculator', description: 'Calculate transformer iron loss, copper loss, efficiency and loading at any load point from nameplate data.' },
   'grounding-grid': { title: 'Grounding Grid Design Calculator (IEEE 80)', description: 'Calculate substation grounding grid resistance and screen ground potential rise against IEEE 80 tolerable touch voltage.' },
-  'ngr-sizing': { title: 'Neutral Grounding Resistor (NGR) Sizing Calculator', description: 'Size a neutral grounding resistor for a resistance-grounded MV system from system voltage and target fault current.' },
+  'ngr-sizing': { title: 'Neutral Grounding Resistor Sizing Calculator', description: 'Size a neutral grounding resistor for a resistance-grounded MV system from system voltage and target fault current.' },
   'generator-sizing': { title: 'Standby Generator Sizing Calculator', description: 'Size a standby generator for connected running load and the DOL starting surge of the largest motor.' },
-  'voltage-unbalance': { title: 'Voltage Unbalance & Motor Derating Calculator (NEMA MG-1)', description: 'Calculate three-phase voltage unbalance and the resulting motor derating factor per NEMA MG-1.' },
+  'voltage-unbalance': { title: 'Voltage Unbalance & Motor Derating Calculator', description: 'Calculate three-phase voltage unbalance and the resulting motor derating factor per NEMA MG-1.' },
   'tx-inrush': { title: 'Transformer Inrush Current Calculator', description: 'Estimate transformer energization inrush current and decay time to check protection relay settings.' },
-  'dp-flow-wizard': { title: 'DP to Flow Calculator \u2014 Orifice, Venturi & Nozzle', description: 'Convert differential pressure to mass or volumetric flow for orifice plates, venturis and flow nozzles \u2014 step-by-step wizard.' },
-  'dp-flow-cal': { title: 'Steam, Water & Air Flow Calculator \u2014 No Pipe or Orifice Diameter Needed', description: 'Calculate steam, water, or air flow from a DP transmitter\u2019s calibrated range alone \u2014 real IAPWS-IF97 steam tables, no pipe or orifice diameter required.' },
+  'dp-flow-wizard': { title: 'DP Flow Wizard \u2014 Orifice, Venturi, Nozzle', description: 'Convert differential pressure to mass or volumetric flow for orifice plates, venturis and flow nozzles \u2014 step-by-step wizard.' },
+  'dp-flow-cal': { title: 'Calibrated Flow Calculator (Steam/Water/Air)', description: 'Calculate steam, water, or air flow from a DP transmitter\u2019s calibrated range alone \u2014 real IAPWS-IF97 steam tables, no pipe or orifice diameter required.' },
   'steam-props': { title: 'Steam Properties Calculator (IAPWS-IF97)', description: 'Calculate real steam density and specific volume from pressure and temperature using IAPWS-IF97 \u2014 not an ideal-gas approximation.' },
   'converter': { title: 'Engineering Unit Converter', description: 'Convert between engineering units for pressure, flow, temperature, length, and more.' },
   'transmitter': { title: '4\u201320 mA Transmitter Calculator', description: 'Convert between 4\u201320 mA signal, percentage of range, and engineering units for any transmitter.' },
@@ -332,15 +477,18 @@ const SEO_META = {
   'pid': { title: 'PID Controller Tuning Calculator', description: 'Calculate PID controller gains and simulate step response for process control loop tuning.' },
   'loop-uncertainty': { title: 'Instrument Loop Uncertainty Calculator', description: 'Calculate total measurement loop uncertainty by combining individual instrument accuracy contributions.' },
   'cavitation': { title: 'Control Valve Cavitation Check Calculator', description: 'Check a control valve for cavitation and flashing risk from upstream/downstream pressure and vapor pressure.' },
-  'sil-verification': { title: 'SIL / PFDavg Verification Calculator (IEC 61508/61511)', description: 'Calculate PFDavg and the achievable SIL for a safety instrumented function from subsystem failure rates, architecture, and proof-test interval.' },
-  'gauge-range': { title: 'Pressure Gauge Range Selection Calculator (ASME B40.100)', description: 'Select a standard pressure gauge range so normal operating pressure falls in the recommended 25-75% of full scale.' },
-  'interface-level': { title: 'Interface Level Calculator (Two-Liquid DP Measurement)', description: 'Calculate DP transmitter calibration values and current interface level for a two-liquid (e.g. oil-water) interface measurement.' },
+  'sil-verification': { title: 'SIL / PFDavg Verification Calculator', description: 'Calculate PFDavg and the achievable SIL for a safety instrumented function from subsystem failure rates, architecture, and proof-test interval.' },
+  'gauge-range': { title: 'Pressure Gauge Range Calculator (ASME B40.100)', description: 'Select a standard pressure gauge range so normal operating pressure falls in the recommended 25-75% of full scale.' },
+  'interface-level': { title: 'Interface Level Calculator (Two-Liquid DP)', description: 'Calculate DP transmitter calibration values and current interface level for a two-liquid (e.g. oil-water) interface measurement.' },
   'loop-power': { title: '4-20 mA Loop Power Budget Calculator', description: 'Check whether a 4-20mA loop\u2019s supply voltage covers the transmitter\u2019s minimum voltage plus all series wiring and load resistances at 20mA.' },
   'cable-gland': { title: 'Cable & Gland Size Calculator', description: 'Predict instrumentation or power cable overall diameter from core count, size and armouring, and get the matching standard cable gland size.' },
   'formula-library': { title: 'Engineering Formula Library', description: 'Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.' },
   'history': { title: 'Calculation History', description: 'Your saved calculation history for this device.', noindex: true },
-  'support': { title: 'Support the Project \u2014 Engineering Calculator Hub', description: 'Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.' },
-  'reviews': { title: 'Reviews & Ratings \u2014 Engineering Calculator Hub', description: 'Read reviews and ratings from engineers using Engineering Calculator Hub.' },
+  'support': { title: 'Support the Project \u2014 EngCalc Hub', description: 'Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.' },
+  'about': { title: 'About This Site \u2014 EngCalc Hub', description: 'Who runs Engineering Calculator Hub, what it is for, and the methodology behind its calculators \u2014 standards cited, assumptions disclosed, confidence tiers shown.' },
+  'contact': { title: 'Contact Us \u2014 EngCalc Hub', description: 'Have a question, found an issue with a calculator, or need assistance? Get in touch with Engineering Calculator Hub.' },
+  'privacy': { title: 'Privacy Policy \u2014 EngCalc Hub', description: 'How Engineering Calculator Hub handles data: Google Analytics, Google AdSense, Razorpay payments, and browser-local calculation history storage.' },
+  'reviews': { title: 'Reviews & Ratings \u2014 Engineering Calculator Hub', description: 'Read reviews and ratings from engineers using Engineering Calculator Hub.', noindex: true },
   'admin': { title: 'Admin', description: 'Site administration.', noindex: true },
   'pipe-pressure-drop': { title: 'Pipe Pressure Drop Calculator (Darcy-Weisbach)', description: 'Calculate pipe friction pressure drop, velocity and flow regime using the Darcy-Weisbach equation with Swamee-Jain friction factor.' },
   'pipe-wall-thickness': { title: 'Pipe Wall Thickness Calculator (ASME B31.3)', description: 'Calculate minimum required process piping wall thickness per ASME B31.3, with corrosion allowance and mill tolerance.' },
@@ -353,9 +501,9 @@ const SEO_META = {
   'cooling-tower': { title: 'Cooling Tower Performance Calculator', description: 'Calculate cooling tower range, approach, and thermal effectiveness against ambient wet-bulb temperature.' },
   'bearing-life': { title: 'Bearing L10 Life Calculator (ISO 281)', description: 'Calculate rolling element bearing L10 life in revolutions and hours from dynamic load rating and equivalent load.' },
   'heat-exchanger': { title: 'Heat Exchanger LMTD & Area Calculator', description: 'Calculate log mean temperature difference (LMTD) and required heat transfer area for a heat exchanger from its four terminal temperatures.' },
-  'horizontal-tank': { title: 'Horizontal Cylindrical Tank Volume Calculator (Dip Chart)', description: 'Calculate partial and total volume of a horizontal cylindrical tank from diameter, length and liquid fill depth \u2014 exact circular-segment geometry.' },
+  'horizontal-tank': { title: 'Horizontal Tank Volume Calculator (Dip Chart)', description: 'Calculate partial and total volume of a horizontal cylindrical tank from diameter, length and liquid fill depth \u2014 exact circular-segment geometry.' },
   'vertical-tank': { title: 'Vertical Tank Volume Calculator', description: 'Calculate vertical storage tank volume from diameter and cylinder height, with optional hemispherical or conical heads.' },
-  'vessel-wall': { title: 'Pressure Vessel Wall Thickness Calculator (ASME VIII)', description: 'Calculate minimum shell thickness for a thin-wall pressure vessel per ASME Section VIII Division 1, UG-27.' },
+  'vessel-wall': { title: 'Pressure Vessel Wall Thickness (ASME VIII)', description: 'Calculate minimum shell thickness for a thin-wall pressure vessel per ASME Section VIII Division 1, UG-27.' },
   'insulation-loss': { title: 'Pipe & Vessel Insulation Heat Loss Calculator', description: 'Calculate steady-state heat loss through cylindrical pipe or vessel insulation from thickness, conductivity and surface conditions.' },
   'thermal-expansion': { title: 'Thermal (Linear) Expansion Calculator', description: 'Calculate linear thermal expansion of pipe or equipment from length, material coefficient, and temperature change.' },
   'gas-compression': { title: 'Gas Compression Work Calculator', description: 'Calculate ideal-gas isothermal and adiabatic compression work and power for compressor sizing estimates.' },
@@ -366,8 +514,8 @@ const SEO_META = {
   'duct-sizing': { title: 'Duct Sizing Calculator (Velocity Method)', description: 'Calculate required duct cross-sectional area and round-duct diameter from airflow and design velocity.' },
   'refrigeration-tons': { title: 'Refrigeration Tons to kW/BTU Converter', description: 'Convert refrigeration capacity between tons, kW and BTU/hr using the standard 1 ton = 3.5168 kW definition.' },
   'sama-logic': { title: 'SAMA Logic Diagram Simulator', description: 'Build and simulate control logic from standard SAMA function blocks — summers, selects, limiters, logic gates, timers — chained together with live values.' },
-  'civil-beam': { title: 'Beam Deflection, Bending Moment & Shear Force Calculator', description: 'Calculate beam deflection, maximum bending moment and shear force for simply-supported and cantilever beams, point load or UDL.' },
-  'civil-section': { title: 'Section Properties Calculator (Moment of Inertia & Section Modulus)', description: 'Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.' },
+  'civil-beam': { title: 'Beam Deflection & Bending Moment Calculator', description: 'Calculate beam deflection, maximum bending moment and shear force for simply-supported and cantilever beams, point load or UDL.' },
+  'civil-section': { title: 'Beam Section Properties Calculator', description: 'Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.' },
   'civil-column': { title: 'Column Buckling Calculator (Euler)', description: 'Calculate Euler critical buckling load and slenderness ratio for a column with any standard end-support condition.' },
   'civil-combined-stress': { title: 'Combined Axial & Bending Stress Calculator', description: 'Calculate combined axial and bending stress on a structural section from axial load, bending moment, area and section modulus.' },
   'civil-steel-weight': { title: 'Steel Weight Calculator (Bar, Plate, Pipe)', description: 'Calculate the weight of round bar, flat plate, or pipe steel sections from dimensions and density.' },
@@ -375,10 +523,10 @@ const SEO_META = {
   'civil-water-cement': { title: 'Water-Cement Ratio Calculator', description: 'Calculate water-cement ratio, or solve for water or cement quantity from a target ratio.' },
   'civil-concrete-mix': { title: 'Concrete Nominal Mix Calculator (IS 456)', description: 'Calculate cement, sand and aggregate quantities for IS 456:2000 nominal concrete mixes M5 to M20.' },
   'civil-rebar': { title: 'Rebar Weight & Quantity Calculator', description: 'Calculate reinforcement bar weight from diameter and length, with the familiar d\u00b2/162 site rule of thumb shown alongside.' },
-  'civil-earth-pressure': { title: 'Earth Pressure Calculator (Rankine Active & Passive)', description: 'Calculate active and passive earth pressure on a retaining wall using Rankine theory, with optional cohesion.' },
-  'civil-soil-phase': { title: 'Soil Phase Relationships & Effective Stress Calculator', description: 'Calculate void ratio, porosity, and effective (Terzaghi) stress from total stress and pore water pressure.' },
+  'civil-earth-pressure': { title: 'Earth Pressure Calculator (Rankine)', description: 'Calculate active and passive earth pressure on a retaining wall using Rankine theory, with optional cohesion.' },
+  'civil-soil-phase': { title: 'Soil Phase & Effective Stress Calculator', description: 'Calculate void ratio, porosity, and effective (Terzaghi) stress from total stress and pore water pressure.' },
   'civil-manning': { title: "Manning's Equation Calculator (Open Channel Flow)", description: 'Calculate open channel flow velocity and discharge using Manning\u2019s equation for rectangular and trapezoidal channels.' },
-  'civil-weir': { title: 'Weir Flow Calculator (Rectangular, Francis Formula)', description: 'Calculate discharge over a rectangular sharp-crested weir using the Francis formula.' },
+  'civil-weir': { title: 'Weir Flow Calculator (Rectangular, Francis)', description: 'Calculate discharge over a rectangular sharp-crested weir using the Francis formula.' },
   'civil-earthwork': { title: 'Land Area & Earthwork Volume Calculator', description: 'Calculate triangle and trapezoid land area, slope grade, and cut/fill earthwork volume by the average end area method.' },
 };
 
@@ -584,9 +732,11 @@ const PAGE_CONTENT = {
     ],
   },
   'relay-settings': {
-    about: 'A real feeder protection relay is never set in isolation \u2014 it needs three coordinated stages (I> inverse-time, I>> definite-time high-set, I>>> instantaneous), every pickup expressed in both primary amps and the relay\u2019s own per-unit setting, and a check that it can actually see the smallest fault it\u2019s meant to clear, not just the largest. This calculator follows that real workflow rather than treating relay setting as a single time-current curve calculation, matching how ABB, Siemens, and equivalent numerical relays are actually configured and documented.',
+    about: 'A real feeder protection relay is never set in isolation \u2014 it needs three coordinated phase stages (I> inverse-time, I>> definite-time high-set, I>>> instantaneous) plus a genuinely separate earth fault element (I0>/I0>>), every pickup expressed in both primary amps and the relay\u2019s own per-unit setting, and a check that it can actually see the smallest fault it\u2019s meant to clear, not just the largest. This calculator follows that real workflow rather than treating relay setting as a single time-current curve calculation, matching how ABB, Siemens, and equivalent numerical relays are actually configured and documented.',
     faq: [
       { q: 'Why does every pickup show up in both primary amps and \u00d7In?', a: 'The relay itself is set in per-unit (multiples of its rated current In); primary amps are what goes on the setting sheet and coordination study. Confusing the two \u2014 a real, common commissioning error \u2014 is exactly what showing both values side by side is meant to prevent.' },
+      { q: 'Why is the earth fault (I0>) pickup so much more sensitive than the phase (I>) pickup?', a: 'Because the two protect against fundamentally different baseline conditions. The phase I> stage must sit above normal load current, which is always present, so it needs real margin above full load. Earth (ground) fault current is normally near-zero under healthy balanced conditions, so I0> can and should be set as a much smaller percentage of full load current \u2014 typically 10-30% \u2014 to catch a genuine single-phase-to-ground fault quickly and sensitively, exactly how a real numerical relay\u2019s earth fault element is configured.' },
+      { q: 'Why does the earth fault current depend on the system grounding type?', a: 'Because the physical fault path is completely different depending on how the neutral is grounded. A solidly grounded system lets a large fault current flow, similar in magnitude to a three-phase fault. A resistance- or reactance-grounded system deliberately limits that current to whatever the grounding resistor or reactor lets through \u2014 which is why this calculator asks for that let-through current directly rather than assuming it. An ungrounded system has no intentional return path at all, so a first ground fault produces only a small capacitive current, which is why conventional I0> protection doesn\u2019t apply and a different scheme (sensitive/directional earth fault, or insulation monitoring) is needed instead.' },
       { q: 'What is the sensitivity check, and why does it matter?', a: 'It checks whether Stage 1 (I>) can actually detect the SMALLEST fault current the relay needs to clear \u2014 often much lower than the maximum fault used to set the other stages. A relay set only against the maximum fault can be technically blind to a legitimate, smaller fault elsewhere in its zone; this check catches that before it becomes a real gap in protection.' },
       { q: 'Why does Stage 3 (instantaneous) have no time delay at all?', a: 'It\u2019s set safely above the maximum fault current the relay could ever see for a fault genuinely within its own protected zone, so it only operates for a close-in fault \u2014 at that point, instantaneous clearance is both safe and desirable, since there\u2019s no coordination concern with anything further downstream.' },
       { q: 'Does this replace the relay manufacturer\u2019s own setting software?', a: 'No \u2014 this calculates the underlying primary-amp and per-unit values using standard IEC 60255 and IEEE C37.112 equations, the same standards both manufacturers build their relays on. It doesn\u2019t reproduce either vendor\u2019s specific setting software or menu structure, and final settings should always be checked against that specific relay\u2019s own setting-range limits.' },
@@ -638,12 +788,456 @@ const PAGE_CONTENT = {
     ],
   },
   'sama-logic': {
-    about: 'SAMA (Scientific Apparatus Makers Association) symbols are the standard notation for control and interlock logic diagrams across the power industry, part of the same lineage as the ISA/MCAA "Functional Diagramming of Instrument and Control Systems" standard \u2014 the same summing junctions, high/low selects, limiters, and manual/auto transfer stations that appear throughout real combustion control and permissive logic. This tool lets you wire your own chain of standard blocks \u2014 both static/algebraic blocks and genuine time-stepped dynamic blocks (lag, derivative, integrator, PID, ramp generators, timers) \u2014 and watch every output update live, including a scrolling trend chart of any signal you choose to watch, rather than only viewing pre-built loops.',
+    about: 'SAMA (Scientific Apparatus Makers Association) symbols are the standard notation for control and interlock logic diagrams across the power industry, part of the same lineage as the ISA/MCAA "Functional Diagramming of Instrument and Control Systems" standard \u2014 the same summing junctions, high/low/median selects, limiters, and manual/auto transfer stations that appear throughout real combustion control and permissive logic. This tool lets you wire your own chain of standard blocks \u2014 static/algebraic blocks, a full logic-gate family (AND/OR/NOT/NAND/NOR/XOR) plus an M-out-of-N safety voter, and genuine time-stepped dynamic blocks (lag, derivative, integrator, a resettable totalizer, a real Auto/Manual PID faceplate, an on/off hysteresis controller, track/hold, ramp generators, timers, a first-out annunciator) \u2014 and watch every output update live, including a scrolling trend chart and a full Hi-Hi/Hi/Lo/Lo-Lo alarm summary with acknowledge and event log, rather than only viewing pre-built loops.',
     faq: [
       { q: 'What\u2019s the difference between this and the Control Loops page?', a: 'Control Loops shows complete, pre-built simulations of specific real plant control loops (drum level, combustion control, and so on), each already wired up and ready to run. This tool is for building your OWN logic from individual SAMA blocks \u2014 summers, selects, AND/OR gates, and genuine dynamic blocks like PID, lag, and timers \u2014 to check how a specific piece of interlock, permissive, or control logic behaves for exactly the combination you need, not just the pre-built examples.' },
       { q: 'Why can a block only reference an earlier block, not a later one?', a: 'A real SAMA diagram is read left to right \u2014 signals flow forward, never backward into an earlier summing junction on the same sheet. Enforcing that here means the chain evaluates in one deterministic pass with no risk of a circular reference, exactly matching how the diagram would actually be drawn and read. A genuine feedback loop (like a PID controlling the process it reads back from) is still fully supported \u2014 it\u2019s resolved correctly using a one-step simulation delay once you add a dynamic block, the same way a real control loop\u2019s feedback path works.' },
       { q: 'What happens if I remove a block that another block depends on?', a: 'The dependent block\u2019s input automatically falls back to a constant value (0) instead of being left broken \u2014 you\u2019ll see it change and can re-wire it to a different source if needed.' },
-      { q: 'Are dynamic blocks like lag, integrator, or timers included?', a: 'Yes \u2014 lag, derivative, lead-lag, integrator, rate limiter, dead time, a ramp/time-function generator, a full anti-windup PID controller, both Reset-dominant and Set-dominant SR latches, a time-delay (ON/OFF-delay) timer, a one-shot pulse timer, and a free-running pulse generator are all available alongside the static/algebraic SAMA blocks (summers, averaging, differencing, selects, limiters, exponential, manual/auto transfer stations, AND/OR/NOT, comparators). Add any dynamic block to a diagram and Simulate mode activates automatically, stepping the whole chain forward in time with a Run/Pause/Reset clock and an optional live trend chart.' },
+      { q: 'Are dynamic blocks like lag, integrator, or timers included?', a: 'Yes \u2014 lag, derivative, lead-lag, integrator, a resettable totalizer, rate limiter, dead time, a ramp/time-function generator, a full anti-windup PID controller (with a real Auto/Manual faceplate mode and bumpless transfer, just like a real DCS), an on/off hysteresis controller, a track/hold (sample-and-hold), both Reset-dominant and Set-dominant SR latches, a first-out sequence annunciator, a time-delay (ON/OFF-delay) timer, a one-shot pulse timer, and a free-running pulse generator are all available alongside the static/algebraic SAMA blocks (summers, averaging, differencing, high/low/median selects, an M-out-of-N safety voter, limiters, exponential, manual/auto transfer stations, AND/OR/NOT/NAND/NOR/XOR, comparators). Add any dynamic block to a diagram and Simulate mode activates automatically, stepping the whole chain forward in time with a Run/Pause/Reset clock and an optional live trend chart.' },
+      { q: 'Can I build real safety voting logic like 2oo3, not just plain AND/OR?', a: 'Yes \u2014 the M-out-of-N Voter block is the standard SIS architecture (1oo2, 2oo2, 2oo3, 1oo3, 3oo3) as one configurable block: it outputs TRUE once at least M of its connected inputs are TRUE. 2oo3 specifically is genuinely different from a plain AND or OR gate \u2014 it tolerates any single input disagreeing (a stuck or spurious sensor) without either a nuisance trip or a loss of protection, which is exactly why real safety instrumented systems use it. Median Select does the equivalent job for analog signals: it outputs the middle of three inputs, so one wildly failed transmitter (high or low) never affects the result.' },
+      { q: 'Can I configure alarm limits and see them on the diagram?', a: 'Yes \u2014 any block with an assigned instrument tag can have Hi-Hi/Hi/Lo/Lo-Lo alarm limits configured in its Properties panel. An active, unacknowledged alarm shows a pulsing red or amber border directly on the block, and every alarm across every page of the diagram appears in the Alarm Summary panel with an acknowledge workflow and a timestamped event log \u2014 the same alarm banner pattern a real DCS operator station uses.' },
+    ],
+  },
+  'thermal-plant': {
+    about: "This estimator builds a first-pass heat balance for a coal- or gas-fired thermal power plant from a handful of high-level inputs \u2014 plant type (subcritical/supercritical/ultra-supercritical), unit rating, and fuel properties \u2014 and works out steam conditions, boiler duty, turbine cycle efficiency, and net heat rate using real IAPWS-IF97 steam properties rather than a simplified textbook approximation. It exists to answer the question every early-stage project asks: \u201cwhat heat rate and fuel consumption should we expect from a plant of this size and this steam class?\u201d before a full thermal design study exists. It is a planning-stage estimator, not a substitute for the OEM's guaranteed heat balance diagram \u2014 real plants add feedwater heater trains, reheat cycles, and auxiliary loads that shift the final number meaningfully from this baseline.",
+    faq: [
+      { q: "Why does raising steam pressure and temperature improve heat rate?", a: "Higher steam parameters raise the average temperature at which heat is added in the boiler relative to the temperature at which it is rejected in the condenser \u2014 by the Carnot argument, a bigger temperature spread between heat addition and heat rejection means more of the heat input can theoretically become work, which is exactly why supercritical and ultra-supercritical plants exist." },
+      { q: "What is the difference between gross and net heat rate?", a: "Gross heat rate is based on the generator\u2019s total electrical output; net heat rate subtracts the plant\u2019s own auxiliary power consumption (fans, pumps, mills, coal handling) first. Net heat rate is always the higher (worse) number, and it is the one that actually determines fuel cost per unit of power sold." },
+      { q: "Why does condenser pressure matter so much to efficiency?", a: "Condenser pressure sets the temperature at which heat is rejected from the cycle \u2014 the lower it is, the more work the turbine can extract from the same steam before it condenses. This is why cooling water temperature (which sets achievable condenser vacuum) has a real, measurable effect on a plant\u2019s heat rate, independent of anything happening in the boiler." },
+      { q: "How much does boiler efficiency alone affect the final result?", a: "Directly and linearly on fuel consumption for a given output \u2014 a boiler running at 88% instead of 90% efficiency needs roughly 2.3% more fuel for the same steam output, since efficiency is simply useful heat output divided by fuel heat input." },
+    ],
+  },
+  'protection': {
+    about: "A real turbine-boiler-generator (BTG) unit is protected by dozens of overlapping systems, not one: the Emergency Trip System (ETS) protects the turbine-generator itself (overspeed, low vacuum, high vibration, thrust bearing failure), the Master Fuel Trip (MFT) protects the boiler (flame failure, low drum level, furnace pressure excursion), and dozens of individual auxiliary-drive interlocks and permissives sit underneath both. This registry models that structure directly \u2014 organized by ETS/MFT/auxiliary-drive category, each parameter tagged by data source (a defensible public-reference value, your own entered plant data, or a live simulated value) so it is always clear whether a number shown is a generic illustration or something you configured yourself.",
+    faq: [
+      { q: "What is the actual difference between an alarm, a permissive, an interlock, and a trip?", a: "An alarm only notifies the operator \u2014 it takes no automatic action. A permissive is a condition that must already be true before an action is ALLOWED to proceed (e.g. a pump won\u2019t start unless its discharge valve is open). An interlock actively PREVENTS or FORCES an action based on current conditions. A trip is the most severe: it automatically shuts down equipment (or the whole unit) because a protective limit was exceeded, and normally requires a deliberate reset before restart." },
+      { q: "Why does the ETS exist separately from the plant DCS?", a: "Overspeed, loss of vacuum, and similar turbine-generator protection functions need to act in milliseconds and must remain reliable even if the main control system has a fault \u2014 so ETS logic is traditionally implemented on dedicated, often hardwired or triple-redundant safety-rated hardware, kept deliberately independent of the DCS that handles normal day-to-day control." },
+      { q: "Why does an MFT trip ALL fuel valves, not just reduce firing?", a: "A furnace that has lost flame but continues receiving fuel builds up an unburned, explosive fuel-air mixture \u2014 re-ignition of that accumulated fuel is a genuine explosion hazard. Immediate, complete fuel isolation on any flame-failure or furnace-safety trip condition is a core NFPA 85 combustion-safety principle, not an operational choice." },
+      { q: "Are the setpoints shown here real values from a specific OEM?", a: "No \u2014 values tagged \u201cPublic Reference\u201d are commonly-used generic figures for education and planning, explicitly not sourced from any specific manufacturer\u2019s proprietary setpoint documents. Real trip setpoints for an actual unit must come from that unit\u2019s own approved C&E (Cause & Effect) documentation." },
+    ],
+  },
+  'control-loops': {
+    about: "A power plant runs on dozens of interacting control loops \u2014 boiler drum level (three-element), superheater/reheater temperature (via attemperation spray), combustion (fuel-air ratio), deaerator pressure and level, feedwater flow \u2014 each with its own dynamics, its own coupling to neighboring loops, and its own reason a naive single-loop PID tune can go wrong. This page runs live, interactive simulations of several of the most consequential ones, showing the actual process response (not just a static formula) so the effect of a tuning change, a disturbance, or a control-strategy choice (single-element vs. three-element level control, for instance) is genuinely visible rather than just described.",
+    faq: [
+      { q: "Why does drum level control need three elements instead of one?", a: "Single-element control (measuring only drum level) reacts too slowly to a sudden steam demand change \u2014 a load increase causes drum level to briefly rise (shrink-and-swell) before it falls, which a level-only controller misreads as \u201clevel is fine\u201d or even \u201cadd less water\u201d at exactly the wrong moment. Three-element control adds steam flow and feedwater flow as feedforward signals so the controller responds to the load change directly, not just to its delayed effect on level." },
+      { q: "What is shrink and swell, and why does it matter for tuning?", a: "A sudden increase in steam demand drops boiler pressure slightly, which causes existing steam bubbles in the drum water to expand \u2014 drum level rises even though water inventory is actually falling (swell). The reverse happens on a load decrease (shrink). A level controller tuned without accounting for this inverse response will tend to move the feedwater valve the wrong way immediately after a load change." },
+      { q: "Why is superheater temperature control often the hardest loop on the unit?", a: "It combines a long, variable process dead time (spray water takes real time to travel through the remaining superheater tubing before it affects outlet temperature) with a process gain and dead time that both change significantly with load \u2014 a PID tuned well at full load is commonly too aggressive or too sluggish at part load." },
+      { q: "Can I use this to actually re-tune a real loop\u2019s PID constants?", a: "Use it to build tuning intuition and to compare control STRATEGIES (e.g. cascade vs. single-loop, feedforward vs. feedback-only) \u2014 not to lift Kp/Ti/Td values directly onto a real DCS. A real loop\u2019s actual process gain, dead time, and time constant depend on that specific unit\u2019s equipment and must come from an actual tuning study or step-test on the real process." },
+    ],
+  },
+  'ct-sizing': {
+    about: "A protection-class current transformer (CT) has to do two contradictory jobs: reproduce normal load current accurately for metering and relaying, and NOT saturate during a fault current many times larger, since a saturated CT distorts the secondary waveform and can cause a relay to misoperate or fail to trip at all. CT sizing checks that the CT's rated accuracy limit factor (ALF) and connected burden (relay coils, leads, meters) together keep it working correctly right up to the maximum fault current the protection scheme actually needs to see \u2014 not just at rated load.",
+    faq: [
+      { q: "What is CT burden and why does it matter?", a: "Burden is the total impedance the CT secondary has to drive \u2014 relay coil impedance, connected meters, and the resistance of the lead wire between the CT and the panel. A higher burden makes the CT more prone to saturating at a given fault current, because more of the CT\u2019s limited output voltage capability is consumed just driving current through that burden." },
+      { q: "What does the accuracy limit factor (ALF) actually mean?", a: "ALF is the multiple of rated primary current up to which the CT is guaranteed to stay within its stated accuracy (composite error), for a given rated burden. A 5P20 CT is guaranteed 5% composite error up to 20 times rated current \u2014 exceed that current-times-burden combination and the CT can saturate." },
+      { q: "Why do long CT lead runs matter so much?", a: "Lead resistance adds directly to burden, and it does so twice \u2014 once out to the relay, once back \u2014 so a long run in small-gauge wire can dominate total burden even with a low-impedance relay, pushing an otherwise adequately-sized CT toward saturation at fault current." },
+      { q: "Should protection and metering ever share the same CT core?", a: "Not ideally \u2014 a metering-class CT core is optimized for accuracy at NORMAL load current and is designed to saturate early to protect connected meters from fault current, which is exactly the wrong behavior for a protection relay that needs to see the fault clearly. Multi-ratio, multi-core CTs with separate protection and metering cores are the standard solution." },
+    ],
+  },
+  'transformer-prot': {
+    about: "A power transformer's differential protection compares current entering one winding against current leaving the other \u2014 under normal conditions and external faults these are equal (after CT ratio and vector-group correction), but an internal fault creates a genuine mismatch the relay can detect almost instantly. The hard part is that transformer inrush current (a large, temporary magnetizing surge on energization) also looks like a differential mismatch to a naive relay \u2014 which is why real transformer differential protection includes harmonic restraint, specifically checking for the second-harmonic content that distinguishes inrush from a genuine internal fault.",
+    faq: [
+      { q: "Why does transformer inrush current look like a fault to a differential relay?", a: "On energization, the transformer core briefly draws a large magnetizing current from one side only (to build up flux) \u2014 the secondary sees essentially no current during this transient, creating a large apparent current imbalance that a simple differential comparison would read as an internal fault." },
+      { q: "What is second-harmonic restraint and why 2nd harmonic specifically?", a: "Inrush current is rich in even harmonics, especially 2nd harmonic, because of the asymmetric, one-sided way the core saturates during energization \u2014 a genuine internal fault current does not have this signature. Relays measure 2nd harmonic content in the differential current and restrain (block) tripping when it exceeds a set threshold, typically 15-20%." },
+      { q: "Why does the CT ratio matching matter so much for differential protection?", a: "The relay is comparing scaled-down secondary currents from CTs on both sides of the transformer, which normally have different turns ratios (since primary and secondary transformer currents differ by the transformer\u2019s own turns ratio). Any mismatch between the actual CT ratios and what the relay compensates for shows up as a false, permanent differential current even with no fault at all." },
+      { q: "What does percentage (biased) differential protection add over simple differential?", a: "It scales the tripping threshold up as through-current rises, since CT ratio errors and mismatches genuinely get larger in absolute terms at higher current \u2014 a fixed differential threshold would either be too sensitive at low load or too insensitive at high load; percentage bias keeps sensitivity appropriate across the whole load range." },
+    ],
+  },
+  'motor-prot': {
+    about: "An induction motor's biggest protection challenge is that its own normal starting current \u2014 typically 5\u20138 times full-load current \u2014 looks electrically identical to a stalled-rotor overload condition, except for duration. Motor protection has to correctly tell these apart: allow the high inrush during a legitimate start (thermal capacity curve), but trip quickly if the rotor genuinely stalls or the motor is overloaded for too long, since sustained high current at zero or low speed dumps heat into the rotor and stator far faster than the motor's steady-state thermal design accounts for.",
+    faq: [
+      { q: "Why can\u2019t a simple instantaneous overcurrent relay protect a motor?", a: "It would trip on every normal start, since starting current is genuinely several times full-load current for a few seconds \u2014 the relay has to distinguish a normal, time-limited starting transient from a genuine sustained overload or stall, which is exactly what a thermal (I\u00b2t) or motor-specific thermal-model relay does instead of a simple instantaneous element." },
+      { q: "What is locked-rotor (stalled) protection and why is it time-critical?", a: "A stalled rotor draws locked-rotor current indefinitely with zero cooling airflow from shaft rotation \u2014 rotor bar and stator winding temperature rises far faster than during a normal start, since there\u2019s no acceleration to bring current back down. Locked-rotor protection uses a much shorter time limit than the normal starting-current allowance specifically because of this." },
+      { q: "Why does motor protection need negative-sequence (unbalance) protection?", a: "A small voltage unbalance across the three phases produces a disproportionately large negative-sequence current in the motor, which creates a counter-rotating flux and induces significant extra heating in the rotor \u2014 a motor can overheat from unbalance alone even while total current looks acceptable on a simple overcurrent relay." },
+      { q: "What is the difference between thermal overload and true RMS overload protection?", a: "A basic bimetallic thermal overload responds to average current heating effect reasonably well but doesn\u2019t distinguish between fundamental current and harmonic-rich current from VFD supply or unbalance. A true RMS or motor-thermal-model relay measures actual heating-equivalent current more precisely, which matters increasingly as VFD-fed and unbalanced-supply motors become common." },
+    ],
+  },
+  'lsig': {
+    about: "LSIG (Long-time, Short-time, Instantaneous, Ground fault) is the standard four-zone protective curve used on molded-case and power circuit breakers with adjustable trip units \u2014 each zone targets a different fault magnitude and timescale, and getting the settings right (and properly coordinated with upstream/downstream breakers) is what actually determines which breaker opens for a given fault, not just whether a breaker CAN open for it. Long-time protects against sustained overload (like a thermal element); Short-time and Instantaneous protect against progressively larger fault currents at progressively faster speeds; Ground fault specifically targets line-to-ground faults, which can otherwise be too small to reliably trip the phase elements.",
+    faq: [
+      { q: "Why does a breaker need four separate zones instead of one curve?", a: "Because overload, moderate fault, and severe fault conditions genuinely need different response speeds and thresholds to coordinate correctly with other breakers in the system \u2014 a single curve can\u2019t simultaneously ride through normal motor starting current, coordinate selectively with a downstream breaker on a moderate fault, and still clear a severe bolted fault fast enough to limit damage." },
+      { q: "What is the purpose of the short-time delay specifically?", a: "It deliberately delays tripping on a moderate-to-high fault long enough for a downstream breaker (closer to the actual fault) to clear it first \u2014 this is what \"selective coordination\" means: only the breaker nearest the fault opens, keeping the rest of the system energized." },
+      { q: "Why is instantaneous protection sometimes turned off entirely?", a: "On an upstream (main or intermediate) breaker in a fully-coordinated system, instantaneous tripping would defeat the selective coordination the short-time delay was set up to provide \u2014 a severe fault downstream would trip BOTH the downstream breaker and the upstream instantaneous element simultaneously, causing unnecessary loss of unaffected loads." },
+      { q: "Why is ground fault protection a separate zone from phase overcurrent?", a: "A line-to-ground fault, especially through some impedance (like a wet insulation failure), can draw current far below the phase overcurrent pickup but still be a real, dangerous fault \u2014 dedicated ground fault protection, often using a zero-sequence or residual current measurement, catches faults the phase elements alone would miss." },
+    ],
+  },
+  'coordination': {
+    about: "Protective device coordination (selectivity) means that when a fault happens, only the breaker or fuse closest to the fault opens \u2014 not every device upstream of it. Achieving that requires plotting every device's time-current characteristic on the same log-log graph and confirming adequate time separation (coordination margin) between adjacent devices across the full range of possible fault currents, not just at one point. Poor coordination shows up in exactly the way plant operators dread: a fault on one small feeder trips the main breaker and blacks out the whole switchboard instead of just that feeder.",
+    faq: [
+      { q: "What is a typical minimum coordination time interval (CTI) between devices?", a: "A commonly used margin between two electromechanical or digital relay/breaker time-current curves is around 0.3\u20130.4 seconds at the fault current level being checked, accounting for breaker interrupting time, relay overtravel/overshoot, and a safety margin \u2014 fuse-to-fuse coordination often uses tighter margins since fuses have no moving parts to overtravel." },
+      { q: "Why must coordination be checked across a RANGE of fault currents, not just one value?", a: "Two time-current curves that are well-separated at low fault current can cross or converge at high fault current (or vice versa) \u2014 curve shapes differ (inverse-time vs. definite-time vs. instantaneous), so adequate margin at one current level says nothing about margin at another. A full coordination study plots the whole range the system can actually see." },
+      { q: "What is the difference between coordination and discrimination?", a: "They\u2019re essentially the same concept under different regional naming conventions \u2014 IEC literature more often says \"discrimination,\" while North American practice more often says \"coordination.\" Both describe the same goal: only the nearest device to a fault operates." },
+      { q: "Can two devices ever be impossible to coordinate?", a: "Yes \u2014 if the downstream device\u2019s maximum clearing time at some fault current exceeds the upstream device\u2019s minimum pickup time at that same current, no time-current curve shape or setting change can create separation there; the only fixes are changing device type/rating, adding an intermediate protective step, or accepting that fault range as a coordination gap." },
+    ],
+  },
+  'cable-withstand': {
+    about: "A cable subjected to fault current for the time it takes upstream protection to clear the fault must not exceed its short-circuit thermal withstand limit \u2014 the adiabatic (no-heat-loss-to-surroundings) approximation used for this calculation assumes all the fault energy heats the conductor directly, which is genuinely accurate for the short durations (typically under 5 seconds) real protection clearing times fall within. This check exists because a cable correctly sized for normal load current can still be thermally destroyed by a fault current it was never checked against, if protection clearing time is too slow relative to the cable's cross-sectional area.",
+    faq: [
+      { q: "Why is the adiabatic assumption valid here when it clearly isn\u2019t for continuous loading?", a: "Heat conduction away from the conductor into surrounding insulation and air takes real time \u2014 measured in tens of seconds to minutes for typical cable constructions. Over the sub-5-second durations most fault-clearing times fall within, essentially none of that heat has had time to escape, so treating all the energy as staying in the conductor is a genuinely accurate, not just conservative, approximation." },
+      { q: "What is the k-factor in the cable withstand formula and where does it come from?", a: "k depends on the conductor material (copper vs. aluminum) and the cable\u2019s insulation type\u2019s maximum permitted short-circuit temperature (which is higher than its continuous operating temperature) \u2014 it is derived from the conductor\u2019s specific heat, resistivity, and the temperature rise permitted between normal operating temperature and the insulation\u2019s short-circuit damage limit." },
+      { q: "Why does a slower upstream breaker require a bigger cable, all else equal?", a: "The withstand formula shows required cross-sectional area scaling with the square root of clearing time \u2014 a breaker that takes 4 times longer to clear a fault requires a cable with twice the cross-sectional area to absorb the proportionally larger total energy (I\u00b2t) without exceeding its thermal limit." },
+      { q: "Does this check replace normal ampacity sizing?", a: "No \u2014 it is a separate, additional check. A cable must pass BOTH normal ampacity/voltage-drop sizing for continuous load AND short-circuit thermal withstand for fault conditions; either one alone can be the governing constraint depending on the specific installation and protection scheme." },
+    ],
+  },
+  'motor-start': {
+    about: "A directly-started induction motor draws 5\u20138 times its full-load current for the first several seconds of starting \u2014 large enough that it can pull the local bus voltage down (voltage dip) far enough to disturb other equipment on the same supply: contactors dropping out, lighting flicker, sensitive electronics resetting, or nearby motors stalling. This calculation checks whether a given motor's starting current, against the supply system's available fault capacity (source impedance), produces an acceptable voltage dip \u2014 the key input to deciding whether direct-on-line starting is acceptable or a reduced-voltage starting method (soft starter, VFD, star-delta) is genuinely needed.",
+    faq: [
+      { q: "What voltage dip is generally considered acceptable during motor starting?", a: "A commonly used guideline allows a dip of 10\u201315% at the point of common coupling for occasional motor starts, though sensitive equipment (VFDs, PLCs, some lighting) may need tighter limits \u2014 always confirm against the actual equipment supplier\u2019s tolerance and any site or utility-imposed limit, since there is no single universal number." },
+      { q: "Why does source impedance (fault level) matter for voltage dip, not just motor starting current?", a: "Voltage dip is fundamentally a voltage divider between source impedance and the motor\u2019s starting impedance \u2014 the same starting current causes a much smaller dip on a \"stiff\" high-fault-level supply than on a \"weak\" supply with high source impedance, which is exactly why the same motor can be fine on one site and problematic on another." },
+      { q: "How much does a soft starter or VFD actually reduce the dip compared to direct-on-line?", a: "Substantially \u2014 a soft starter or VFD can limit starting current to roughly 2\u20133 times full-load current instead of DOL\u2019s 5\u20138 times, which correspondingly cuts the voltage dip by a similar fraction, since dip scales roughly linearly with starting current at a given source impedance." },
+      { q: "Does star-delta starting always help enough to avoid a reduced-voltage starter?", a: "It reduces starting current to roughly a third of DOL current during the star phase, which often helps meaningfully \u2014 but it also reduces starting torque to about a third, so it only works where the driven load\u2019s starting torque requirement is genuinely low; a high-inertia or high-starting-torque load may not accelerate at all in the star connection." },
+    ],
+  },
+  'pf-correction': {
+    about: "A predominantly inductive industrial load (motors, transformers) draws reactive power (kVAR) in addition to real power (kW), which the supply and distribution system still has to carry even though it does no useful work \u2014 this shows up as a power factor below 1.0, higher apparent current for the same real power, and, in many tariff structures, a direct financial penalty. Power factor correction adds capacitor banks to supply reactive power locally, reducing the reactive current the utility supply and site cabling have to carry for the same real load.",
+    faq: [
+      { q: "Why does poor power factor cost money even though the \"wasted\" power isn\u2019t actually consumed?", a: "Reactive current still flows through transformers, cables, and switchgear, requiring them to be sized larger than the real power alone would need \u2014 many utilities bill for this directly (a power factor penalty or kVA-based demand charge) precisely because it consumes real distribution system capacity even though it doesn\u2019t register as consumed energy." },
+      { q: "How much capacitance (kVAR) do I actually need to reach a target power factor?", a: "The required kVAR is the difference between the reactive power at the current power factor and the reactive power that WOULD exist at the target power factor, for the same real power (kW) \u2014 both computed from kW \u00d7 tan(\u03b8), where \u03b8 is the phase angle corresponding to each power factor." },
+      { q: "Can you overcorrect power factor, and is that a real problem?", a: "Yes \u2014 too much capacitance makes the load net-capacitive (leading power factor), which can cause overvoltage at light load, resonance with system inductance (particularly a concern with harmonic-generating loads like VFDs), and some utilities penalize leading power factor just as they penalize lagging." },
+      { q: "Where should capacitor banks physically be installed \u2014 centrally or at each motor?", a: "Both are used in practice: individual (per-motor) correction avoids reactive current flowing through any of the site wiring at all, but is more capital-intensive per kVAR; central correction at the main switchboard is cheaper per kVAR but still leaves reactive current flowing through the branch circuits to each load. The right choice depends on which segment\u2019s capacity is actually the constraint." },
+    ],
+  },
+  'battery-sizing': {
+    about: "A DC battery system \u2014 for switchgear tripping/closing, emergency lighting, or UPS backup \u2014 must be sized for the actual DUTY CYCLE it will see during an outage, not just the peak or average load in isolation: a typical substation battery duty cycle includes a large momentary current spike (breaker closing/tripping) superimposed on a smaller continuous standing load (relay/DCS power, indication) sustained for the full required backup time. IEEE 485 provides the standard method for translating that duty cycle, plus aging and temperature derating, into the number of battery cells and their required ampere-hour capacity.",
+    faq: [
+      { q: "Why does battery sizing need the full duty cycle, not just peak current?", a: "A battery sized only for the momentary peak (breaker close/trip current) could be far smaller than what\u2019s needed to sustain the continuous standing load for the full backup duration \u2014 and vice versa, sizing only for the steady load could leave insufficient capacity for the peak. IEEE 485\u2019s duty-cycle method captures both correctly by working through each time period of the cycle in sequence." },
+      { q: "Why derate for both aging and temperature separately?", a: "They act through different, additive mechanisms: aging reduces a battery\u2019s available capacity over its service life even under ideal conditions (a common design allowance is sizing for 100% capacity only needed at end-of-life, meaning it starts oversized), while low temperature reduces the electrochemical reaction rate and available capacity at any given point in the battery\u2019s life, independent of age." },
+      { q: "What is the difference between a VRLA and a vented (flooded) lead-acid battery for this application?", a: "VRLA (valve-regulated, \"sealed\") batteries need less maintenance and no separate battery room ventilation for hydrogen, but typically have a shorter design life and lower tolerance for deep discharge or high temperature than vented lead-acid \u2014 vented batteries remain common for critical substation applications specifically for their longer life and more predictable aging." },
+      { q: "Why size for the WORST-case duty cycle rather than a typical one?", a: "The battery\u2019s entire purpose is to be available during an actual outage, which by definition is not a routine event \u2014 sizing for anything less than the worst realistic combination of events (e.g. a fault requiring a trip near the end of the design backup time) risks the exact scenario the battery exists to cover." },
+    ],
+  },
+  'tx-loading': {
+    about: "A power transformer's nameplate rating is a continuous, steady-state limit at a specified ambient temperature \u2014 in practice, transformers routinely and safely carry loads above nameplate for limited periods, especially in cool ambient conditions, because insulation aging (the thing that actually limits transformer life) depends on accumulated thermal exposure over time, not on any single instantaneous loading value. IEEE C57.91 and IEC 60076-7 both provide loading guides that trade a controlled, bounded amount of accelerated insulation aging for genuinely useful short-term overload capability \u2014 within limits that keep hot-spot temperature from reaching levels that risk immediate, catastrophic damage.",
+    faq: [
+      { q: "Why is transformer overload capability an aging trade-off rather than a hard limit?", a: "Insulation aging follows an approximately exponential relationship with hot-spot temperature \u2014 a modest, time-limited overload accelerates aging for that period but the transformer still has a long remaining useful life; a genuinely excessive or sustained overload accelerates aging fast enough to meaningfully shorten transformer life, and beyond that risks immediate bubble formation or dielectric breakdown." },
+      { q: "How much does ambient temperature actually change safe loading capability?", a: "Substantially \u2014 loading guides typically show every degree Celsius below the transformer\u2019s rated ambient allows roughly 1% additional loading capacity (and vice versa above rated ambient) \u2014 a transformer nameplate-rated at 30\u00b0C ambient can often carry noticeably more load on a cold winter night than the flat nameplate number suggests." },
+      { q: "What is hot-spot temperature and why is it the limiting parameter, not average winding temperature?", a: "The hottest point in the winding (typically near the top, where cooling oil circulation is least effective) ages faster than the average \u2014 loading guides are built around keeping THAT specific point below its damage threshold, since insulation failure starts at the hottest point, not at the average temperature across the whole winding." },
+      { q: "Does an oil-filled transformer\u2019s cooling mode (ONAN/ONAF/OFAF) change its overload capability?", a: "Yes, meaningfully \u2014 forced-air or forced-oil cooling stages (ONAF, OFAF) that are normally reserved for the transformer\u2019s highest nameplate rating also improve its ability to shed the extra heat generated during a short-term overload, so a transformer\u2019s overload margin genuinely depends on which cooling stages are actually available and running." },
+    ],
+  },
+  'ngr-sizing': {
+    about: "A neutral grounding resistor (NGR) deliberately limits ground fault current on a resistance-grounded system to a controlled, known value \u2014 typically tens to a few hundred amps rather than the thousands of amps a solidly-grounded fault would produce \u2014 trading some sensitivity in ground fault detection for dramatically reduced arc-flash energy, equipment damage, and step/touch voltage hazard during a ground fault. Sizing an NGR means choosing that target fault current (based on system voltage, protection sensitivity needs, and equipment withstand) and then working out the resistance and short-time power rating the resistor must have to sustain it for the protection clearing time.",
+    faq: [
+      { q: "Why deliberately limit ground fault current instead of maximizing protection sensitivity?", a: "A solidly-grounded system\u2019s ground fault current can be nearly as large as its three-phase fault current \u2014 that much energy dumped into an arcing fault causes severe equipment damage and a genuine arc-flash hazard to personnel. Resistance grounding accepts a somewhat less sensitive (but still entirely adequate) ground fault detection scheme in exchange for keeping fault energy and hazard dramatically lower." },
+      { q: "What is the difference between low-resistance and high-resistance grounding?", a: "Low-resistance grounding typically targets tens to a few hundred amps and is designed to trip on the first ground fault, common on medium-voltage industrial systems. High-resistance grounding limits fault current to just a few amps, deliberately allowing continued operation through a single ground fault (common on low-voltage systems where an unplanned trip is very costly) while alarming so the fault can be found and cleared in a controlled shutdown." },
+      { q: "How is the NGR\u2019s short-time rating determined?", a: "It must absorb the full I\u00b2R heating from the target fault current for at least as long as the protection system takes to clear the fault, with margin \u2014 resistors are typically rated for a specific time (e.g. 10 seconds or 1 minute) at their rated current, and that time must exceed the actual expected fault duration including any coordination margin." },
+      { q: "Does NGR resistance value affect ground fault relay settings elsewhere in the system?", a: "Yes, directly \u2014 the whole point of choosing the NGR\u2019s target current is that it sets the maximum ground fault current the system will ever see, which in turn sets the pickup range every ground fault relay downstream must be coordinated within; changing the NGR without re-checking those settings can leave the ground fault protection scheme mis-coordinated." },
+    ],
+  },
+  'generator-sizing': {
+    about: "Sizing a standby or prime-power generator means checking it against several genuinely different load conditions, not just total connected kW: continuous running capacity for steady load, the much larger and shorter-duration surge current needed to start the largest motor on the system without the generator's own voltage collapsing, and the generator's transient voltage dip response to that starting event. A generator correctly sized for steady-state running load can still fail to start a large motor if its transient reactance and voltage-regulator response aren't checked against that motor's starting kVA specifically.",
+    faq: [
+      { q: "Why is motor starting kVA usually the real sizing constraint, not total running load?", a: "A large motor\u2019s starting current (5\u20138\u00d7 full-load, at a low, mostly-reactive power factor) briefly demands far more kVA than the same motor\u2019s running load \u2014 a generator sized only for steady-state kW can have its voltage collapse badly enough during that surge to stall the very motor it\u2019s trying to start, or trip on undervoltage before the motor accelerates." },
+      { q: "What does subtransient reactance have to do with generator sizing?", a: "Subtransient reactance (X\u2033d) governs the generator\u2019s voltage response in the first few cycles of a sudden large load step, like motor starting \u2014 a lower X\u2033d generator holds voltage up better during that transient, meaning the same generator can start a larger motor (or the same motor with less voltage dip) than a higher-reactance machine of similar steady-state kW rating." },
+      { q: "How much voltage dip during motor starting is generally acceptable?", a: "A commonly used guideline allows 15\u201320% momentary voltage dip during motor starting on a genset, though this depends on what else is connected to the same bus and how sensitive it is \u2014 always check against both the generator manufacturer\u2019s guidance and the tolerance of other equipment sharing the supply." },
+      { q: "Is a generator\u2019s standby rating the same as its prime (continuous) rating?", a: "No \u2014 standby ratings assume limited annual run hours at variable load with no overload capacity margin beyond the rating itself, while prime ratings are for continuous, unlimited-hours running and are typically set lower (often around 90% of the standby rating) precisely because of that duty-cycle difference." },
+    ],
+  },
+  'voltage-unbalance': {
+    about: "A three-phase induction motor is highly sensitive to voltage unbalance between its supply phases \u2014 even a modest 2-3% voltage unbalance (well within many utility supply tolerances) produces a disproportionately large 6-9x negative-sequence current in the motor, since motor negative-sequence impedance is much lower than its positive-sequence (normal running) impedance. That negative-sequence current creates a counter-rotating magnetic field that induces significant additional heating in the rotor specifically, which NEMA MG-1 addresses with a derating curve: the same motor must be run at reduced load as supply voltage unbalance increases, to keep total heating within the motor's thermal design.",
+    faq: [
+      { q: "Why does a small voltage unbalance cause such disproportionately large current unbalance?", a: "A motor\u2019s impedance to negative-sequence current is roughly equal to its locked-rotor (starting) impedance, which is much lower than its normal positive-sequence running impedance \u2014 a small negative-sequence VOLTAGE therefore drives a much larger negative-sequence CURRENT than the same percentage would produce if impedances were equal, which is exactly the 6-9x multiplication NEMA\u2019s guidance describes." },
+      { q: "How is voltage unbalance actually calculated?", a: "The NEMA definition is the maximum deviation of any one line voltage from the average of the three line voltages, divided by that average, expressed as a percentage \u2014 not simply the difference between the highest and lowest voltage, which is a common calculation mistake that overstates the actual unbalance." },
+      { q: "What causes voltage unbalance on an otherwise healthy supply?", a: "Unequal single-phase loading distributed across the three phases upstream is the most common cause on an otherwise sound supply \u2014 a large single-phase load (or several, poorly balanced) draws more current from one or two phases than the others, causing unequal voltage drop across the supply impedance and showing up as unbalance at the motor terminals." },
+      { q: "At what unbalance level should a motor be taken out of service rather than just derated?", a: "NEMA MG-1 explicitly recommends against operating a motor above about 5% voltage unbalance at all, regardless of derating, since the derating curve itself is only defined and validated up to that point \u2014 above it, the root cause (usually an upstream supply or loading problem) needs to be fixed rather than compensated for at the motor." },
+    ],
+  },
+  'tx-inrush': {
+    about: "Energizing a power transformer produces a large, brief inrush current \u2014 often 8\u201312 times full-load current for the first few cycles, decaying over roughly half a second to several seconds depending on transformer size and system X/R ratio \u2014 caused by the core briefly saturating as it establishes normal operating flux from whatever residual flux happened to remain from the last de-energization. This calculation exists because inrush current, despite being entirely normal and harmless to the transformer itself, can nuisance-trip upstream protection or cause unwanted voltage dip if the protection settings and upstream capacity weren't checked against it specifically.",
+    faq: [
+      { q: "Why does inrush current depend on the exact moment of energization?", a: "If the transformer is switched in exactly when residual core flux and the flux the applied voltage is trying to establish add together (worst case), the core saturates hard and inrush is maximum; switched in at the point where they partially cancel, inrush can be much smaller \u2014 this randomness is why repeated energizations of the same transformer show different inrush magnitudes." },
+      { q: "Why is inrush current mostly a protection coordination problem, not a transformer damage risk?", a: "The transformer\u2019s own windings and insulation are designed to handle this exact event since it happens every time the transformer is energized \u2014 the real risk is that an upstream fuse or relay, if not set with adequate margin above inrush magnitude and duration, mistakes this normal event for a fault and trips unnecessarily." },
+      { q: "How is inrush current distinguished from genuine fault current by protection relays?", a: "The same 2nd-harmonic content used in differential protection (see Transformer Protection) is the standard method \u2014 inrush current is rich in even harmonics from the asymmetric core saturation, while genuine fault current is not, letting a relay restrain tripping specifically during inrush without losing sensitivity to real faults." },
+      { q: "Does transformer size affect how long inrush current takes to decay?", a: "Yes \u2014 larger transformers generally have proportionally higher winding resistance-to-reactance ratios that affect the decay time constant, and in practice larger units often show inrush decaying over a longer period (sometimes several seconds) compared to small distribution transformers, which is exactly why time-delayed (not instantaneous) protection settings are used to ride through it." },
+    ],
+  },
+  'dp-flow-wizard': {
+    about: "Every differential-pressure flow element \u2014 orifice, venturi, flow nozzle \u2014 shares the same underlying physics (Bernoulli's principle: accelerating a fluid through a restriction drops its pressure, and that drop scales with the square of flow rate) but each element type has its own discharge coefficient, permanent pressure loss, and accuracy characteristics. This wizard walks through selecting an element type for your service and duty, then sizing it, rather than assuming you've already decided which element you need \u2014 the right choice genuinely depends on available pressure drop budget, required accuracy, and installation space.",
+    faq: [
+      { q: "Why does flow scale with the SQUARE ROOT of differential pressure, not linearly?", a: "Bernoulli\u2019s equation relates velocity squared to pressure drop \u2014 doubling flow rate requires roughly quadrupling the differential pressure across a fixed restriction, which is why a DP transmitter\u2019s calibrated range and a flow element\u2019s turndown ratio are tightly linked: the same transmitter range gives much better resolution at low flow than the square-root relationship might suggest." },
+      { q: "When should I choose a venturi over a plain orifice plate?", a: "When permanent pressure loss matters \u2014 a venturi recovers most of the pressure it temporarily drops (typically 10\u201320% permanent loss vs. an orifice\u2019s 40\u201380%), at several times the cost and a longer required installation length. It\u2019s the right trade when pumping/compression energy cost over the element\u2019s life outweighs its higher purchase price." },
+      { q: "What does turndown ratio mean for a DP flow element?", a: "It\u2019s the ratio between maximum and minimum flow the element can measure at acceptable accuracy \u2014 typically only about 3:1 to 4:1 for a single DP element and transmitter, since accuracy degrades badly at low flow (small DP, more affected by transmitter zero error) even though the physics theoretically supports a wider range." },
+      { q: "Do I need straight upstream and downstream pipe runs for any DP element?", a: "Yes, for all three types \u2014 published standards (ISO 5167 for orifice/venturi/nozzle) specify minimum straight-run lengths depending on the upstream fitting (elbow, valve, tee), since the accuracy of every DP element depends on a settled, symmetric velocity profile arriving at the element." },
+    ],
+  },
+  'converter': {
+    about: "Engineering unit conversion sounds trivial until a specific field's units cross a system boundary \u2014 pressure alone has bar, psi, kPa, mmH2O, mmHg, kg/cm\u00b2, and inH2O all in active industrial use, and a single wrong conversion factor (especially the ones that aren't simple powers of ten) is a genuinely common source of real instrumentation calibration errors. This tool exists as a fast, always-available reference for exactly those conversions engineers do dozens of times a week across pressure, flow, temperature, and other common process units.",
+    faq: [
+      { q: "Why are there so many different pressure units in industrial use?", a: "Regional and historical convention, mostly \u2014 psi and inH2O are common in US practice, bar and mbar in European/metric practice, kg/cm\u00b2 in some Asian markets, and mmHg/mmH2O for vacuum and low-pressure work specifically because they correspond to a directly visible manometer column height." },
+      { q: "Is temperature conversion just a simple multiplication like other units?", a: "No \u2014 unlike most unit conversions, Celsius/Fahrenheit/Kelvin involve both a scale factor AND an offset (since their zero points don\u2019t coincide), which is exactly the kind of conversion that\u2019s easy to get subtly wrong doing it manually, especially for a TEMPERATURE DIFFERENCE (span) versus an absolute temperature value, which convert differently." },
+      { q: "Why does flow unit conversion sometimes need density, not just a factor?", a: "Converting between a VOLUMETRIC flow unit (m\u00b3/h, gpm) and a MASS flow unit (kg/h, lb/h) genuinely requires the fluid\u2019s density \u2014 there is no universal conversion factor between them, since the same mass flow of a light gas and a heavy liquid occupy very different volumes." },
+    ],
+  },
+  'transmitter': {
+    about: "A 4-20mA transmitter compresses a physical measurement's entire calibrated range into a standard current signal, with 4mA representing the low end (0%) and 20mA the high end (100%) \u2014 the choice of 4mA rather than 0mA as the zero point is deliberate: it lets a broken wire or dead transmitter be distinguished from a genuine zero reading, since a real zero reads 4mA while a fault reads 0mA. This tool converts between the engineering value, the percentage of range, and the corresponding mA signal for any transmitter's calibrated span.",
+    faq: [
+      { q: "Why 4-20mA specifically, instead of 0-20mA or another range?", a: "The 4mA live zero is the key design choice \u2014 it lets the receiving instrument (PLC, DCS, indicator) distinguish a genuine zero reading (4mA) from a broken wire, dead transmitter, or disconnected loop (0mA), which a 0-20mA scheme cannot do at all." },
+      { q: "How is the milliamp value related to percentage of range?", a: "Linearly: 4mA = 0% of range, 20mA = 100% of range, with every point in between scaling directly \u2014 12mA is always 50% of range regardless of what the range actually represents in engineering units, which is exactly what makes 4-20mA a universal signal standard across different measurement types." },
+      { q: "Does a transmitter\u2019s calibrated range have to match its physical measurement limits?", a: "No, and usually it shouldn\u2019t \u2014 a transmitter is calibrated to the RANGE the specific application needs (e.g. 0-10 bar) even if the physical sensor could measure a wider range, since using the full 4-20mA span across only the range actually needed maximizes resolution and accuracy for that application." },
+    ],
+  },
+  'dp-level': {
+    about: "Measuring liquid level with a differential pressure transmitter works because a column of liquid exerts hydrostatic pressure proportional to its height and density \u2014 mounting the transmitter's high-pressure side at the bottom of the vessel (or via an impulse line) and its low-pressure side at the top (open to atmosphere for a vented tank, or connected to the vapor space for a closed/pressurized vessel) measures exactly that hydrostatic head, independent of the vessel's absolute pressure. This is the standard, most common level measurement technique in industrial process plants precisely because it needs no moving parts and directly measures a physical quantity (pressure) that scales predictably with level.",
+    faq: [
+      { q: "Why does a CLOSED, pressurized vessel need the low-pressure side connected to vapor space, not atmosphere?", a: "Because the vessel\u2019s own internal pressure (above the liquid) would otherwise show up as a large, level-independent offset on the high-pressure side reading \u2014 connecting the low-pressure side to the SAME vapor space cancels that common pressure out of the differential, leaving only the true hydrostatic head due to liquid level." },
+      { q: "What is a wet leg and when is it needed?", a: "On a closed vessel where the low-pressure impulse line could see condensation collecting in it over time, a wet leg deliberately fills that line with a known reference fluid instead \u2014 the calculation then has to subtract that reference column\u2019s own hydrostatic contribution, which is why wet-leg level transmitters need their calibration to account for it explicitly, not just the vessel\u2019s own liquid." },
+      { q: "Does liquid density changing (e.g. with temperature) affect a DP level reading?", a: "Yes, directly \u2014 the transmitter genuinely measures pressure, and pressure = density \u00d7 g \u00d7 height, so if the calibrated density assumption no longer matches actual process density, the SAME true level reads as a different pressure, and the transmitter reports an incorrect level unless recalibrated or density-compensated." },
+      { q: "Why is DP level still used when radar and ultrasonic level exist?", a: "It has no moving parts, works reliably in dirty, foaming, or vapor-obscured services where non-contact methods can struggle, and is well-proven at high pressure and temperature \u2014 the trade-off is a genuine dependency on knowing liquid density accurately, which radar and similar non-contact techniques don\u2019t share." },
+    ],
+  },
+  'ip-converter': {
+    about: "An I/P (current-to-pneumatic) converter bridges an electronic 4-20mA control signal to the 3-15psi (or 0.2-1.0 bar) pneumatic signal that drives a pneumatic control valve actuator or positioner \u2014 essential wherever electronic control systems need to operate legacy or intrinsically-safe pneumatic final control elements. The device works by using the input current to control a nozzle-flapper or similar pneumatic amplifier, converting a small electrical signal into a proportional, much higher-force pneumatic output capable of actually moving a valve stem against process pressure and spring force.",
+    faq: [
+      { q: "Why is 3-15 psi the standard pneumatic signal range?", a: "It\u2019s a long-established industry convention (predating widespread 4-20mA electronics) chosen to give a usable working range above atmospheric pressure while staying within instrument air supply pressure limits \u2014 like 4-20mA\u2019s live zero, the 3psi baseline (rather than 0psi) also helps distinguish a genuine zero-demand signal from a lost air supply." },
+      { q: "Why would anyone still use a pneumatic final control element instead of an electric actuator?", a: "Pneumatic actuators are inherently simple, fail-safe (spring return to a defined position on air loss), and intrinsically safe without special electrical certification \u2014 genuinely valuable properties in hazardous-area process plants, which is why I/P converters remain common even in otherwise fully electronic control systems." },
+      { q: "Is the I/P conversion linear across the whole range?", a: "A well-calibrated I/P converter is designed to be linear \u2014 4mA corresponds to 3psi, 20mA to 15psi, with proportional values in between \u2014 but like any instrument it has its own accuracy and linearity specification that should be checked against the application\u2019s control requirements, not assumed perfect." },
+    ],
+  },
+  'loop-uncertainty': {
+    about: "Every instrument in a measurement loop \u2014 the primary sensor, the transmitter, any signal conditioning, the receiving DCS/PLC input card \u2014 contributes its own accuracy error, and these don't simply add together: independent, random errors combine in quadrature (root-sum-of-squares), meaning a loop's total uncertainty is meaningfully smaller than the sum of all the individual component errors, though larger than any single one. This calculator combines the individual accuracy specifications from a real instrument loop into the total measurement uncertainty the loop actually delivers \u2014 the number that matters for deciding whether a measurement is good enough for its intended use (custody transfer, control, or just monitoring).",
+    faq: [
+      { q: "Why do independent errors add in quadrature (root-sum-of-squares) instead of simply adding up?", a: "Independent random errors are statistically very unlikely to all be at their maximum, in the same direction, simultaneously \u2014 quadrature combination correctly reflects that a loop\u2019s TOTAL uncertainty is dominated by its largest individual contributor, not inflated by naively summing every source as if they always align." },
+      { q: "When should errors be added directly (worst-case) instead of in quadrature?", a: "When errors are NOT independent \u2014 for example, if a single environmental factor (like ambient temperature) affects both the sensor and the transmitter\u2019s accuracy simultaneously and in a correlated way, quadrature combination would understate the real combined effect, and a more conservative worst-case addition may be appropriate for that shared factor." },
+      { q: "Which single component usually dominates total loop uncertainty?", a: "It depends on the loop, but the primary sensor (RTD, thermocouple, orifice plate discharge coefficient uncertainty) is very often the largest single contributor \u2014 transmitters and receiving instrumentation have typically become accurate enough that the physical sensing element itself is usually the limiting factor in overall loop accuracy." },
+      { q: "Does loop uncertainty include installation effects like straight-run requirements?", a: "Not directly \u2014 this calculation combines the STATED accuracy specifications of the instruments themselves. Installation-related errors (inadequate straight run for a flow element, poor thermal contact for an RTD) are real but separate sources of error not captured in a manufacturer\u2019s accuracy specification, and should be checked independently." },
+    ],
+  },
+  'cavitation': {
+    about: "Cavitation in a control valve happens when local pressure inside the valve drops below the fluid's vapor pressure at the vena contracta (the point of maximum velocity, minimum pressure), causing vapor bubbles to form \u2014 then, as pressure recovers downstream of the restriction, those bubbles collapse violently, causing the characteristic noise, vibration, and progressive erosion damage cavitation is known for. This check compares the valve's actual pressure drop against its cavitation-onset and choked-flow limits (both governed by the valve's own FL and sigma coefficients) to determine whether a given service condition is safely within limits, near onset, or genuinely damaging.",
+    faq: [
+      { q: "What is the difference between cavitation and flashing?", a: "Both start the same way \u2014 pressure dropping below vapor pressure inside the valve \u2014 but in flashing, downstream pressure never recovers above vapor pressure, so the vapor bubbles never collapse; they simply persist into the downstream piping. Cavitation specifically requires downstream pressure to recover enough for the bubbles to collapse violently, which is what causes cavitation\u2019s characteristic damage that flashing (without collapse) does not." },
+      { q: "Why does cavitation damage the valve body downstream of the restriction, not at the restriction itself?", a: "Bubbles form at the point of lowest pressure (the vena contracta) but haven\u2019t collapsed yet there \u2014 as the flow decelerates and pressure recovers downstream, that\u2019s where the bubbles actually implode, and the resulting micro-jet impacts and pressure shock waves are what erode the valve body and downstream piping surfaces at that location." },
+      { q: "What do FL and the sigma indices actually represent?", a: "FL (liquid pressure recovery factor) describes how much pressure recovery a specific valve geometry produces downstream, which sets its choked-flow limit. The sigma indices (incipient, constant, damage) are valve-specific values from manufacturer testing marking the pressure-ratio thresholds at which cavitation first begins, becomes steady, and becomes damaging \u2014 they genuinely vary by valve trim design, not just size." },
+      { q: "Can cavitation be avoided by simply choosing a bigger valve?", a: "Not necessarily \u2014 a larger valve sized for the same flow operates at lower velocity and less pressure drop per valve, which can help, but cavitation is fundamentally about the PRESSURE RATIO across the valve relative to vapor pressure, not valve size alone. Anti-cavitation trim (multi-stage pressure letdown, specially shaped internals) is often the more direct fix when the process pressure drop itself is unavoidably severe." },
+    ],
+  },
+  'cable-gland': {
+    about: "A cable gland's job is deceptively complex for a single fitting: it must seal against moisture and dust ingress (an IP rating), provide strain relief so cable tension doesn't transmit to the termination, and \u2014 critically, for hazardous-area installations \u2014 maintain the enclosure's explosion-proof or intrinsically-safe integrity, which depends on selecting a gland certified for the specific protection method (Ex d, Ex e, Ex n) in use. Getting gland selection wrong in a hazardous area is a genuine safety and code-compliance issue, not just a sealing-quality concern.",
+    faq: [
+      { q: "Why does hazardous-area gland selection depend on the enclosure\u2019s OWN protection method, not just the area classification?", a: "An Ex d (flameproof) enclosure requires a gland rated to maintain the flamepath integrity that Ex d protection depends on, which is a fundamentally different mechanical requirement than an Ex e (increased safety) enclosure\u2019s sealing and strain-relief needs \u2014 using an Ex e gland on an Ex d enclosure (or vice versa) can genuinely compromise the certified protection method regardless of area classification." },
+      { q: "What is the difference between a single-compression and double-compression gland?", a: "Single-compression seals only the outer cable sheath; double-compression additionally seals and clamps the individual inner cable cores or armor separately \u2014 double-compression is generally required for armored cable in hazardous areas, since it maintains earth continuity through the armor and provides more robust strain relief." },
+      { q: "Does cable gland IP rating need to match the enclosure\u2019s IP rating exactly?", a: "The gland\u2019s rating should be equal to or better than the enclosure\u2019s rating \u2014 a lower-rated gland becomes the weak point in an otherwise well-sealed enclosure, since ingress protection is only as good as the least-protected entry point in the whole assembly." },
+    ],
+  },
+  'sil-verification': {
+    about: "Verifying that a Safety Instrumented Function (SIF) actually achieves its required Safety Integrity Level means calculating PFDavg (average Probability of Failure on Demand) from the dangerous-undetected failure rates of every subsystem \u2014 sensor, logic solver, final element \u2014 combined according to their architecture (simplex, redundant voting) and proof-test interval, per the simplified equations in IEC 61508-6 Annex B. This is the probability half of SIL verification specifically; a complete verification per IEC 61511 also requires confirming architectural constraints (hardware fault tolerance limits) and systematic capability, which depend on the certified component data sheets, not just the failure-rate math this calculator performs.",
+    faq: [
+      { q: "What does PFDavg actually mean in plain terms?", a: "It\u2019s the average probability that a safety function will FAIL to act when a genuine demand occurs, averaged over the time between proof tests \u2014 a PFDavg of 0.001 means roughly a 1-in-1000 chance the safety function won\u2019t work correctly on any given demand, which corresponds to a SIL 2 rating in low-demand mode." },
+      { q: "Why does proof-test interval matter so much to PFDavg?", a: "A dangerous-undetected fault sits silently until either a real demand exposes it (too late) or a proof test finds it first \u2014 PFDavg grows roughly with the SQUARE of proof-test interval for redundant architectures (and linearly for simplex), so halving the interval between proof tests can dramatically improve the achieved SIL for the same hardware." },
+      { q: "Does adding redundancy (1oo2, 2oo3) always improve PFDavg?", a: "It substantially reduces the INDEPENDENT-failure contribution, but a common-cause failure fraction (beta) that affects multiple channels simultaneously bypasses the redundancy benefit entirely for that fraction of failures \u2014 which is why beta, representing shared failure modes like a common power supply or calibration error, is a critical, separate input, not an afterthought." },
+      { q: "Is passing the PFDavg calculation enough to claim a SIL rating for the whole SIF?", a: "No \u2014 IEC 61511 also requires the architecture to meet minimum hardware fault tolerance requirements for the claimed SIL (which can cap the achievable SIL regardless of how good the PFDavg number is) and requires the component to have adequate systematic capability, both of which come from the manufacturer\u2019s SIL certificate, not from this failure-rate calculation alone." },
+    ],
+  },
+  'gauge-range': {
+    about: "A pressure gauge sized purely to survive the maximum possible pressure, without regard for where NORMAL operating pressure falls on its dial, is a genuinely common specification mistake \u2014 ASME B40.100 recommends normal operating pressure read in the middle third (25-75%) of full scale, both for legible needle position and because a Bourdon tube continuously flexed near its full-scale limit wears and fatigues faster than one operating comfortably within its elastic range. This calculator selects an appropriately-sized standard gauge range given normal (and optionally, upset/maximum) operating pressure.",
+    faq: [
+      { q: "Why specifically 25-75% of full scale, not some other range?", a: "Below 25%, the needle sits too close to the pin/stop for precise reading and the gauge is oversized for the actual pressure it\u2019s reading day-to-day; above 75%, the Bourdon tube is continuously flexed close to its elastic limit, accelerating fatigue and reducing calibration life \u2014 the middle band balances readability against mechanical longevity." },
+      { q: "Why does an occasional upset/surge pressure change the recommended range?", a: "The gauge still needs a genuine safety margin against its OWN overrange limit during any upset, even though normal operation should sit in the 25-75% band \u2014 sizing purely for normal pressure could leave an occasional pressure surge pinning the needle past full scale, which can permanently damage the Bourdon tube." },
+      { q: "Do all pressure gauges come in the exact standard ranges this calculator checks?", a: "Most manufacturers follow a similar preferred-number sequence for standard ranges, but exact availability varies by vendor and gauge type \u2014 always confirm the specific range is actually stocked or manufacturable by your chosen gauge supplier before finalizing a specification." },
+    ],
+  },
+  'interface-level': {
+    about: "A DP transmitter measuring the interface between two immiscible liquids of different density \u2014 an oil-water separator, a boot, a decanter \u2014 needs different calibration math than a single-liquid level measurement, because the transmitter's differential pressure now depends on BOTH the total span AND the current thickness of each liquid layer, derived from a hydrostatic balance between the two liquids' different densities. This calculator derives both the 0%/100% calibration span for a given service and, given a measured DP, the current interface position.",
+    faq: [
+      { q: "Why does interface level calibration need BOTH liquid densities, not just the heavier one?", a: "The DP transmitter\u2019s reading changes as the ratio of light-to-heavy liquid above the low-pressure tap shifts \u2014 the SAME total liquid volume produces a different pressure reading depending on where the interface sits, since light and heavy liquid contribute differently to the hydrostatic head, which is exactly why both densities enter the calibration math." },
+      { q: "What assumption does this calculation make about the vapor space above the liquids?", a: "It assumes any vapor-space pressure is common to both the high and low pressure taps and so cancels out of the differential \u2014 the same assumption a plain single-liquid DP level measurement makes. A pressurized vessel with an uncompensated or asymmetric vapor space needs an additional correction this basic calculation doesn\u2019t include." },
+      { q: "Does a wet reference leg change the interface level calculation?", a: "Yes \u2014 a wet leg deliberately fills the low-pressure impulse line with a known reference fluid, whose own hydrostatic contribution must be subtracted from the calculation, similar to how a wet-leg single-liquid level transmitter needs its own additional correction term beyond the basic dry-leg case this tool covers." },
+    ],
+  },
+  'loop-power': {
+    about: "A 4-20mA two-wire transmitter loop is a series electrical circuit: supply voltage must be enough to cover the transmitter's own minimum operating (compliance) voltage PLUS the voltage dropped across every resistance in the loop \u2014 wiring, receiver/PLC input resistance, any intrinsic-safety barrier \u2014 evaluated at 20mA, the worst case for voltage drop by Ohm's law. A loop that reads correctly on the bench with a short test lead can genuinely fail once installed with the actual, much longer field wiring run, if this budget was never checked.",
+    faq: [
+      { q: "Why is 20mA specifically the worst case for voltage drop, not 4mA?", a: "By Ohm\u2019s law, voltage drop across a fixed resistance is directly proportional to current \u2014 the loop\u2019s total series resistance drops the MOST voltage at the HIGHEST current the loop will ever carry, which is 20mA (100% of range) for a standard 4-20mA transmitter, making it the correct condition to check against." },
+      { q: "Why does a HART-compatible receiver need a specific minimum resistance, not just enough to be safe?", a: "HART communication is a small AC signal superimposed on the 4-20mA DC current \u2014 that signal needs the receiving input to present sufficient resistance (commonly a minimum around 230\u03a9, though it varies by system) for the HART signal to develop enough voltage swing to be reliably read, which is a genuinely different requirement from simply having \"enough\" resistance for the DC loop power budget alone." },
+      { q: "Does increasing wire gauge always fix a marginal loop power budget?", a: "Usually yes for the wiring\u2019s own contribution, since resistance falls with cross-sectional area for a given length \u2014 but it doesn\u2019t address the transmitter\u2019s own minimum voltage requirement or a fixed receiver/barrier resistance, so for a badly marginal loop, raising supply voltage or removing a series device may be the only real fix." },
+    ],
+  },
+  'pipe-pressure-drop': {
+    about: "Fluid flowing through a pipe loses pressure to friction against the pipe wall (a function of velocity, pipe roughness, and Reynolds number via the Darcy-Weisbach or Colebrook-White friction factor) and to fittings, valves, and direction changes along the route \u2014 sizing a pipe or specifying a pump correctly means totaling BOTH contributions across the full pipe run, not just the straight-pipe friction loss alone, since fittings can easily dominate total pressure drop on a route with many bends and valves even when the straight-pipe sections are short.",
+    faq: [
+      { q: "Why does pressure drop increase so sharply with pipe velocity?", a: "Friction pressure drop scales with velocity SQUARED in the Darcy-Weisbach equation \u2014 doubling flow velocity in the same pipe roughly quadruples the friction pressure drop, which is why undersizing a pipe even slightly can produce a disproportionately large pumping energy penalty over the system\u2019s operating life." },
+      { q: "What is equivalent length and why use it for fittings instead of a separate calculation?", a: "Equivalent length expresses a fitting\u2019s pressure loss as \"however many diameters of straight pipe would cause the same loss,\" letting fittings simply be added to the actual pipe run length and run through the SAME friction-factor calculation, rather than needing a completely separate loss-coefficient method for every fitting type." },
+      { q: "Does pipe roughness matter as much as pipe diameter for pressure drop?", a: "It matters, but less dramatically \u2014 roughness affects the friction factor logarithmically (via the Colebrook-White relation) while diameter affects pressure drop to roughly the 5th power in the Darcy-Weisbach equation, meaning a modest diameter increase reduces pressure drop far more than an equivalent percentage change in pipe roughness or condition." },
+      { q: "Why does the Reynolds number matter for choosing a friction factor method?", a: "It determines whether flow is laminar (smooth, predictable, friction factor = 64/Re) or turbulent (chaotic, friction factor depends on both Reynolds number and relative roughness via Colebrook-White) \u2014 using a laminar-flow formula for turbulent flow, or vice versa, gives a genuinely wrong answer, not just a slightly imprecise one." },
+    ],
+  },
+  'pipe-wall-thickness': {
+    about: "A pressure pipe's minimum required wall thickness, per ASME B31.3 (process piping), is set by the hoop stress the internal pressure creates in the pipe wall \u2014 thin-wall pressure vessel theory relates that stress directly to pressure, pipe diameter, and wall thickness, with the material's allowable stress (from its ASME-listed properties at design temperature) setting the limit. Getting this wrong in the unsafe direction risks a genuine pressure-boundary failure; getting it wrong in the conservative direction just costs more in pipe and fittings than necessary.",
+    faq: [
+      { q: "Why does the calculation need a corrosion allowance on top of the pressure-only thickness?", a: "The pressure calculation gives the MINIMUM thickness needed to safely contain the design pressure at the moment of installation \u2014 corrosion allowance adds extra material specifically so the pipe still meets that minimum requirement after a design-life\u2019s worth of expected internal or external corrosion has consumed some wall thickness." },
+      { q: "Why does allowable stress depend on temperature, not just the material grade?", a: "Metal strength genuinely decreases at elevated temperature (and some materials also derate at very low temperature) \u2014 ASME B31.3\u2019s allowable stress tables give a different, temperature-specific value for the same material grade, since the pipe must be checked against its actual design temperature, not just room-temperature material properties." },
+      { q: "Is a schedule number (Sch 40, Sch 80) the same as a specific wall thickness?", a: "No \u2014 schedule is a dimensionless designation that corresponds to a DIFFERENT actual wall thickness depending on nominal pipe size, since larger pipes need proportionally different wall thickness for the same schedule number to maintain a consistent approximate pressure rating across sizes." },
+      { q: "Does this calculation account for pipe bends or only straight pipe?", a: "This is the straight-pipe (longitudinal) hoop-stress calculation \u2014 pipe bends see additional stress from the bending process itself (thinning on the extrados, thickening on the intrados) and are often specified with additional wall thickness margin or checked separately per the piping code\u2019s bend-specific requirements." },
+    ],
+  },
+  'pump-specific-speed': {
+    about: "A centrifugal pump's specific speed (Ns) is a dimensionless (or unit-dependent, by convention) number derived from its flow rate, head, and speed at the best efficiency point \u2014 it doesn't describe a single pump's performance so much as it classifies which IMPELLER GEOMETRY FAMILY (radial, mixed-flow, axial-flow) is best suited to that duty point, since different geometries are inherently better at different flow/head combinations. This calculator computes Ns for a given duty and identifies the impeller type typically used at that specific speed range, as a pump-selection starting point.",
+    faq: [
+      { q: "Why does specific speed predict impeller GEOMETRY rather than just efficiency?", a: "Different impeller shapes are fundamentally better at converting rotational energy into head versus flow \u2014 a narrow, radial-flow impeller excels at high head/low flow duties, while a wide, axial-flow (propeller-type) impeller excels at low head/high flow duties, and specific speed is essentially a dimensionless way of expressing where a given duty point falls on that spectrum." },
+      { q: "Can two very different pumps have the same specific speed?", a: "Yes \u2014 specific speed is defined per unit of the pump\u2019s BEST EFFICIENCY POINT parameters, so a small pump and a large pump with proportionally similar flow/head/speed relationships (geometrically similar impellers, different size) will have the same specific speed even though their absolute flow and head values differ substantially." },
+      { q: "Does a higher specific speed always mean higher pump efficiency?", a: "Not directly \u2014 specific speed indicates GEOMETRY FAMILY, and within any family, well-designed pumps of that type can achieve good efficiency; extremely low or extremely high specific speed pumps do tend to have somewhat lower peak efficiency than mid-range values, but this is a secondary effect, not the primary purpose of the number." },
+      { q: "Why is specific speed useful before selecting a specific pump model?", a: "It narrows the search to the RIGHT FAMILY of pump for a duty point before comparing specific manufacturer models \u2014 trying to force a radial-flow pump design onto a low-head, high-flow duty (or vice versa) generally produces a poorly-performing, inefficient result regardless of how well that specific pump is otherwise built." },
+    ],
+  },
+  'fan-laws': {
+    about: "Centrifugal and axial fans follow predictable affinity (fan) laws when their speed changes: flow scales directly with speed, pressure (head) scales with speed squared, and power scales with speed cubed \u2014 which is exactly why variable-speed fan drives save so much energy at reduced flow: a fan running at 80% speed uses only about half the power of running at 100% speed, even though flow only dropped 20%. This calculator applies the affinity laws for a speed change and separately calculates fan shaft power from flow, pressure rise, and efficiency.",
+    faq: [
+      { q: "Why does fan power scale with speed CUBED, not just linearly with flow?", a: "Power is the product of flow and pressure, and since flow scales with speed while pressure scales with speed squared, their product scales with speed cubed \u2014 this compounding relationship is exactly why a modest fan speed reduction (via a VFD, for instance) produces a disproportionately large energy saving." },
+      { q: "Do the fan affinity laws apply to a completely different fan, or only the same fan at different speeds?", a: "Strictly, they apply to the SAME fan (or geometrically similar fans of different size) at different speeds \u2014 comparing two genuinely different fan designs at the same speed doesn\u2019t follow the affinity laws, since those laws describe how one fixed geometry\u2019s performance scales, not how different geometries compare to each other." },
+      { q: "Why does changing fan speed also change the system operating point, not just the fan curve?", a: "The fan\u2019s performance curve shifts according to the affinity laws, but the SYSTEM resistance curve (duct/damper friction) doesn\u2019t change with fan speed \u2014 the new operating point is wherever the shifted fan curve intersects the UNCHANGED system curve, which is why a simple percentage speed change doesn\u2019t produce the exact same percentage flow change if the system curve isn\u2019t purely fan-static-pressure-dominated." },
+      { q: "How is fan shaft power actually calculated from flow and pressure?", a: "Shaft power equals flow rate times pressure rise, divided by the fan\u2019s efficiency at that operating point \u2014 the efficiency term matters because a fan\u2019s efficiency itself varies across its operating range, so shaft power isn\u2019t simply proportional to the useful (flow \u00d7 pressure) work being done on the air." },
+    ],
+  },
+  'compressor-power': {
+    about: "Compressing a gas from a lower to a higher pressure requires real, calculable work \u2014 the ideal-gas adiabatic (isentropic) compression model, based on the same PV^k=constant relationship that governs any reversible adiabatic process, gives the standard shortcut method for a first-pass estimate of compression work, discharge temperature, and shaft power. This applies across instrument air compressors, process gas compression, and general utility air systems in power plants, steel plants, and process industries alike \u2014 anywhere gas needs to move from a lower to a higher pressure.",
+    faq: [
+      { q: "Why does compressed gas come out significantly hotter, not just at higher pressure?", a: "Adiabatic compression (no heat exchange with surroundings during the process) means all the work done ON the gas goes into raising its internal energy, which shows up as higher temperature \u2014 this is exactly the same physics as a bicycle pump getting warm during use, just at industrial scale, and it\u2019s why multi-stage compression with intercooling exists: to remove that heat between stages rather than compounding it." },
+      { q: "Why does the calculation need molar mass and specific heat ratio (k), not just pressure and flow?", a: "Both properties are genuinely gas-specific \u2014 molar mass sets the specific gas constant (R = universal gas constant \u00f7 molar mass) that relates pressure, volume, and temperature for THAT particular gas, while k = Cp/Cv governs how much temperature rises for a given compression ratio, so compressing air, natural gas, and nitrogen through the same pressure ratio genuinely requires different amounts of work." },
+      { q: "Is real compressor efficiency ever close to the ideal isentropic value?", a: "No compressor achieves true isentropic (100% efficient, reversible) compression \u2014 real machines have isentropic efficiencies typically in the 70-85% range depending on type and size, meaning actual work input (and actual discharge temperature) run meaningfully higher than the ideal calculation alone, which is exactly why the calculator includes an efficiency input rather than only reporting the ideal case." },
+      { q: "Does this ideal-gas model work for high-pressure natural gas compression?", a: "It becomes progressively less accurate as pressure rises and the gas deviates further from ideal-gas behavior (compressibility factor Z moves away from 1) \u2014 for natural gas above roughly 40 bar, a real-gas compressibility correction becomes genuinely necessary for accurate results, which this simplified ideal-gas shortcut method does not include." },
+    ],
+  },
+  'boiler-blowdown': {
+    about: "Every kilogram of steam a boiler generates leaves behind whatever dissolved solids were in the feedwater, since steam itself is essentially pure \u2014 without continuous blowdown to remove some boiler water (and its accumulated solids) and replace it with fresh feedwater, dissolved solids concentration in the boiler would rise without limit, eventually causing scale formation, carryover into the steam, and corrosion. Blowdown rate is set by a straightforward mass balance on dissolved solids between what enters with feedwater and what must leave with blowdown to hold boiler water TDS at its allowable limit.",
+    faq: [
+      { q: "Why does blowdown rate depend on the RATIO of feedwater to maximum boiler TDS, not just feedwater quality alone?", a: "The mass balance is between solids entering (feedwater TDS \u00d7 steam rate) and solids leaving (blowdown TDS, which equals the boiler\u2019s maximum allowable TDS at steady state) \u2014 a wider gap between feedwater TDS and the allowable boiler limit means each unit of blowdown removes proportionally more solids, so less blowdown is needed for the same feedwater quality." },
+      { q: "What is \"cycles of concentration\" and why does it matter for water treatment?", a: "It\u2019s simply the ratio of maximum allowable boiler TDS to feedwater TDS \u2014 it tells you how many times more concentrated boiler water solids are allowed to become relative to what enters, and it\u2019s a genuinely useful single number for comparing blowdown efficiency across different feedwater treatment quality levels." },
+      { q: "Does improving feedwater treatment (lower TDS) always reduce blowdown proportionally?", a: "Yes, and often dramatically \u2014 since blowdown scales with feedwater TDS divided by the TDS gap to the boiler limit, halving feedwater TDS roughly halves required blowdown for the same boiler TDS limit, which is exactly why investment in feedwater treatment (demineralization, condensate polishing) pays back partly through reduced blowdown heat and water loss." },
+      { q: "Why is recovering blowdown heat considered standard practice, not optional?", a: "Continuous blowdown at even a few percent of steam rate represents meaningful thermal energy being discharged from the boiler at boiler pressure/temperature \u2014 a flash tank or heat exchanger recovering that heat back into the feedwater or deaerator system is a genuinely worthwhile efficiency gain at the blowdown rates a real boiler actually requires." },
+    ],
+  },
+  'cooling-tower': {
+    about: "A cooling tower can only ever approach the ambient wet-bulb temperature \u2014 never reach or beat it \u2014 since evaporative cooling is fundamentally limited by how much moisture the surrounding air can still absorb, which is exactly what wet-bulb temperature measures. Range (how much heat is being rejected) and approach (how close the leaving water gets to that theoretical wet-bulb limit) are genuinely different metrics: range reflects the process heat load and water flow rate, while approach is the real indicator of the tower's own condition and performance.",
+    faq: [
+      { q: "Why can\u2019t a cooling tower ever reach the ambient wet-bulb temperature exactly?", a: "As leaving water temperature approaches wet-bulb, the driving force for further evaporation (the humidity gradient between the water surface and the air) shrinks toward zero \u2014 the closer you get, the slower additional cooling happens, which is a diminishing-returns effect that makes reaching true wet-bulb temperature require infinite tower size and contact time." },
+      { q: "If range is not a performance indicator, why is it useful at all?", a: "Range directly reflects the process heat load and water flow rate through the tower \u2014 it\u2019s a genuinely useful operational number for tracking heat rejection duty, just not a measure of how WELL the tower itself is performing, since the same tower in perfect condition shows different range at different heat loads without that meaning anything changed about the tower." },
+      { q: "What does a rising approach at constant range and flow actually indicate?", a: "Since approach measures how close leaving water gets to wet-bulb at a GIVEN heat load and flow, a rising approach with everything else unchanged points to the tower itself degrading \u2014 fouled or scaled fill reducing air-water contact surface, poor air distribution, or reduced fan or water flow \u2014 not a change in ambient conditions, which are already accounted for by comparing against wet-bulb specifically." },
+      { q: "Why use wet-bulb temperature specifically, not the more commonly quoted dry-bulb temperature?", a: "Evaporative cooling capacity is fundamentally set by how much additional moisture the air can absorb, which is what wet-bulb temperature measures directly \u2014 dry-bulb (ordinary air temperature) says nothing about humidity, and substituting it for wet-bulb in a cooling tower performance check would meaningfully misstate the tower\u2019s real effectiveness, especially in humid climates." },
+    ],
+  },
+  'bearing-life': {
+    about: "A rolling-element bearing's rated (L10) life is the number of revolutions (or operating hours) at which 90% of a large population of identical bearings, operating under identical conditions, are still expected to be running \u2014 not a guarantee for any single bearing, but a statistically defined design life per ISO 281. Because bearing fatigue life scales with the CUBE (ball bearings) or higher power (roller bearings) of the ratio between dynamic load rating and actual applied load, even a modest overload shortens expected life dramatically, which is exactly why correct load calculation matters far more than it might first appear.",
+    faq: [
+      { q: "Why is L10 defined as 90% survival, not 100%?", a: "Rolling-element fatigue failure is inherently statistical \u2014 even identical bearings under identical conditions fail at different times due to microscopic material and manufacturing variation, so no single deterministic \"this bearing will last exactly X hours\" claim is physically meaningful; L10 is the standard statistical convention across the bearing industry." },
+      { q: "Why does doubling the load on a ball bearing cut its life by a factor of 8, not just 2?", a: "Ball bearing fatigue life scales with the load ratio raised to the THIRD power (L10 \u221d (C/P)\u00b3) per ISO 281 \u2014 this comes from the physics of subsurface fatigue crack initiation under rolling contact stress, and it\u2019s exactly why even modest overloading (from misalignment, unaccounted-for dynamic loads, or incorrect preload) has an outsized effect on real bearing life." },
+      { q: "Why do roller bearings use a different life exponent than ball bearings?", a: "Roller bearings have line contact (a rectangular contact patch) rather than a ball bearing\u2019s point contact, which produces a different stress distribution and fatigue behavior \u2014 ISO 281 uses an exponent of 10/3 for roller bearings versus 3 for ball bearings to reflect this genuinely different contact mechanics." },
+      { q: "Does L10 life account for lubrication and contamination, or only mechanical load?", a: "The basic L10 rating life calculation covers fatigue life under ideal lubrication and cleanliness \u2014 modern practice often applies an additional life modification factor (a1a2a3 or the newer ISO 281 aISO factor) to account for actual lubrication condition and contamination level, since poor lubrication or contamination can reduce real bearing life well below the basic calculation." },
+    ],
+  },
+  'horizontal-tank': {
+    about: "A horizontal cylindrical tank's volume as a function of liquid depth is NOT linear \u2014 unlike a vertical tank where volume scales directly with height, a horizontal tank's cross-section is a circular segment whose area changes nonlinearly with fill depth, meaning the same depth increase near the bottom or top of the tank represents far less volume change than the same depth increase near the middle. This calculator produces the actual dip-chart relationship (volume vs. depth) for a horizontal cylindrical tank, accounting for this geometry directly rather than assuming a linear approximation that would be genuinely wrong.",
+    faq: [
+      { q: "Why is horizontal tank volume-vs-depth nonlinear when vertical tank volume is linear?", a: "A vertical tank\u2019s horizontal cross-section (a circle) stays the same area at every height, so volume simply scales with height \u2014 a horizontal tank\u2019s cross-section at any given depth is a circular SEGMENT, and segment area changes nonlinearly with depth (fastest change near the tank\u2019s midpoint, slowest near the very top and bottom), which is the actual geometric reason the relationship isn\u2019t a straight line." },
+      { q: "Why does this matter for a dipstick-based level gauge?", a: "A dip chart converts a measured dip (physical depth) into volume \u2014 if the underlying volume-depth relationship were assumed linear when the tank is actually horizontal, every depth reading except at exactly 50% full would give a genuinely wrong volume, with the error being largest near the top and bottom of the tank where the true curve deviates most from a straight line." },
+      { q: "Does a tank with hemispherical or dished heads need a different calculation than a flat-ended cylinder?", a: "Yes \u2014 the head shape adds its own volume contribution as a function of depth, following different geometry than the cylindrical shell section, so a tank with dished, hemispherical, or elliptical heads needs those head volumes calculated and added separately, not just the cylindrical body treated in isolation." },
+    ],
+  },
+  'vertical-tank': {
+    about: "A vertical cylindrical tank's volume scales linearly with liquid height \u2014 volume equals cross-sectional area (a fixed circle) multiplied by height \u2014 which makes vertical tank volume calculation straightforward compared to a horizontal tank's nonlinear circular-segment geometry, but the total volume still depends correctly on tank diameter, straight-side height, and any conical or dished bottom/top contribution, which many quick estimates overlook.",
+    faq: [
+      { q: "Why is a vertical tank\u2019s volume calculation simpler than a horizontal tank\u2019s?", a: "A vertical tank\u2019s horizontal cross-section (a full circle) has the same area at every height, so volume is simply that fixed area multiplied by height \u2014 there\u2019s no changing cross-sectional shape to account for the way a horizontal tank\u2019s circular-segment cross-section changes with fill depth." },
+      { q: "Does a conical bottom tank need a different formula for that section?", a: "Yes \u2014 the conical (or dished) bottom section follows cone or dish geometry, not simple cylinder geometry, so its volume contribution must be calculated separately from the straight cylindrical shell above it and added to get correct total tank volume, especially important for tanks meant to fully drain via a conical bottom." },
+      { q: "Is nominal tank diameter the same as the diameter to use for volume calculation?", a: "Not always \u2014 nominal diameter often refers to a rounded, commercially quoted size, while actual internal diameter (accounting for wall thickness and any internal lining) is what genuinely determines liquid-holding volume; always confirm actual internal dimensions from the tank\u2019s as-built drawing for a precise volume calculation." },
+    ],
+  },
+  'vessel-wall': {
+    about: "A pressure vessel's minimum shell wall thickness, per ASME Section VIII Division 1, follows thin-wall pressure vessel theory similarly to piping \u2014 internal pressure creates hoop stress in the cylindrical shell (and a different stress state in formed heads), with the vessel's material allowable stress at design temperature setting the safe limit. Vessels additionally require joint efficiency factors reflecting the quality and inspection level of welded seams, since a weld that hasn't been fully radiographed is treated as inherently less reliable than the base metal it joins.",
+    faq: [
+      { q: "Why does joint efficiency reduce allowable stress rather than just add a safety factor?", a: "Joint efficiency directly represents how much of the base material\u2019s strength a specific weld quality/inspection level can be trusted to deliver \u2014 a fully radiographed weld can be assigned close to 100% joint efficiency (full base-metal strength), while a spot-radiographed or unradiographed weld gets a lower efficiency factor, genuinely reflecting a higher uncertainty in that weld\u2019s actual strength, not an arbitrary conservatism." },
+      { q: "Why is a vessel head\u2019s required thickness different from the cylindrical shell\u2019s?", a: "A formed head (hemispherical, ellipsoidal, torispherical) is in a genuinely different stress state than a cylindrical shell under the same internal pressure \u2014 a hemispherical head, for instance, needs roughly half the thickness of the cylindrical shell it\u2019s attached to for the same pressure and material, since its geometry distributes stress differently." },
+      { q: "Does this calculation include external pressure (vacuum) design?", a: "No \u2014 internal pressure design (hoop stress limiting minimum thickness) and external pressure/vacuum design (buckling/collapse limiting minimum thickness, per ASME Section VIII Division 1 UG-28) are governed by entirely different failure modes and require separate calculations; a vessel subject to vacuum conditions needs both checks, not just the internal-pressure one." },
+      { q: "Why add corrosion allowance to the calculated minimum thickness?", a: "The pressure calculation gives the thinnest wall that safely contains design pressure AT THE MOMENT of fabrication \u2014 corrosion allowance adds extra material specifically so the vessel still meets that minimum requirement after its design life\u2019s worth of expected internal or external corrosion has consumed part of the wall thickness." },
+    ],
+  },
+  'insulation-loss': {
+    about: "Thermal insulation on a hot (or cold) pipe or vessel reduces heat loss (or gain) by adding thermal resistance in series with the surface's natural convection and radiation losses \u2014 the calculation works through conduction resistance across the insulation thickness plus the outer surface's combined convective and radiative heat transfer to ambient, since both mechanisms act simultaneously at a real insulated surface, not just one or the other. This is the standard method for estimating both the energy (and cost) savings insulation provides and the resulting outer surface temperature, which matters for personnel protection as much as for energy efficiency.",
+    faq: [
+      { q: "Why does heat loss calculation need both convection AND radiation from the outer surface?", a: "A real insulated pipe surface loses heat to ambient air through both mechanisms simultaneously \u2014 natural convection (air moving past the warm surface) and thermal radiation (electromagnetic emission proportional to the fourth power of absolute surface temperature) \u2014 ignoring either one, especially radiation at higher surface temperatures, meaningfully understates total heat loss." },
+      { q: "Why does adding MORE insulation eventually show diminishing returns?", a: "Each additional layer of insulation adds thermal resistance in series, but the percentage REDUCTION in heat loss from each additional inch shrinks as total resistance grows \u2014 the first inch of insulation on a bare pipe typically saves far more energy than the fifth inch, which is exactly why insulation thickness specification is normally an economic optimization, not simply \"more is always better.\"" },
+      { q: "Why does outer surface temperature matter beyond just energy loss?", a: "A pipe or vessel surface exceeding roughly 60\u201365\u00b0C (140\u2013150\u00b0F) is normally considered a burn hazard requiring personnel protection under most safety standards \u2014 insulation sizing for personnel protection can genuinely require MORE thickness than the economic-optimum thickness for energy savings alone would suggest." },
+      { q: "Does insulation performance stay the same over its service life?", a: "No \u2014 insulation can degrade from moisture ingress (dramatically increasing effective thermal conductivity), physical damage, or compaction over time, so a calculation based on as-new insulation properties represents a best-case, not necessarily the actual in-service heat loss of aged or damaged insulation." },
+    ],
+  },
+  'thermal-expansion': {
+    about: "Every material expands or contracts with temperature change at a rate described by its coefficient of thermal expansion \u2014 for a simple linear (one-dimensional) case, the length change is directly proportional to original length, temperature change, and that material-specific coefficient. This matters throughout process plant design: pipe runs need expansion loops or joints to avoid overstressing anchors and supports, and equipment with mismatched materials at their interface can develop real stress purely from differential thermal expansion, even with no external mechanical load at all.",
+    faq: [
+      { q: "Why do different materials need different coefficients of thermal expansion?", a: "Thermal expansion comes from how strongly a material\u2019s interatomic bonds respond to added thermal energy \u2014 this is a genuine material property that varies significantly: steel and aluminum, for instance, differ by roughly a factor of two in expansion coefficient, which is exactly why steel bolts in an aluminum flange (or vice versa) can develop meaningful thermal stress purely from temperature cycling." },
+      { q: "Why does a long pipe run need expansion loops even if it\u2019s well-supported?", a: "A pipe rigidly anchored at both ends with no accommodation for thermal growth develops enormous compressive (or tensile) stress as it tries to expand or contract against those fixed anchors \u2014 an expansion loop, bellows, or other flexible element lets the pipe actually move the calculated amount instead of fighting its own supports." },
+      { q: "Does thermal expansion calculation change for a large temperature swing versus a small one?", a: "The basic linear relationship (\u0394L = L \u00d7 \u03b1 \u00d7 \u0394T) assumes a roughly constant expansion coefficient, which is a good approximation over moderate temperature ranges \u2014 for very large temperature swings, the expansion coefficient itself can vary enough with temperature that a more detailed, temperature-dependent calculation becomes worthwhile." },
+      { q: "Is thermal expansion only a concern for hot equipment, not cold?", a: "No \u2014 contraction from COOLING (cryogenic service, cold climate exposure) follows exactly the same physics in the opposite direction, and can be just as significant a design concern; a pipe carrying cryogenic fluid needs the same kind of expansion/contraction accommodation as a hot steam line, just contracting instead of expanding." },
+    ],
+  },
+  'gas-compression': {
+    about: "This is a general single-stage ideal-gas adiabatic compression calculator \u2014 the same underlying isentropic (PV^k=constant) physics used across compressor sizing generally, letting you check compression work, discharge temperature, and required power for any gas given its molar mass and specific heat ratio, useful for quick checks across process gas, refrigerant, or utility gas applications beyond the dedicated air-compressor tool.",
+    faq: [
+      { q: "Why does gas TYPE change the compression work needed for the same pressure ratio?", a: "Both the specific gas constant (from molar mass) and the specific heat ratio k (from Cp/Cv, which depends on molecular structure \u2014 monatomic, diatomic, or polyatomic gases have different characteristic k values) directly enter the isentropic work equation, so compressing helium, air, and a heavy hydrocarbon gas through the identical pressure ratio genuinely requires different amounts of work per unit mass." },
+      { q: "When does single-stage compression stop being practical, requiring multiple stages?", a: "As pressure ratio rises, discharge temperature rises with it \u2014 beyond roughly a 4:1 to 5:1 ratio in a single stage, discharge temperature commonly exceeds safe limits for typical lubricants and seal materials, which is why higher overall pressure ratios are usually split across multiple compression stages with intercooling between them." },
+      { q: "Does polytropic compression give a meaningfully different answer than isentropic?", a: "Yes, for a REAL (non-ideal, non-reversible) compression process \u2014 polytropic compression uses an empirically-determined exponent (n) instead of the theoretical isentropic exponent (k) to better match actual observed compressor behavior, typically giving somewhat different (often higher) actual work than the idealized isentropic calculation predicts for the same pressure ratio." },
+    ],
+  },
+  'gear-ratio': {
+    about: "A gear (or belt/chain) drive's ratio sets the trade-off between output speed and output torque \u2014 conservation of power (ignoring friction losses) means a drive that reduces speed by a given factor increases torque by the same factor, which is the entire reason gearboxes exist: matching a motor's efficient operating speed to whatever speed and torque the driven equipment actually needs. This calculator computes the resulting output speed and torque for a given gear ratio and input conditions.",
+    faq: [
+      { q: "Why does reducing speed through a gearbox increase torque proportionally?", a: "Mechanical power equals torque multiplied by angular speed \u2014 for an ideal (100% efficient) gear drive, power in equals power out, so if a gear reduction cuts output speed to a fraction of input speed, output torque must increase by the inverse of that same fraction to keep power balanced." },
+      { q: "Does a real gearbox actually preserve power exactly, or is there always a loss?", a: "Real gear drives always have some mechanical loss (friction in gear meshing, bearings, lubricant churning) \u2014 typical gearbox efficiency ranges from about 95-98% per reduction stage for well-designed gear sets, meaning actual output torque is slightly less than the ideal speed-ratio calculation alone would predict, and that loss shows up as heat." },
+      { q: "How is overall ratio calculated for a multi-stage gear train?", a: "Overall ratio is the PRODUCT of each individual stage\u2019s ratio, not the sum \u2014 a two-stage gearbox with a 3:1 first stage and a 4:1 second stage gives a 12:1 overall ratio, which is why compact multi-stage gearboxes can achieve very large overall reductions from modestly-sized individual gear stages." },
+    ],
+  },
+  'belt-pulley': {
+    about: "A belt-and-pulley drive transmits power between two shafts at a speed ratio set purely by the ratio of pulley diameters \u2014 the same conservation-of-power principle as a gear drive applies (smaller output pulley for a given belt speed means higher output shaft speed but lower output torque, and vice versa), but with the practical advantages of some slip tolerance, easier misalignment accommodation, and simpler maintenance than a rigid gear mesh.",
+    faq: [
+      { q: "Why does pulley diameter ratio determine speed ratio, not pulley width or belt type?", a: "Belt speed (linear velocity at the belt-pulley contact point) must be the same on both pulleys for the belt to move as a continuous loop \u2014 since that linear speed equals pulley radius times its rotational speed, a smaller pulley radius must correspondingly spin faster (and a larger pulley slower) to maintain that same shared belt speed." },
+      { q: "Does belt slip meaningfully affect the theoretical speed ratio?", a: "For a V-belt or flat belt under normal load, slip is typically small (often under 1-2%) and often ignored for a first-pass calculation \u2014 but under heavy load or with a worn/glazed belt, slip can increase enough to matter for precision applications, which is why a synchronous (toothed) belt is used instead wherever exact speed ratio must be guaranteed regardless of load." },
+      { q: "Why choose a belt drive over a direct gear mesh for the same speed ratio?", a: "Belt drives tolerate shaft misalignment and center-distance variation that a rigid gear mesh cannot, run quieter, need no lubrication, and provide inherent overload protection through slip \u2014 trade-offs against a gear drive\u2019s more precise ratio, higher torque capacity, and better efficiency at the same physical size." },
+    ],
+  },
+  'refrigeration-tons': {
+    about: "A ton of refrigeration is a historical unit still in everyday HVAC and industrial refrigeration use \u2014 defined as the cooling rate needed to freeze one short ton (2000 lb) of water into ice over 24 hours, which works out to a fixed, precisely defined power equivalent. This calculator converts between tons of refrigeration and standard power units (kW, BTU/hr), a routine but easy-to-get-wrong conversion given the unit's historical (non-metric) origin.",
+    faq: [
+      { q: "Why does refrigeration capacity still use \"tons\" instead of just kW or BTU/hr?", a: "It\u2019s a historical holdover from the ice-manufacturing industry that predates modern mechanical refrigeration \u2014 the unit stuck around in HVAC and refrigeration equipment nameplates and industry convention even after the underlying technology moved entirely away from actually producing ice, similar to how horsepower persists for engines despite watts being the SI unit." },
+      { q: "What is the exact conversion factor between tons of refrigeration and kW?", a: "1 ton of refrigeration equals exactly 3.5168 kW (or 12,000 BTU/hr) \u2014 derived directly from the latent heat of fusion of water and the defining 2000 lb over 24 hours basis, which is why it\u2019s a fixed, exact conversion rather than an approximate or context-dependent one." },
+      { q: "Does \"tons of refrigeration\" describe electrical input power or actual cooling capacity?", a: "It describes COOLING CAPACITY (heat removed from the space), not electrical input power to the refrigeration equipment \u2014 the ratio between the two is the system\u2019s coefficient of performance (COP) or energy efficiency ratio (EER), which is always a separate, additional specification beyond the tonnage rating itself." },
+    ],
+  },
+  'civil-combined-stress': {
+    about: "A structural member under BOTH axial load (compression or tension) and bending moment simultaneously experiences combined stress \u2014 the two stress contributions superimpose directly (axial stress is uniform across the section, bending stress varies linearly from maximum compression on one face to maximum tension on the other), meaning the actual peak stress at the extreme fiber can be significantly higher than either effect analyzed alone would suggest. Checking combined stress against allowable stress is essential for any column or beam-column that carries genuine eccentric or off-axis loading, not just pure axial or pure bending members.",
+    faq: [
+      { q: "Why do axial and bending stress simply add together, rather than combine some other way?", a: "Both are normal stresses acting perpendicular to the same cross-section \u2014 by basic mechanics of materials, normal stresses from independent load effects on the same section superimpose algebraically (with appropriate sign for tension/compression), which is why the combined stress formula is a straightforward sum rather than a more complex interaction." },
+      { q: "Why does eccentric axial loading create bending, even with no separate applied moment?", a: "Any axial load applied off the section\u2019s centroidal axis creates a moment equal to load times eccentricity, exactly as if that moment had been applied directly \u2014 a column loaded even slightly off-center is genuinely experiencing combined axial-plus-bending stress, not pure axial stress, which is a common real-world loading condition rather than an edge case." },
+      { q: "Does combined stress checking replace a full column buckling (slenderness) check?", a: "No \u2014 combined stress checks the SECTION\u2019s material stress capacity at a given load, while buckling is a separate STABILITY failure mode governed by the member\u2019s slenderness ratio, which can cause failure at a load well below what the material stress alone would allow for a sufficiently slender column; both checks are needed independently." },
+    ],
+  },
+  'civil-water-cement': {
+    about: "Water-cement ratio is the single most influential variable in concrete mix design, governing both strength (lower ratio generally means higher strength, since less water leaves less porosity after curing) and workability (too little water makes concrete difficult to place and compact properly) \u2014 Abrams' law, the empirical relationship between water-cement ratio and compressive strength, has guided mix design since the early 20th century and remains the starting point for any concrete mix design today.",
+    faq: [
+      { q: "Why does LOWER water-cement ratio generally mean HIGHER concrete strength?", a: "Water beyond what\u2019s needed for cement hydration reactions eventually evaporates or remains as capillary pore space in the hardened concrete \u2014 more of that pore space (from more excess water) means a weaker, more porous internal structure, which is the physical basis for Abrams\u2019 law\u2019s inverse relationship between water-cement ratio and strength." },
+      { q: "Why not simply use the minimum possible water-cement ratio for maximum strength?", a: "Concrete with too little water becomes difficult or impossible to properly place, consolidate, and finish \u2014 poor workability leads to voids, honeycombing, and incomplete compaction that can hurt strength and durability far more than a modest increase in water-cement ratio would, which is why mix design balances strength against genuinely achievable workability." },
+      { q: "Does water-cement ratio also affect concrete durability, not just strength?", a: "Yes, significantly \u2014 a lower water-cement ratio produces a denser, less permeable concrete that resists chloride penetration, carbonation, and freeze-thaw damage better, which is why durability-critical applications (marine structures, bridge decks) often specify a maximum water-cement ratio independently of the strength requirement alone." },
+    ],
+  },
+  'civil-soil-phase': {
+    about: "Soil is a three-phase material \u2014 solid particles, water, and air \u2014 and the relationships between their relative volumes and weights (void ratio, porosity, water content, degree of saturation, unit weight) are foundational to nearly every geotechnical calculation that follows, from settlement prediction to bearing capacity. Effective stress specifically \u2014 the stress actually carried by the soil skeleton, as distinct from pore water pressure \u2014 is the concept that explains why saturated soil behaves so differently from dry soil under the same total load.",
+    faq: [
+      { q: "Why does effective stress matter more than total stress for soil behavior?", a: "Terzaghi\u2019s principle of effective stress states that soil strength and deformation are governed by the stress carried by the SOLID SKELETON, not by pore water pressure, which the water simply transmits without contributing shear resistance \u2014 this is why a saturated soil under sudden loading (before pore pressure can dissipate) can behave dramatically differently than the same soil once fully drained." },
+      { q: "What is the difference between void ratio and porosity?", a: "Void ratio is the ratio of void volume to SOLID volume; porosity is the ratio of void volume to TOTAL volume \u2014 they describe the same physical void space using different reference volumes, and while related by a simple formula, they are not numerically the same value and shouldn\u2019t be used interchangeably in a calculation." },
+      { q: "Why does degree of saturation affect soil unit weight so significantly?", a: "As void spaces fill with water instead of air, the soil mass increases while its volume stays essentially constant (water is far denser than air) \u2014 a soil at 100% saturation genuinely weighs more per unit volume than the same soil skeleton at a lower saturation level, which is why unit weight calculations must specify which saturation condition (dry, saturated, or a specific moisture content) they apply to." },
+      { q: "How is specific gravity of soil solids used in these phase relationships?", a: "It relates the solid particles\u2019 mass to an equal volume of water, letting the calculation convert between volume-based ratios (void ratio, porosity) and weight-based quantities (unit weight, water content) \u2014 without it, the phase diagram\u2019s volume and weight sides couldn\u2019t be connected into the single consistent set of relationships these calculations rely on." },
+    ],
+  },
+  'civil-weir': {
+    about: "A weir is a precisely-shaped obstruction across an open channel that creates a predictable relationship between upstream water depth (head) and flow rate over the crest \u2014 the rectangular (Francis formula) weir is one of the oldest and most widely used flow measurement methods for open channels, irrigation systems, and wastewater facilities, valued for having no moving parts and a well-established, simple empirical formula relating head to flow.",
+    faq: [
+      { q: "Why does weir flow scale with head to the 3/2 power, not linearly?", a: "The flow rate over a weir crest is essentially the integral of velocity (which itself depends on depth below the free surface, via Torricelli\u2019s/Bernoulli\u2019s relation) across the flowing cross-section \u2014 working through that integration for a rectangular weir produces the characteristic head^1.5 relationship the Francis formula captures empirically." },
+      { q: "Why does the Francis formula include an end-contraction correction?", a: "A rectangular weir narrower than the full channel width causes the flow to contract inward at each end as it approaches the crest, effectively reducing the useful flow width below the weir\u2019s actual physical crest length \u2014 the end-contraction term corrects for this, and is omitted (suppressed) only when the weir spans the full channel width with no contraction possible." },
+      { q: "How accurate is a well-maintained rectangular weir compared to other flow measurement methods?", a: "A properly installed and maintained sharp-crested rectangular weir can achieve accuracy in the range of \u00b12\u20135% under the Francis formula\u2019s valid conditions \u2014 comparable to many closed-pipe flow measurement methods, though it requires adequate approach channel length and a properly vented nappe (air space under the falling sheet of water) to maintain that accuracy." },
+    ],
+  },
+  'civil-earthwork': {
+    about: "Earthwork quantity calculation \u2014 how much soil must be cut or filled to grade a site to its design elevations \u2014 typically uses the average end area method: cross-sectional areas at regular survey stations are averaged between consecutive stations and multiplied by the station spacing to estimate volume, a practical approximation that works well when ground profile doesn't change too abruptly between survey points. Getting cut/fill quantities right matters directly for project cost estimation and for balancing cut material against fill needs to minimize expensive material haul-off or import.",
+    faq: [
+      { q: "Why use the average end area method instead of exact integration of the ground surface?", a: "The actual ground surface between survey stations is never perfectly known \u2014 average end area gives a practical, repeatable estimate from the CROSS-SECTIONS actually surveyed, and its accuracy improves with closer station spacing, which is exactly why survey stations are placed more closely together where the ground profile changes more rapidly." },
+      { q: "What does \"balancing\" cut and fill actually mean for a project?", a: "It means arranging the site grading design so that cut material removed from high areas is reused as fill in low areas, minimizing the volume that must be hauled off-site (excess cut) or imported (shortfall needing fill from elsewhere) \u2014 since hauling earth off-site or importing it are both genuinely expensive, a well-balanced grading design meaningfully reduces project earthwork cost." },
+      { q: "Why does soil \"swell\" and \"shrink\" factor into earthwork volume calculations?", a: "In-place (bank measure) soil volume changes when excavated and re-compacted \u2014 most soils swell (increase in loose, excavated volume) when first dug, then shrink below their original bank volume once recompacted as fill, because compaction achieves a different density than the soil\u2019s natural in-place state; earthwork estimates must apply the correct swell/shrink factor for the specific soil type or genuinely misjudge how much material is actually needed." },
     ],
   },
 };
@@ -787,6 +1381,15 @@ function applySeo(route) {
   };
   setMeta('meta[name="description"]', 'content', meta.description);
   setMeta('meta[name="robots"]', 'content', meta.noindex ? 'noindex, nofollow' : 'index, follow');
+  // Google's own publisher policy explicitly bars ads on "dead end" or
+  // no-content screens (login, thank-you, error pages) -- the routes
+  // already marked noindex (admin login, calculation history) are
+  // exactly those thin/utility screens, so the same flag that already
+  // tells search engines "don't index this" also tells the ad unit
+  // "don't show here", rather than showing the identical global ad
+  // block on every route regardless of what's actually on the page.
+  const adUnit = document.getElementById('mainAdUnit');
+  if (adUnit) adUnit.style.display = meta.noindex ? 'none' : '';
   setMeta('link[rel="canonical"]', 'href', url);
   setMeta('meta[property="og:title"]', 'content', fullTitle);
   setMeta('meta[property="og:description"]', 'content', meta.description);
@@ -867,6 +1470,9 @@ const ROUTES = {
   'formula-library': pageFormulaLibrary,
   'history': pageHistory,
   'support': pageSupport,
+  'about': pageAbout,
+  'contact': pageContact,
+  'privacy': pagePrivacy,
   'reviews': pageReviews,
   'admin': pageAdmin,
   'pipe-pressure-drop': pagePipePressureDrop,
@@ -931,12 +1537,45 @@ function navigate(route, opts = {}) {
     } catch (e) { /* history API unavailable in this context -- navigation still works */ }
   }
 }
+function renderRelatedCalculators(route) {
+  // Systematic internal linking: every calculator page gets links to a
+  // few others in the same nav group. This helps users discover related
+  // tools, and it's a real, cited ranking factor in its own right --
+  // "internal linking & architecture" (topic clusters, descriptive
+  // anchors) -- implemented once here rather than hand-added to 80+
+  // individual page functions.
+  if (!route) return; // skip on the dashboard itself
+  const group = NAV.find((g) => g.items.some((item) => item.id === route));
+  if (!group) return;
+  const others = group.items.filter((item) => item.id !== route && (adminMode || contentVisibility[item.id] !== false));
+  if (others.length === 0) return;
+  const picks = others.slice(0, 6);
+  const block = h(`<div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+      ${picks.map((item) => `<a${isEmbeddedFrame ? ' tabindex="0"' : ` href="?page=${encodeURIComponent(item.id)}"`} class="pill" data-related-link="${item.id}" style="text-decoration:none;cursor:pointer;">${item.icon} ${item.label}</a>`).join('')}
+    </div>
+  </div>`);
+  block.querySelectorAll('[data-related-link]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      navigate(a.dataset.relatedLink);
+    });
+    if (isEmbeddedFrame) {
+      a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(a.dataset.relatedLink); } });
+    }
+  });
+  app.appendChild(block);
+}
+
 function render() {
   renderNav(currentRoute);
   app.innerHTML = '';
   (ROUTES[currentRoute] || pageDashboard)();
   renderConfidenceTier(currentRoute);
   renderLearnMore(currentRoute);
+  renderRelatedCalculators(currentRoute);
   app.scrollTop = 0;
   applySeo(currentRoute);
 }
@@ -984,20 +1623,30 @@ function pageDashboard() {
     </div>
   `));
 
-  // Cards are generated directly from NAV (the same data that builds the
-  // sidebar) and SEO_META (which already has a one-line description for
-  // every route). A hand-maintained card list here previously drifted out
-  // of sync as calculators were added — this can't drift, because there's
-  // only one list of calculators in the whole app, not two.
-  for (const g of NAV) {
-    if (g.group === 'Overview') continue; // just the Dashboard link to this page itself
-    app.appendChild(h(`<h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">${g.group}</h2>`));
+  // Featured calculators: an explicit, curated list of the calculators
+  // used most often day-to-day, rather than showing all ~85 calculators
+  // with equal visual weight on first load. This is a WHITELIST OF
+  // ROUTE IDS ONLY -- each card's icon/label/description is still looked
+  // up live from NAV/SEO_META below, the same single source of truth the
+  // full category grid uses, so a featured card can never drift out of
+  // sync with its real nav entry. The Simulator is deliberately NOT in
+  // this list -- it gets its own standalone hero placement above this
+  // grid instead, since it's the flagship feature, not just one more
+  // calculator among equals.
+  const FEATURED_ROUTE_IDS = [
+    'thermal-plant', 'converter', 'protection', 'control-loops',
+    'dp-flow-wizard', 'transmitter', 'dp-level', 'ip-converter', 'rtd', 'thermocouple', 'pid',
+    'cable-gland', 'motor-prot', 'transformer-prot', 'relay-settings',
+  ];
+  const navItemById = new Map(NAV.flatMap((g) => g.items).map((item) => [item.id, item]));
+
+  function renderCardGrid(items) {
     const grid = h('<div class="grid cols-4"></div>');
-    for (const item of g.items) {
+    for (const item of items) {
       const meta = SEO_META[item.id];
       const desc = meta ? meta.description : '';
       const card = h(`
-        <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;">
+        <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
           <span class="tag free">free</span>
           <div class="card-icon">${item.icon}</div>
           <h3>${item.label}</h3>
@@ -1008,8 +1657,109 @@ function pageDashboard() {
       card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(item.id); } });
       grid.appendChild(card);
     }
-    app.appendChild(grid);
+    return grid;
   }
+
+  // Simulator: standalone hero placement, alone at the top, above the
+  // regular featured grid -- it's the app's flagship feature (multi-page
+  // DCS-style logic simulator with a shared tag database, undo/redo, 40+
+  // block types), not just another calculator card of equal weight.
+  const simItem = navItemById.get('sama-logic');
+  if (simItem) {
+    const simMeta = SEO_META['sama-logic'];
+    const heroCard = h(`
+      <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:22px;padding:24px 28px;border-color:var(--amber);">
+        <div class="card-icon" style="font-size:2.2rem;margin:0;">${simItem.icon}</div>
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:10px;"><h3 style="margin:0;font-size:1.15rem;">${simItem.label}</h3><span class="tag free">free</span></div>
+          <p style="margin:6px 0 0;">${simMeta ? simMeta.description : ''}</p>
+        </div>
+      </div>
+    `);
+    heroCard.addEventListener('click', () => navigate('sama-logic'));
+    heroCard.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('sama-logic'); } });
+    app.appendChild(h(`<h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">Logic Simulator</h2>`));
+    app.appendChild(heroCard);
+  }
+
+  app.appendChild(h(`<h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">Analytics and Calculator</h2>`));
+  const featuredItems = FEATURED_ROUTE_IDS.map((id) => navItemById.get(id)).filter(Boolean);
+  app.appendChild(renderCardGrid(featuredItems));
+
+  // About & Support: the site's own meta pages (who runs it, how to reach
+  // them, what other engineers think of it, how to support it) -- a
+  // distinct category from the calculators themselves, so it gets its own
+  // small section rather than being buried only in the sidebar's
+  // Reference group or the collapsed full category list below.
+  app.appendChild(h(`<h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">About & Support</h2>`));
+  const infoGrid = h('<div class="grid cols-4"></div>');
+  for (const id of ['about', 'reviews', 'support']) {
+    const item = navItemById.get(id);
+    if (!item) continue;
+    const meta = SEO_META[id];
+    const card = h(`
+      <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+        <div class="card-icon">${item.icon}</div>
+        <h3>${item.label}</h3>
+        <p>${meta ? meta.description : ''}</p>
+      </div>
+    `);
+    card.addEventListener('click', () => navigate(id));
+    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(id); } });
+    infoGrid.appendChild(card);
+  }
+  // Contact now has its own dedicated page (a real, visible contact page
+  // is what Google's publisher policies actually expect, not just a
+  // mailto: link) -- so this card simply navigates like About, Reviews,
+  // and Support do, rather than trying to trigger mailto: directly. That
+  // also sidesteps every sandboxed-preview mailto: complication entirely,
+  // since in-app navigation via navigate() works identically everywhere.
+  const contactItem = navItemById.get('contact');
+  if (contactItem) {
+    const contactMeta = SEO_META['contact'];
+    const contactCard = h(`
+      <div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+        <div class="card-icon">${contactItem.icon}</div>
+        <h3>${contactItem.label}</h3>
+        <p>${contactMeta ? contactMeta.description : ''}</p>
+      </div>
+    `);
+    contactCard.addEventListener('click', () => navigate('contact'));
+    contactCard.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('contact'); } });
+    infoGrid.appendChild(contactCard);
+  }
+  app.appendChild(infoGrid);
+
+  // Everything else, grouped by category exactly as the sidebar groups
+  // it -- collapsed behind a single toggle by default so a first-time
+  // visitor sees a curated ~15 items, not all ~85 at once, while every
+  // calculator stays exactly as discoverable as before for anyone who
+  // wants the full list. Uses the CSS grid-template-rows 0fr/1fr trick
+  // for a genuinely smooth height animation (rather than an instant
+  // display:none/'' toggle), which handles variable-height content
+  // correctly without needing to guess a max-height value.
+  const toggleRow = h(`<div style="margin-top:30px;padding-top:18px;border-top:1px solid var(--line);text-align:center;">
+    <button class="btn secondary collapse-toggle" id="toggleAllCalcsBtn" style="max-width:340px;margin:0 auto;">
+      <span id="toggleAllCalcsLabel">Browse All Calculators by Category</span><span class="chevron">\u25be</span>
+    </button>
+  </div>`);
+  app.appendChild(toggleRow);
+  const collapseWrap = h('<div class="collapse-wrap" id="allCalcsCollapseWrap"><div class="collapse-inner"></div></div>');
+  const allCalcsWrap = collapseWrap.querySelector('.collapse-inner');
+  allCalcsWrap.style.marginTop = '10px';
+  for (const g of NAV) {
+    if (g.group === 'Overview') continue; // just the Dashboard link to this page itself
+    allCalcsWrap.appendChild(h(`<h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">${g.group}</h2>`));
+    allCalcsWrap.appendChild(renderCardGrid(g.items));
+  }
+  app.appendChild(collapseWrap);
+  const toggleBtn = toggleRow.querySelector('#toggleAllCalcsBtn');
+  toggleBtn.addEventListener('click', () => {
+    const isOpen = collapseWrap.classList.toggle('open');
+    toggleBtn.classList.toggle('open', isOpen);
+    toggleRow.querySelector('#toggleAllCalcsLabel').textContent = isOpen ? 'Hide Full Category List' : 'Browse All Calculators by Category';
+  });
+
   app.appendChild(h(`<div style="margin-top:22px;">${disclaimerHTML()}</div>`));
 }
 
@@ -2841,6 +3591,14 @@ function pageProtection() {
       <p style="color:var(--text-dim);font-size:.85rem;">A working reference for how a real USC boiler-turbine-generator unit is structured, protected, started, and stopped — built around the ${trip.PARAMETER_REGISTRY.length} live parameters in this app's own registry, not a generic textbook copy.</p>
       <div class="assumptions-note">Plant/OEM-specific numeric limits (exact trip setpoints, ramp rates, generator ratings, etc.) vary by manufacturer and by unit and are marked accordingly below — they're not guessed. Where this page gives a real number, it's either the live registry (see ETS/MFT/Major Drives dashboards) or a cited public source.</div>
 
+      <h3 style="margin-top:22px;">Engineering Basis (660/800 MW-class Supercritical Unit)</h3>
+      <p style="color:var(--text-dim);font-size:.82rem;">Many rows below are drawn from an actual published government standard for this exact class of unit (cited per row) rather than left as a placeholder — but they're minimum thresholds or adopted-practice figures for the CLASS of unit, not a guarantee of any specific project's contracted values. Rows still marked "VALUE REQUIRED" are genuinely project-specific (vary unit to unit even within this class) and have no single correct answer without the actual OEM data sheet.</p>
+      <div style="overflow-x:auto;">
+        <table><thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead><tbody>
+          ${trip.ENGINEERING_BASIS.map((r) => `<tr><td style="white-space:nowrap;font-weight:600;">${r.parameter}${r.unit ? ` (${r.unit})` : ''}</td><td style="font-size:.84rem;color:${r.value.startsWith('VALUE REQUIRED') ? 'var(--amber)' : 'var(--text-dim)'};">${r.value}</td><td style="font-size:.76rem;color:var(--text-faint);">${r.source || ''}</td></tr>`).join('')}
+        </tbody></table>
+      </div>
+
       <h3 style="margin-top:22px;">Power Plant Systems</h3>
       <p style="color:var(--text-dim);font-size:.82rem;">Click a major system to open it, then a subsystem to see its parameters.</p>
       <div id="systemTree"></div>
@@ -3977,15 +4735,16 @@ function pageSupport() {
     <div class="support-hero">
       <div class="heart">❤️</div>
       <h1>Support the Project</h1>
-      <p>Help us build knowledge, skills, and opportunities for the next generation.</p>
-      <p>Every contribution matters. Please support this initiative.</p>
+      <p>Engineering Calculator Hub is free to use, with no sign-up and no paywalled calculators \u2014 every tool on this site, from the SAMA logic simulator to the turbine and boiler protection registry, stays free for every engineer, student, and plant operator who needs it.</p>
+      <p>Keeping it that way, and continuing to add and verify new calculators against real published standards, takes ongoing time and hosting cost. If this site has saved you time on the job or in your studies, a donation helps cover that and keeps development going.</p>
+      <p>Revenue from this project, including any donation you make here, goes toward building a library in Bihar for children from very poor backgrounds \u2014 the same mission stated in the site footer. Every contribution, however small, genuinely matters toward that.</p>
       <div style="margin-top:18px;color:var(--amber);font-weight:600;">💝 Donate Now</div>
       <button class="btn-donate" id="openDonateBtn" type="button">DONATE ❤️</button>
     </div>
     <div class="support-footer-sig">
       <div class="name">Built &amp; Maintained by Dr. Kundan</div>
       <div>Engineering • Automation • Instrumentation • Power Plant Technology</div>
-      <div style="margin-top:6px;">For suggestions or to report a bug, write to <a href="mailto:admin@engineeringhubcalc.com" style="color:var(--cyan);">admin@engineeringhubcalc.com</a></div>
+      <div style="margin-top:6px;">For suggestions or to report a bug, write to ${isEmbeddedFrame ? 'admin@engineeringhubcalc.com' : '<a href="mailto:admin@engineeringhubcalc.com" id="supportContactLink" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>'}</div>
       <div>&copy; 2026 Dr. Kundan — All Rights Reserved</div>
     </div>
 
@@ -4145,6 +4904,108 @@ function pageSupport() {
       successBox.appendChild(dot);
     }
     modalBody.querySelector('#closeSuccessBtn').addEventListener('click', closeModal);
+  }
+}
+
+// ---------- About ----------
+function pageAbout() {
+  app.appendChild(h(`<div class="page-head">
+    <div class="eyebrow">Reference</div>
+    <h1>About Engineering Calculator Hub</h1>
+    <p class="lead">What this site is, who runs it, and how its calculators are actually built.</p>
+  </div>
+  <div class="card" style="max-width:800px;">
+    <h2 class="panel-title" style="margin-top:0;">What this site is</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">Engineering Calculator Hub is a free collection of engineering calculators for power plant, instrumentation, electrical, civil, and mechanical work \u2014 built to answer the kind of everyday sizing, checking, and verification questions engineers run into on the job, from short-circuit fault current and IDMT relay curves to boiler blowdown rate and SIL/PFDavg verification. It also includes a full SAMA logic diagram simulator with a real DCS-style multi-page architecture and a shared instrument tag database.</p>
+
+    <h2 class="panel-title">Who runs it</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">This site is built and maintained by Dr. Kundan.</p>
+
+    <h2 class="panel-title">Methodology \u2014 how a calculator here is actually built</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">Every calculator on this site is tagged with a confidence badge (visible at the top of the page) that honestly states how it was verified:</p>
+    <ul style="color:var(--text-dim);line-height:1.85;padding-left:22px;">
+      <li><b style="color:var(--green);">Verified against published standard</b> \u2014 checked against the named standard's own equations and, where one exists, a published worked example, not just internal self-consistency.</li>
+      <li><b style="color:var(--amber);">Standard method \u2014 stated scope limits apply</b> \u2014 a real, correct engineering method that deliberately doesn't cover every case the full standard does; the scope note in the result explains exactly what's excluded.</li>
+      <li><b style="color:var(--blue);">Estimation / reference tool</b> \u2014 gives an order-of-magnitude or typical-value result by design, not a substitute for a full study or OEM documentation.</li>
+    </ul>
+    <p style="color:var(--text-dim);line-height:1.7;">Where a calculator uses generic reference figures rather than a specific manufacturer's proprietary data, that is stated directly in the page, not left implicit. None of these tools are a substitute for calibrated instruments, an approved design document, or qualified engineering review \u2014 see the disclaimer in the site footer.</p>
+
+    <h2 class="panel-title">Have a question or feedback?</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">We\u2019d love to hear from you. If you have any suggestions, find an issue with one of the calculators, or need assistance, feel free to contact us${isEmbeddedFrame ? ' at admin@engineeringhubcalc.com' : ': <a href="mailto:admin@engineeringhubcalc.com" id="aboutContactLink" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>'}.</p>
+  </div>`));
+  if (isEmbeddedFrame) {
+    // Same reasoning as the dashboard Contact card: a plain mailto:
+    // navigation can be silently blocked inside a sandboxed preview with
+    // no visible feedback at all, so this always shows something the
+    // person can act on regardless of what the sandbox actually allows.
+    const p = [...app.querySelectorAll('p')].find((el) => el.textContent.includes('admin@engineeringhubcalc.com'));
+    if (p) p.addEventListener('click', (e) => { e.preventDefault(); copyEmailWithFallback('admin@engineeringhubcalc.com'); });
+  }
+}
+
+// ---------- Contact ----------
+function pageContact() {
+  app.appendChild(h(`<div class="page-head">
+    <div class="eyebrow">Reference</div>
+    <h1>Contact Us</h1>
+    <p class="lead">Have a question or feedback? We\u2019d love to hear from you.</p>
+  </div>
+  <div class="card" style="max-width:800px;">
+    <h2 class="panel-title" style="margin-top:0;">Get in touch</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">If you have any suggestions, find an issue with one of the calculators, or need assistance, feel free to contact us${isEmbeddedFrame ? ' at admin@engineeringhubcalc.com' : ': <a href="mailto:admin@engineeringhubcalc.com" id="contactPageEmailLink" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>'}.</p>
+    <p style="color:var(--text-dim);line-height:1.7;">We read every message and try to respond as soon as we can. For bugs, it helps to mention which calculator you were using and what you expected versus what happened.</p>
+
+    <h2 class="panel-title">Who you're contacting</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">Engineering Calculator Hub is built and maintained by Dr. Kundan \u2014 see the <a id="contactAboutLink" style="color:var(--cyan);cursor:pointer;">About page</a> for more on the site and its methodology.</p>
+  </div>`));
+  const aboutLink = document.getElementById('contactAboutLink');
+  if (aboutLink) aboutLink.addEventListener('click', (e) => { e.preventDefault(); navigate('about'); });
+  if (isEmbeddedFrame) {
+    // Same reasoning as the dashboard Contact card and About page: a
+    // plain mailto: navigation can be silently blocked inside a
+    // sandboxed preview with no visible feedback at all, so this always
+    // shows something the person can act on regardless of what the
+    // sandbox actually allows.
+    const p = [...app.querySelectorAll('p')].find((el) => el.textContent.includes('admin@engineeringhubcalc.com'));
+    if (p) p.addEventListener('click', (e) => { e.preventDefault(); copyEmailWithFallback('admin@engineeringhubcalc.com'); });
+  }
+}
+
+// ---------- Privacy Policy ----------
+function pagePrivacy() {
+  app.appendChild(h(`<div class="page-head">
+    <div class="eyebrow">Reference</div>
+    <h1>Privacy Policy</h1>
+    <p class="lead">Last updated: September 2026. This page describes what data this site and its third-party services collect, and how it is used.</p>
+  </div>
+  <div class="card" style="max-width:800px;">
+    <h2 class="panel-title" style="margin-top:0;">What this site itself collects</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">This site does not require an account, does not collect your name or email to use any calculator, and does not run its own server-side database of your activity. Everything you enter into a calculator \u2014 your inputs, results, and calculation history \u2014 is processed and stored entirely in your own browser (using IndexedDB, a browser-local storage technology), and is never transmitted to us or any server. Clearing your browser data removes it completely; we have no copy.</p>
+
+    <h2 class="panel-title">Google Analytics</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">This site uses Google Analytics (GA4) to understand overall site usage \u2014 which pages are visited, how often, and general technical information like browser type and approximate location. Google Analytics uses cookies to do this. We do not use this data to identify individual visitors personally. See <a href="https://policies.google.com/privacy" target="_blank" rel="noopener" style="color:var(--cyan);">Google's Privacy Policy</a> for how Google itself handles this data.</p>
+
+    <h2 class="panel-title">Google AdSense</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">This site displays advertisements served by Google AdSense. Google and its advertising partners may use cookies and similar technologies to serve ads based on your prior visits to this and other websites, in order to show ads that may be more relevant to you. You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener" style="color:var(--cyan);">Google's Ads Settings</a>, or opt out of some third-party vendors' use of cookies for personalized advertising by visiting <a href="https://www.aboutads.info/choices/" target="_blank" rel="noopener" style="color:var(--cyan);">www.aboutads.info</a>. Full detail on how Google uses data from sites that use its services, including AdSense, is available at <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener" style="color:var(--cyan);">policies.google.com/technologies/partner-sites</a>.</p>
+
+    <h2 class="panel-title">Razorpay (voluntary support/donations)</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">The optional "Support the Project" page uses Razorpay to process voluntary donations. If you choose to donate, your payment details are entered directly on Razorpay's own secure checkout page \u2014 this site never receives, sees, or stores your card, UPI, or other payment details. See <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" style="color:var(--cyan);">Razorpay's Privacy Policy</a> for how they handle that data.</p>
+
+    <h2 class="panel-title">Cookies, generally</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">Cookies on this site come from the third-party services described above (Google Analytics, Google AdSense) rather than from code we write ourselves. You can block or delete cookies through your browser's own settings at any time; doing so may affect how ads are personalized but will not prevent you from using any calculator on this site.</p>
+
+    <h2 class="panel-title">Children's privacy</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">This site is intended for engineering professionals and students and is not directed at children under 13. We do not knowingly collect personal information from children.</p>
+
+    <h2 class="panel-title">Changes to this policy</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">If this policy changes, the "Last updated" date at the top of this page will change accordingly.</p>
+
+    <h2 class="panel-title">Contact</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">Questions about this policy or how your data is handled: ${isEmbeddedFrame ? 'admin@engineeringhubcalc.com' : '<a href="mailto:admin@engineeringhubcalc.com" id="privacyContactLink" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>'}</p>
+  </div>`));
+  if (isEmbeddedFrame) {
+    const p = [...app.querySelectorAll('p')].find((el) => el.textContent.includes('admin@engineeringhubcalc.com'));
+    if (p) p.addEventListener('click', (e) => { e.preventDefault(); copyEmailWithFallback('admin@engineeringhubcalc.com'); });
   }
 }
 
@@ -6255,6 +7116,95 @@ let samaCurrentPageIdx = 0;
 let samaTagLibrary = [];
 const samaGlobalTagValues = {}; // tag -> last value computed for it, by whichever page last ran it
 
+// Alarm management, same "global across every page" reasoning as the tag
+// database above -- a real DCS alarm summary shows every active alarm
+// across the whole unit, not just whichever graphic the operator happens
+// to be looking at right now. Keyed by "<blockId>:<level>" (a block can
+// have both a Hi and a Hi-Hi alarm active in principle, though evaluation
+// only ever lets the single worst level be active at once per block, so
+// in practice at most one key per block exists at a time).
+const samaActiveAlarms = new Map(); // key -> { blockId, tag, level, value, limit, activatedAt, acknowledged }
+const samaAlarmEventLog = []; // [{ t, tag, blockId, event: 'ACTIVATED'|'CLEARED'|'ACKNOWLEDGED', level, value }], newest first
+const SAMA_ALARM_LOG_MAX = 200; // a real alarm historian keeps far more, but this is a live in-memory session log, not a plant historian
+
+/** Priority order for picking the single worst active level on one block
+ * -- Hi-Hi and Lo-Lo are process-critical (red); Hi/Lo are advisory
+ * (amber). Matches standard ISA-18.2 alarm philosophy: the operator
+ * should only ever be shown the most severe condition for a given point,
+ * not be told "Hi" and "Hi-Hi" are both true when they mean the same
+ * underlying excursion. */
+const SAMA_ALARM_LEVEL_SEVERITY = { hiHi: 4, loLo: 4, hi: 2, lo: 2 };
+const SAMA_ALARM_LEVEL_LABEL = { hiHi: 'HI-HI', hi: 'HI', lo: 'LO', loLo: 'LO-LO' };
+
+/** Removes any currently-active alarm for a block (used when alarming is
+ * disabled on it, the block itself is deleted, or a tag is unassigned) --
+ * logs a CLEARED event for anything that was actually active, exactly as
+ * a real system logs an alarm clearing on configuration removal, not a
+ * silent disappearance from the summary. */
+function clearAlarmsForBlock(blockId) {
+  for (const [key, alarm] of [...samaActiveAlarms.entries()]) {
+    if (alarm.blockId !== blockId) continue;
+    samaActiveAlarms.delete(key);
+    samaAlarmEventLog.unshift({ t: Date.now(), tag: alarm.tag, blockId, event: 'CLEARED', level: alarm.level, value: alarm.value });
+  }
+  if (samaAlarmEventLog.length > SAMA_ALARM_LOG_MAX) samaAlarmEventLog.length = SAMA_ALARM_LOG_MAX;
+}
+
+/** Checks every alarm-enabled, tagged block's current computed value
+ * against its configured Hi-Hi/Hi/Lo/Lo-Lo limits and updates the global
+ * active-alarm set and event log accordingly. Called once per simulation
+ * scan (from updateLiveValues, alongside trend recording), the same
+ * cadence a real DCS alarm subsystem runs on -- every input scan, not on
+ * a separate slower cycle. Runs across every block on the CURRENT page
+ * only (a block on another page can't be alarm-checked without that
+ * page's own simulation running), which matches how each page's Run
+ * button independently controls its own evaluation.
+ */
+function evaluateAlarms(blocksToCheck, results) {
+  for (const block of blocksToCheck) {
+    if (!block.alarm || !block.alarm.enabled || !block.tag) continue;
+    const r = results.get(block.id);
+    if (!r || r.error || r.value === null || r.value === undefined) continue;
+    const value = r.value;
+
+    // Determine the single worst level currently true, per the severity
+    // ordering above -- Hi-Hi/Lo-Lo win over Hi/Lo if both would apply.
+    let worstLevel = null, worstLimit = null, worstSeverity = -1;
+    const checks = [
+      ['hiHi', block.alarm.hiHi, block.alarm.hiHi !== undefined && value >= block.alarm.hiHi],
+      ['hi', block.alarm.hi, block.alarm.hi !== undefined && value >= block.alarm.hi],
+      ['lo', block.alarm.lo, block.alarm.lo !== undefined && value <= block.alarm.lo],
+      ['loLo', block.alarm.loLo, block.alarm.loLo !== undefined && value <= block.alarm.loLo],
+    ];
+    for (const [level, limit, isTrue] of checks) {
+      if (isTrue && SAMA_ALARM_LEVEL_SEVERITY[level] > worstSeverity) { worstLevel = level; worstLimit = limit; worstSeverity = SAMA_ALARM_LEVEL_SEVERITY[level]; }
+    }
+
+    const key = block.id; // one active-alarm slot per block, holding only the current worst level
+    const existing = samaActiveAlarms.get(key);
+    if (worstLevel) {
+      if (!existing) {
+        samaActiveAlarms.set(key, { blockId: block.id, tag: block.tag, level: worstLevel, value, limit: worstLimit, activatedAt: Date.now(), acknowledged: false });
+        samaAlarmEventLog.unshift({ t: Date.now(), tag: block.tag, blockId: block.id, event: 'ACTIVATED', level: worstLevel, value });
+      } else if (existing.level !== worstLevel) {
+        // The excursion got worse (or better but still in alarm) and
+        // crossed into a different level -- e.g. Hi escalating to Hi-Hi.
+        // Log this as a fresh activation of the new level; an operator
+        // needs to know severity changed, not just see the same entry
+        // silently update its level underneath them.
+        samaAlarmEventLog.unshift({ t: Date.now(), tag: block.tag, blockId: block.id, event: 'ACTIVATED', level: worstLevel, value });
+        existing.level = worstLevel; existing.limit = worstLimit; existing.value = value; existing.acknowledged = false;
+      } else {
+        existing.value = value; // still the same level -- just keep the displayed value current
+      }
+    } else if (existing) {
+      samaActiveAlarms.delete(key);
+      samaAlarmEventLog.unshift({ t: Date.now(), tag: block.tag, blockId: block.id, event: 'CLEARED', level: existing.level, value });
+    }
+  }
+  if (samaAlarmEventLog.length > SAMA_ALARM_LOG_MAX) samaAlarmEventLog.length = SAMA_ALARM_LOG_MAX;
+}
+
 function pageSamaLogic() {
   const DYNAMIC_COLOR = '#a78bfa';
   const CONNECT_OK_COLOR = '#4ade80'; // distinct "connected" green -- separate from the wire's own cyan, so a successful/live connection reads clearly at a glance
@@ -6498,23 +7448,36 @@ function pageSamaLogic() {
     row.innerHTML = samaPages.map((p, i) => `
       <div class="pill" data-page-tab="${i}" style="cursor:pointer;display:flex;align-items:center;gap:6px;${i === samaCurrentPageIdx ? 'border-color:var(--amber);color:var(--amber);' : ''}">
         <span data-page-name="${i}">${p.name}</span>
+        <span data-edit-page="${i}" title="Rename page" style="color:var(--text-faint);cursor:pointer;font-size:.85em;">\u270e</span>
         ${samaPages.length > 1 ? `<span data-remove-page="${i}" style="color:var(--red);font-weight:700;cursor:pointer;">\u2715</span>` : ''}
       </div>`).join('');
     row.querySelectorAll('[data-page-tab]').forEach((el) => el.addEventListener('click', (e) => {
-      if (e.target.dataset.removePage !== undefined) return; // the x click is handled separately below
+      if (e.target.dataset.removePage !== undefined || e.target.dataset.editPage !== undefined) return; // handled separately below
       switchToPage(+el.dataset.pageTab);
     }));
-    row.querySelectorAll('[data-page-name]').forEach((el) => el.addEventListener('dblclick', (e) => {
-      e.stopPropagation();
-      const idx = +el.dataset.pageName;
-      const name = prompt('Rename page:', samaPages[idx].name);
+    async function renamePage(idx) {
+      const name = await showPrompt('Rename page:', samaPages[idx].name);
       if (name && name.trim()) { samaPages[idx].name = name.trim(); renderPageTabs(); }
+    }
+    row.querySelectorAll('[data-page-name]').forEach((el) => el.addEventListener('dblclick', async (e) => {
+      e.stopPropagation();
+      await renamePage(+el.dataset.pageName);
     }));
-    row.querySelectorAll('[data-remove-page]').forEach((el) => el.addEventListener('click', (e) => {
+    // A visible pencil icon does the exact same rename as the double-click
+    // above -- double-click alone is easy to miss, and doesn't have a
+    // reliable touch/mobile equivalent, so this gives everyone an obvious,
+    // discoverable way to edit a page's name or number rather than only
+    // an undiscoverable gesture.
+    row.querySelectorAll('[data-edit-page]').forEach((el) => el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await renamePage(+el.dataset.editPage);
+    }));
+    row.querySelectorAll('[data-remove-page]').forEach((el) => el.addEventListener('click', async (e) => {
       e.stopPropagation();
       const idx = +el.dataset.removePage;
       if (samaPages.length <= 1) return; // always keep at least one page
-      if (!confirm(`Delete "${samaPages[idx].name}"? This cannot be undone.`)) return;
+      const ok = await showConfirm(`Delete "${samaPages[idx].name}"? This cannot be undone.`);
+      if (!ok) return;
       samaPages.splice(idx, 1);
       if (samaCurrentPageIdx >= samaPages.length) samaCurrentPageIdx = samaPages.length - 1;
       else if (idx < samaCurrentPageIdx) samaCurrentPageIdx--;
@@ -6524,9 +7487,22 @@ function pageSamaLogic() {
       renderPageTabs();
     }));
   }
+  function nextDefaultPageName() {
+    // Finds the lowest unused "Page N" rather than always using
+    // samaPages.length + 1, which breaks the instant a page is deleted:
+    // delete "Page 1" out of ["Page 1", "Page 2"], add a new page, and
+    // length+1 gives "Page 2" again -- a real, confusing duplicate name,
+    // not just an odd-looking number. This picks whichever "Page N" name
+    // isn't currently in use, so a freed-up number (or gap from a
+    // deletion) gets reused sensibly instead of skipped over.
+    const used = new Set(samaPages.map((p) => p.name));
+    let n = 1;
+    while (used.has(`Page ${n}`)) n++;
+    return `Page ${n}`;
+  }
   pageTabsCard.querySelector('#addPageBtn').addEventListener('click', () => {
     syncCurrentPageState();
-    samaPages.push({ name: `Page ${samaPages.length + 1}`, blocks: [], undoStack: [], redoStack: [], selectedId: null });
+    samaPages.push({ name: nextDefaultPageName(), blocks: [], undoStack: [], redoStack: [], selectedId: null });
     switchToPage(samaPages.length - 1);
   });
   renderPageTabs();
@@ -6543,6 +7519,118 @@ function pageSamaLogic() {
   const propsCard = h(`<div class="card" id="propsPanel" style="width:280px;flex:none;display:none;"><div class="panel-title">Block Properties</div><div id="propsBody"></div></div>`);
   layoutRow.append(canvasCard, propsCard);
   app.appendChild(layoutRow);
+
+  // ------------------------------------------------------------------
+  // Alarm Summary -- a real DCS alarm banner: every active, tagged,
+  // alarm-enabled point that has crossed a configured Hi-Hi/Hi/Lo/Lo-Lo
+  // limit shows here the moment it happens, sorted worst-first, with an
+  // acknowledge workflow and a scrollable event log underneath. Hidden
+  // entirely when nothing is configured to alarm and nothing is active,
+  // so it never clutters a diagram that isn't using alarming at all.
+  // ------------------------------------------------------------------
+  const alarmPanel = h(`<div class="card" id="alarmPanel" style="margin-top:12px;display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div class="panel-title" style="margin:0;" id="alarmPanelTitle">Alarm Summary</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary" id="alarmAckAllBtn" style="display:none;">Acknowledge All</button>
+        <button class="btn secondary" id="alarmLogToggleBtn">Event Log \u25be</button>
+      </div>
+    </div>
+    <div id="alarmActiveList" style="margin-top:8px;"></div>
+    <div id="alarmEventLogWrap" style="display:none;margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="color:var(--text-faint);font-size:.76rem;">Most recent first \u2014 this session only</span>
+        <button class="btn secondary" id="alarmLogClearBtn" style="padding:2px 10px;font-size:.76rem;">Clear Log</button>
+      </div>
+      <div id="alarmEventLogList" style="max-height:220px;overflow-y:auto;margin-top:6px;font-size:.8rem;font-family:var(--font-mono);"></div>
+    </div>
+  </div>`);
+  app.appendChild(alarmPanel);
+  alarmPanel.querySelector('#alarmLogToggleBtn').addEventListener('click', () => {
+    const wrap = alarmPanel.querySelector('#alarmEventLogWrap');
+    const btn = alarmPanel.querySelector('#alarmLogToggleBtn');
+    const open = wrap.style.display !== 'none';
+    wrap.style.display = open ? 'none' : '';
+    btn.textContent = open ? 'Event Log \u25be' : 'Event Log \u25b4';
+    if (!open) renderAlarmEventLog();
+  });
+  alarmPanel.querySelector('#alarmLogClearBtn').addEventListener('click', async () => {
+    const ok = await showConfirm('Clear the alarm & event log? Active alarms themselves are not affected.', { confirmLabel: 'Clear' });
+    if (!ok) return;
+    samaAlarmEventLog.length = 0;
+    renderAlarmEventLog();
+  });
+  alarmPanel.querySelector('#alarmAckAllBtn').addEventListener('click', () => {
+    let any = false;
+    samaActiveAlarms.forEach((alarm) => {
+      if (!alarm.acknowledged) {
+        alarm.acknowledged = true;
+        any = true;
+        samaAlarmEventLog.unshift({ t: Date.now(), tag: alarm.tag, blockId: alarm.blockId, event: 'ACKNOWLEDGED', level: alarm.level, value: alarm.value });
+      }
+    });
+    if (any) renderAlarmBanner();
+  });
+
+  function alarmTimeAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    return `${Math.floor(s / 3600)}h ago`;
+  }
+
+  function renderAlarmBanner() {
+    const list = alarmPanel.querySelector('#alarmActiveList');
+    const active = [...samaActiveAlarms.values()].sort((a, b) => {
+      // Unacknowledged first, then worst severity first, then most recent first.
+      if (a.acknowledged !== b.acknowledged) return a.acknowledged ? 1 : -1;
+      const sevDiff = SAMA_ALARM_LEVEL_SEVERITY[b.level] - SAMA_ALARM_LEVEL_SEVERITY[a.level];
+      if (sevDiff !== 0) return sevDiff;
+      return b.activatedAt - a.activatedAt;
+    });
+    const anyConfigured = blocks.some((b) => b.alarm && b.alarm.enabled && b.tag) || samaAlarmEventLog.length > 0;
+    alarmPanel.style.display = (active.length > 0 || anyConfigured) ? '' : 'none';
+    alarmPanel.querySelector('#alarmPanelTitle').textContent = active.length > 0 ? `Alarm Summary (${active.length} active)` : 'Alarm Summary';
+    alarmPanel.querySelector('#alarmAckAllBtn').style.display = active.some((a) => !a.acknowledged) ? '' : 'none';
+    if (active.length === 0) {
+      list.innerHTML = `<div style="color:var(--text-faint);font-size:.82rem;">No active alarms.</div>`;
+      return;
+    }
+    list.innerHTML = active.map((a) => {
+      const critical = a.level === 'hiHi' || a.level === 'loLo';
+      const color = critical ? 'var(--red)' : 'var(--amber)';
+      return `<div data-alarm-row="${a.blockId}" style="display:flex;align-items:center;gap:10px;padding:7px 10px;margin-bottom:5px;border-radius:6px;border:1px solid ${color};background:${critical ? 'rgba(220,60,60,.08)' : 'rgba(232,163,61,.08)'};${a.acknowledged ? 'opacity:.6;' : ''}">
+        <span style="font-weight:700;color:${color};min-width:52px;">${SAMA_ALARM_LEVEL_LABEL[a.level]}</span>
+        <span style="font-weight:600;">${a.tag}</span>
+        <span style="color:var(--text-dim);font-size:.82rem;">value ${fmt(a.value, 2)}, limit ${fmt(a.limit, 2)}</span>
+        <span style="color:var(--text-faint);font-size:.76rem;margin-left:auto;">${alarmTimeAgo(a.activatedAt)}</span>
+        ${a.acknowledged ? '<span style="color:var(--text-faint);font-size:.76rem;">ACK</span>' : `<button class="btn secondary" data-ack-alarm="${a.blockId}" style="padding:2px 10px;font-size:.76rem;">Ack</button>`}
+      </div>`;
+    }).join('');
+    list.querySelectorAll('[data-ack-alarm]').forEach((btn) => btn.addEventListener('click', () => {
+      const alarm = samaActiveAlarms.get(btn.dataset.ackAlarm);
+      if (!alarm || alarm.acknowledged) return;
+      alarm.acknowledged = true;
+      samaAlarmEventLog.unshift({ t: Date.now(), tag: alarm.tag, blockId: alarm.blockId, event: 'ACKNOWLEDGED', level: alarm.level, value: alarm.value });
+      renderAlarmBanner();
+    }));
+  }
+
+  function renderAlarmEventLog() {
+    const el = alarmPanel.querySelector('#alarmEventLogList');
+    if (!el) return;
+    if (samaAlarmEventLog.length === 0) { el.innerHTML = `<div style="color:var(--text-faint);">No alarm events yet.</div>`; return; }
+    const eventColor = { ACTIVATED: 'var(--red)', CLEARED: 'var(--green)', ACKNOWLEDGED: 'var(--cyan)' };
+    el.innerHTML = samaAlarmEventLog.map((e) => {
+      const t = new Date(e.t);
+      const hh = String(t.getHours()).padStart(2, '0'), mm = String(t.getMinutes()).padStart(2, '0'), ss = String(t.getSeconds()).padStart(2, '0');
+      return `<div style="padding:2px 0;color:${eventColor[e.event] || 'var(--text-dim)'};">[${hh}:${mm}:${ss}] ${e.tag} ${SAMA_ALARM_LEVEL_LABEL[e.level] || ''} ${e.event}${e.value !== undefined ? ` (${fmt(e.value, 2)})` : ''}</div>`;
+    }).join('');
+  }
+  // Global alarm state can already hold entries from a different page or
+  // an earlier visit to this one -- show them immediately on load rather
+  // than waiting for this page's own simulation to tick once.
+  renderAlarmBanner();
 
   const trendPanel = h(`<div class="card" id="trendPanel" style="margin-top:12px;display:none;">
     <div class="panel-title">Live Trend</div>
@@ -6703,7 +7791,7 @@ function pageSamaLogic() {
     if (!simulation) return;
     const clockEl = document.getElementById('simClock');
     if (clockEl) clockEl.textContent = `t = ${simulation.time.toFixed(1)} s`;
-    refreshDisplayValues();
+    refreshDisplayValues(); // now handles alarm evaluation + banner refresh itself, alongside the static-diagram path
     recordTrend(currentResults());
   }
 
@@ -6721,14 +7809,39 @@ function pageSamaLogic() {
    * completely alone. */
   function refreshDisplayValues() {
     const results = currentResults();
+    // Alarm evaluation belongs here, not only in the dynamic-simulation
+    // timer tick: a purely static diagram (no dynamic blocks at all, so
+    // no setInterval loop ever runs) still needs its alarm-configured
+    // points checked every time a value actually changes -- which is
+    // exactly what calls this function already, from a running dynamic
+    // tick, a static Run press, or editing a const/param input by hand.
+    evaluateAlarms(blocks, results);
+    renderAlarmBanner();
     blocks.forEach((block) => {
       const def = sama.SAMA_BLOCK_TYPES[block.type];
       const r = results.get(block.id) || { value: null, error: null };
-      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : def.category === 'finalControl' ? FINAL_CONTROL_COLOR : 'var(--cyan)';
+      const activeAlarm = samaActiveAlarms.get(block.id);
+      const alarmColor = activeAlarm ? (activeAlarm.level === 'hiHi' || activeAlarm.level === 'loLo' ? 'var(--red)' : 'var(--amber)') : null;
+      const color = alarmColor || (r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : def.category === 'finalControl' ? FINAL_CONTROL_COLOR : 'var(--cyan)');
       const g = svg.querySelector(`[data-block-id="${block.id}"]`);
       if (g) {
         const shapeEl = g.querySelector('ellipse, rect, polygon');
-        if (shapeEl) shapeEl.setAttribute('stroke', color);
+        if (shapeEl) {
+          shapeEl.setAttribute('stroke', color);
+          // An unacknowledged alarm gets a thicker, pulsing border so it
+          // is genuinely hard to miss on a busy diagram -- exactly the
+          // point of alarm indication on a real DCS graphic. Once
+          // acknowledged, the color stays (the excursion is still real)
+          // but the pulse and extra weight stop, matching how a real
+          // system distinguishes "known about" from "needs attention".
+          if (activeAlarm && !activeAlarm.acknowledged) {
+            shapeEl.setAttribute('stroke-width', '3.5');
+            shapeEl.setAttribute('class', 'sama-alarm-pulse');
+          } else {
+            shapeEl.setAttribute('stroke-width', activeAlarm ? '2.5' : '1.5');
+            shapeEl.removeAttribute('class');
+          }
+        }
         const valEl = g.querySelector(`[data-diagram-value="${block.id}"]`);
         if (valEl) { valEl.textContent = r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 3)); valEl.setAttribute('fill', r.error ? 'var(--red)' : 'var(--text)'); }
         // Motor/valve/SOV/lamp symbols carry their own color, fill, and
@@ -7073,11 +8186,20 @@ function pageSamaLogic() {
     blocks.forEach((block) => {
       const def = sama.SAMA_BLOCK_TYPES[block.type];
       const r = results.get(block.id) || { value: null, error: null };
-      const color = r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : def.category === 'finalControl' ? FINAL_CONTROL_COLOR : 'var(--cyan)';
+      const activeAlarm = samaActiveAlarms.get(block.id);
+      const alarmColor = activeAlarm ? (activeAlarm.level === 'hiHi' || activeAlarm.level === 'loLo' ? 'var(--red)' : 'var(--amber)') : null;
+      const color = alarmColor || (r.error ? 'var(--red)' : def.category === 'logic' ? 'var(--amber)' : def.category === 'dynamic' ? DYNAMIC_COLOR : def.category === 'io' ? IO_COLOR : def.category === 'finalControl' ? FINAL_CONTROL_COLOR : 'var(--cyan)');
       const { bw, bh } = blockSize(block);
       const scale = block.scale ?? 1;
       const cx = block.x + bw / 2, cy = block.y + bh / 2;
       const isSelected = block.id === selectedId;
+      // Same reasoning as refreshDisplayValues(): an unacknowledged alarm
+      // gets a thicker, pulsing border; once acknowledged the color
+      // stays but the pulse/extra weight stop. Selection still wins on
+      // stroke width when both apply, since the user is actively working
+      // on that exact block.
+      const strokeWidth = isSelected ? 3 : (activeAlarm && !activeAlarm.acknowledged) ? 3.5 : activeAlarm ? 2.5 : 1.5;
+      const strokeClass = (!isSelected && activeAlarm && !activeAlarm.acknowledged) ? ' class="sama-alarm-pulse"' : '';
       let shape;
       // Enclosure shapes follow the actual MCAA/ISA functional-diagramming
       // standard (Section 4.1.2), not just a category color: circle for
@@ -7087,26 +8209,26 @@ function pageSamaLogic() {
       // from the general rectangle used for other processing blocks).
       if (block.type === 'di' || block.type === 'ai') {
         // Circle -- measuring/readout function.
-        shape = `<ellipse cx="${cx}" cy="${cy}" rx="${bw / 2}" ry="${bh / 2}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+        shape = `<ellipse cx="${cx}" cy="${cy}" rx="${bw / 2}" ry="${bh / 2}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${strokeWidth}"${strokeClass}/>`;
       } else if (['do_', 'ao_', 'motor', 'controlValve', 'sov', 'bulb'].includes(block.type)) {
         // Isosceles trapezoid -- final controlling function.
         const peak = 16 * scale;
-        shape = `<polygon points="${block.x},${block.y} ${block.x + bw},${block.y} ${block.x + bw},${block.y + bh - peak} ${cx},${block.y + bh} ${block.x},${block.y + bh - peak}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+        shape = `<polygon points="${block.x},${block.y} ${block.x + bw},${block.y} ${block.x + bw},${block.y + bh - peak} ${cx},${block.y + bh} ${block.x},${block.y + bh - peak}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${strokeWidth}"${strokeClass}/>`;
       } else if (block.type === 'transfer' || block.type === 'manualValue') {
         // Diamond -- manual signal processing function. The standard
         // specifically says the diamond enclosure holds the A, B, or T
         // symbol (Section 4.1.2.3): A is this Manual Value / Variable
         // Signal Generator, T is Transfer, both belong here together.
-        shape = `<polygon points="${cx},${block.y} ${block.x + bw},${cy} ${cx},${block.y + bh} ${block.x},${cy}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+        shape = `<polygon points="${cx},${block.y} ${block.x + bw},${cy} ${cx},${block.y + bh} ${block.x},${cy}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${strokeWidth}"${strokeClass}/>`;
       } else if (block.type === 'timeDelay' || block.type === 'pulseTimer' || block.type === 'pulseGenerator') {
         // Square -- timer function, distinct from the general rectangle.
-        shape = `<rect x="${block.x}" y="${block.y}" width="${bw}" height="${bh}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+        shape = `<rect x="${block.x}" y="${block.y}" width="${bw}" height="${bh}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${strokeWidth}"${strokeClass}/>`;
       } else {
         // Rectangle -- automatic signal processing function, the
         // standard's enclosure for the great majority of blocks:
         // summers, gains, selects, limiters, PID, lag, integrator, and
         // all the other computation/logic blocks.
-        shape = `<rect x="${block.x}" y="${block.y}" width="${bw}" height="${bh}" rx="4" fill="var(--bg-panel)" stroke="${color}" stroke-width="${isSelected ? 3 : 1.5}"/>`;
+        shape = `<rect x="${block.x}" y="${block.y}" width="${bw}" height="${bh}" rx="4" fill="var(--bg-panel)" stroke="${color}" stroke-width="${strokeWidth}"${strokeClass}/>`;
       }
       const { ins, out } = portPositions(block);
       const portR = Math.max(3, 6 * scale), hitR = Math.max(8, 15 * scale);
@@ -7208,6 +8330,18 @@ function pageSamaLogic() {
         </select>
       </div>
       ${tagLibrary.length === 0 ? '<div class="hint" style="margin-top:-6px;margin-bottom:10px;">No tags defined yet \u2014 use the Tags button in the toolbar to add real instrument tags like FT-101.</div>' : ''}
+      ${block.tag && ['ai', 'ao_', 'controlValve'].includes(block.type) ? `
+      <div style="border-top:1px solid var(--line);margin:10px 0 8px;padding-top:8px;">
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" data-alarm-enabled ${block.alarm && block.alarm.enabled ? 'checked' : ''} style="width:auto;"> <span style="font-weight:600;">Alarm limits</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;${block.alarm && block.alarm.enabled ? '' : 'opacity:.4;pointer-events:none;'}" data-alarm-fields>
+          <div class="field"><label style="color:var(--red);">Hi-Hi</label><input type="number" step="any" data-alarm-level="hiHi" value="${block.alarm && block.alarm.hiHi !== undefined ? block.alarm.hiHi : ''}" placeholder="(none)"></div>
+          <div class="field"><label style="color:var(--amber);">Hi</label><input type="number" step="any" data-alarm-level="hi" value="${block.alarm && block.alarm.hi !== undefined ? block.alarm.hi : ''}" placeholder="(none)"></div>
+          <div class="field"><label style="color:var(--amber);">Lo</label><input type="number" step="any" data-alarm-level="lo" value="${block.alarm && block.alarm.lo !== undefined ? block.alarm.lo : ''}" placeholder="(none)"></div>
+          <div class="field"><label style="color:var(--red);">Lo-Lo</label><input type="number" step="any" data-alarm-level="loLo" value="${block.alarm && block.alarm.loLo !== undefined ? block.alarm.loLo : ''}" placeholder="(none)"></div>
+        </div>
+        <div class="hint" style="margin-top:4px;">Leave a field blank to skip that limit. Checked automatically every scan while Run is active \u2014 an active, unacknowledged alarm shows in the Alarm Summary below and the block's border flashes on the diagram.</div>
+      </div>
+      ` : ''}
       ` : ''}
       ${block.type === 'tagRef' ? `
       <div class="field"><label>Reading tag</label>
@@ -7247,6 +8381,21 @@ function pageSamaLogic() {
       block.params.value = samaGlobalTagValues[block.params.tag] ?? 0; // pick up whatever the tag is already holding immediately, rather than waiting for the next evaluation
       render();
     });
+    const alarmEnabledBox = body.querySelector('[data-alarm-enabled]');
+    if (alarmEnabledBox) alarmEnabledBox.addEventListener('change', () => {
+      if (!block.alarm) block.alarm = {};
+      block.alarm.enabled = alarmEnabledBox.checked;
+      if (!alarmEnabledBox.checked) clearAlarmsForBlock(block.id); // disabling mid-run must also drop any currently active alarm for it
+      const fields = body.querySelector('[data-alarm-fields]');
+      if (fields) fields.style.cssText = alarmEnabledBox.checked ? '' : 'opacity:.4;pointer-events:none;';
+    });
+    body.querySelectorAll('[data-alarm-level]').forEach((inp) => inp.addEventListener('input', () => {
+      if (!block.alarm) block.alarm = {};
+      const level = inp.dataset.alarmLevel;
+      const v = inp.value.trim();
+      if (v === '') delete block.alarm[level];
+      else { const n = parseFloat(v); if (!Number.isNaN(n)) block.alarm[level] = n; }
+    }));
     // Guard against NaN (typing a lone "-" as the first character of a
     // negative number parses to NaN) and, critically, do NOT call render()
     // or structureChanged() here -- those rebuild the whole properties
@@ -7266,12 +8415,18 @@ function pageSamaLogic() {
       // rebuild it here either -- doing so would reset all accumulated
       // state (e.g. a PID's integral term) on every keystroke.
       const key = inp.dataset.param;
-      if (inp.dataset.paramBool) {
+      // Any param that some OTHER param declares as its sliderWhen
+      // trigger needs a full render() when IT changes, not just when a
+      // boolean toggle does -- e.g. PID's Mode dropdown (Auto/Manual)
+      // controls whether Manual Output renders as a slider, exactly the
+      // same structural swap a boolean "enable slider" checkbox causes.
+      const triggersASlider = def.params.some((p) => p.sliderWhen === key);
+      if (inp.dataset.paramBool || triggersASlider) {
         // A boolean toggle here specifically controls whether a sibling
         // param renders as a slider -- that's a structural change to
         // the panel (swapping which input type appears), so it needs a
         // full render(), unlike every other param edit on this page.
-        block.params[key] = inp.checked ? 1 : 0;
+        block.params[key] = inp.dataset.paramBool ? (inp.checked ? 1 : 0) : (Number.isNaN(parseFloat(inp.value)) ? inp.value : parseFloat(inp.value));
         render();
         return;
       }
@@ -7315,6 +8470,8 @@ function pageSamaLogic() {
     blocks.forEach((b) => b.inputs.forEach((inp) => { if (inp.source === 'block' && inp.blockId === id) { inp.source = 'const'; inp.value = 0; } }));
     blocks = blocks.filter((b) => b.id !== id);
     if (selectedId === id) selectedId = null;
+    clearAlarmsForBlock(id); // a deleted block can't still be in alarm
+    renderAlarmBanner();
     structureChanged();
   }
 
@@ -7595,7 +8752,9 @@ function pageSamaLogic() {
   toolbar.querySelector('#clearAllBtn').addEventListener('click', () => {
     if (blocks.length === 0) return; // nothing to snapshot or clear
     snapshotForUndo();
+    blocks.forEach((b) => clearAlarmsForBlock(b.id));
     blocks = []; selectedId = null; structureChanged();
+    renderAlarmBanner();
   });
   toolbar.querySelector('#undoBtn').addEventListener('click', () => undo());
   toolbar.querySelector('#redoBtn').addEventListener('click', () => redo());
@@ -7707,6 +8866,12 @@ function pageSamaLogic() {
           setPillReady(pill);
         }
       }
+      // A static diagram has no timer tick to catch this the way a
+      // dynamic one does -- evaluate alarms against the newly-computed
+      // values (or clear them, if Stop was just pressed) BEFORE the full
+      // render() rebuild below, while this closure's DOM references are
+      // still the current ones.
+      refreshDisplayValues();
       render();
     }
   });
@@ -8675,8 +9840,8 @@ function pageIdmt() {
 
 // ---------- Multi-Stage Relay Settings (ABB/Siemens-style) ----------
 function pageRelaySettings() {
-  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Multi-Stage Overcurrent Relay Settings</h1>
-    <p class="lead">The real workflow for a numerical feeder relay (ABB REF615/620/630, Siemens SIPROTEC 7SJ, and equivalents): three protection stages \u2014 I&gt; inverse-time, I&gt;&gt; definite-time high-set, I&gt;&gt;&gt; instantaneous \u2014 with every pickup carried in BOTH primary amps and relay per-unit (\u00d7 In), because that is how a relay is actually set and documented, not in raw primary current alone. Curve math follows IEC 60255-151 and IEEE C37.112 \u2014 the standards both manufacturers' relays are built on; this does not reproduce either vendor's proprietary setting software.</p></div>`));
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Electrical</div><h1>Overcurrent &amp; Earth Fault Relay Settings</h1>
+    <p class="lead">The real workflow for a numerical feeder relay (ABB REF615/620/630, Siemens SIPROTEC 7SJ, and equivalents): three phase overcurrent stages \u2014 I&gt; inverse-time, I&gt;&gt; definite-time high-set, I&gt;&gt;&gt; instantaneous \u2014 plus a genuine two-stage earth fault element (I0&gt;/I0&gt;&gt;) set against the actual line-to-ground fault level for your system's grounding scheme, with every pickup carried in BOTH primary amps and relay per-unit (\u00d7 In), because that is how a relay is actually set and documented, not in raw primary current alone. Curve math follows IEC 60255-151 and IEEE C37.112 \u2014 the standards both manufacturers' relays are built on; this does not reproduce either vendor's proprietary setting software.</p></div>`));
 
   const layout = h('<div class="calc-layout"></div>');
   const left = h(`<div class="card">
@@ -8716,6 +9881,17 @@ function pageRelaySettings() {
     <div class="panel-title" style="margin-top:14px;">Stage 3 (I&gt;&gt;&gt;) \u2014 Instantaneous</div>
     <div class="field"><label>Margin above max fault current (%)</label><input type="number" id="m3" step="any" value="20"></div>
 
+    <div class="panel-title" style="margin-top:14px;">Earth Fault (I0&gt;/I0&gt;&gt;)</div>
+    <div class="input-row">
+      <div class="field"><label>System grounding</label><select id="grounding">${ec.GROUNDING_TYPES.map((g) => `<option value="${g}"${g === 'solid' ? ' selected' : ''}>${g}</option>`).join('')}</select></div>
+      <div class="field"><label>NGR let-through (A, if resistance/reactance)</label><input type="number" id="ngr" step="any" placeholder="e.g. 400"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>I0&gt; pickup (% of FLC)</label><input type="number" id="efPct" step="any" value="20"></div>
+      <div class="field"><label>I0&gt;&gt; margin above through-fault (%)</label><input type="number" id="efM2" step="any" value="25"></div>
+    </div>
+    <div class="hint">Ground fault current is normally near-zero under healthy conditions, so I0&gt; is set as a sensitive % of full load current, not with the same margin logic as the phase stages above.</div>
+
     <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
   </div>`);
   const right = h('<div class="card"><div class="empty-state">Enter CT ratio, relay rating, and feeder currents.</div></div>');
@@ -8738,6 +9914,10 @@ function pageRelaySettings() {
         stage2DelayS: +left.querySelector('#t2').value,
         minFaultCurrentA: left.querySelector('#minFault').value === '' ? null : +left.querySelector('#minFault').value,
         minSensitivityRatio: +left.querySelector('#minSens').value,
+        groundingType: left.querySelector('#grounding').value,
+        ngrLetThroughA: left.querySelector('#ngr').value === '' ? null : +left.querySelector('#ngr').value,
+        efPickupPctOfFlc: +left.querySelector('#efPct').value,
+        efStage2MarginPct: +left.querySelector('#efM2').value,
       });
       const warnHtml = r.warnings.length
         ? `<div class="assumptions-note" style="margin-top:12px;border-color:var(--red);">${r.warnings.map((w) => `\u26a0 ${w}`).join('<br><br>')}</div>` : '';
@@ -8766,6 +9946,21 @@ function pageRelaySettings() {
           ${resultRow('Pickup (relay setting)', fmt(r.stage3.pickupPu, 3) + ' \u00d7 In')}
           ${resultRow('Time delay', 'Instantaneous (no intentional delay)')}
         </div>
+
+        <div class="panel-title" style="margin-top:14px;">Earth Fault (${r.earthFault.groundingType})</div>
+        ${r.earthFault.applicable ? `
+        <div class="result-grid">
+          ${resultRow('Line-to-ground fault current', fmt(r.earthFault.lgFaultCurrentA, 1) + ' A')}
+          ${resultRow('I0&gt; pickup (primary)', fmt(r.earthFault.stage1.pickupA, 2) + ' A')}
+          ${resultRow('I0&gt; pickup (relay setting)', fmt(r.earthFault.stage1.pickupPu, 4) + ' \u00d7 In')}
+          ${r.earthFault.stage1.tms !== null ? resultRow('I0&gt; TMS / TD (' + r.earthFault.stage1.curve + ')', fmt(r.earthFault.stage1.tms, 4)) : resultRow('I0&gt; TMS / TD', 'n/a \u2014 see warning')}
+          ${r.earthFault.stage1.operatingTimeS !== null ? resultRow('I0&gt; operating time', fmt(r.earthFault.stage1.operatingTimeS, 3) + ' s') : ''}
+          ${resultRow('I0&gt;&gt; pickup (primary)', fmt(r.earthFault.stage2.pickupA, 1) + ' A')}
+          ${resultRow('I0&gt;&gt; pickup (relay setting)', fmt(r.earthFault.stage2.pickupPu, 3) + ' \u00d7 In')}
+          ${resultRow('I0&gt;&gt; time delay', fmt(r.earthFault.stage2.delayS, 3) + ' s')}
+        </div>
+        <div class="hint" style="margin-top:6px;">${r.earthFault.stage2.note}</div>
+        ` : `<div class="assumptions-note">${r.earthFault.note}</div>`}
         ${r.sensitivity ? `
         <div class="panel-title" style="margin-top:14px;">Sensitivity Check \u2014 Minimum Fault</div>
         <div class="result-grid">
@@ -10252,11 +11447,11 @@ async function pageHistory() {
       tr.querySelector('[data-act="pdf"]').addEventListener('click', () => exportCalculationPDF({ calculatorName: rec.calculatorId, inputs: rec.inputs, result: rec.result, assumptions: rec.assumptions }));
       tr.querySelector('[data-act="dup"]').addEventListener('click', async () => { await store.duplicateCalculation(id); renderTable(); });
       tr.querySelector('[data-act="rename"]').addEventListener('click', async () => {
-        const name = prompt('New name', rec.name);
+        const name = await showPrompt('New name', rec.name);
         if (name) { await store.renameCalculation(id, name); renderTable(); }
       });
       tr.querySelector('[data-act="del"]').addEventListener('click', async () => {
-        if (confirm('Delete this saved calculation?')) { await store.deleteCalculation(id); renderTable(); }
+        if (await showConfirm('Delete this saved calculation?')) { await store.deleteCalculation(id); renderTable(); }
       });
     });
   }
@@ -10313,7 +11508,7 @@ if (adminLoginLink) {
 // build -- the version.json update-check mechanism depends on that file
 // being stamped correctly -- only the visible "build XXXXXXXX" text in
 // the footer has been removed, since it was just clutter for a visitor.)
-const APP_BUILD = '20260913174206';
+const APP_BUILD = '20260919182814';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('causeTag')) {
@@ -10337,14 +11532,36 @@ const APP_BUILD = '20260913174206';
     contact.style.cssText = 'color:var(--text-faint);font-size:.7rem;';
     contact.textContent = 'For suggestions or to report a bug, write to ';
     const mailLink = document.createElement('a');
-    mailLink.href = 'mailto:admin@engineeringhubcalc.com';
     mailLink.textContent = 'admin@engineeringhubcalc.com';
-    mailLink.style.cssText = 'color:var(--cyan);';
+    mailLink.style.cssText = 'color:var(--cyan);cursor:pointer;';
+    if (isEmbeddedFrame) {
+      mailLink.addEventListener('click', (e) => { e.preventDefault(); copyEmailWithFallback('admin@engineeringhubcalc.com'); });
+    } else {
+      mailLink.href = 'mailto:admin@engineeringhubcalc.com';
+    }
     contact.appendChild(mailLink);
     contact.appendChild(document.createTextNode('.'));
     foot.appendChild(contact);
   }
 })();
+
+// Same isEmbeddedFrame reasoning as renderNav()'s sidebar links: the
+// footer's About/Privacy Policy links are static HTML relying on a plain
+// full-page navigation (no JS interception at all, since they're rarely
+// clicked), which would trigger a Claude.ai artifact preview's "open
+// external link" sandbox warning when this page is itself embedded in an
+// iframe there. When embedded, strip their href and route the click
+// through navigate() instead -- functionally identical for the visitor,
+// just without a real address for that preview sandbox to notice.
+if (isEmbeddedFrame) {
+  document.querySelectorAll('.app-foot a[href^="?page="]').forEach((a) => {
+    const targetRoute = new URLSearchParams(a.getAttribute('href').slice(1)).get('page');
+    a.removeAttribute('href');
+    a.setAttribute('tabindex', '0');
+    a.addEventListener('click', (e) => { e.preventDefault(); navigate(targetRoute); });
+    a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(targetRoute); } });
+  });
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

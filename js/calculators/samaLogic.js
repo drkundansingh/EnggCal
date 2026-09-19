@@ -103,6 +103,18 @@ export const SAMA_BLOCK_TYPES = {
     description: 'Outputs the LOWEST of its inputs.',
     compute(inputs) { return Math.min(...inputs); },
   },
+  medianSelect: {
+    label: 'Median Select', category: 'analog', inputs: { min: 3, max: 3 },
+    params: [],
+    description: 'Outputs the MIDDLE value of exactly three inputs \u2014 the standard SAMA/DCS approach to triple-redundant analog sensor validation. Unlike averaging (which lets a single wildly-failed transmitter still skew the result) or a simple high/low select (which a single failed-high or failed-low transmitter can dominate outright), median select is genuinely tolerant of any ONE input failing in either direction: the two still-good sensors always outvote it, since the middle of three values can only be wrong if at least two of the three are wrong the same way.',
+    compute(inputs) { const s = [...inputs].sort((a, b) => a - b); return s[1]; },
+  },
+  absoluteValue: {
+    label: 'Absolute Value', category: 'analog', inputs: { min: 1, max: 1 },
+    params: [],
+    description: 'Outputs |x| \u2014 the magnitude of its input regardless of sign. Useful after a difference/summer block when only the SIZE of a deviation matters, not its direction \u2014 e.g. alarming on a large temperature mismatch between two redundant sensors, whichever one happens to read higher.',
+    compute(inputs) { return Math.abs(inputs[0]); },
+  },
   highLimit: {
     label: 'High Limit', category: 'analog', inputs: { min: 1, max: 1 },
     params: [{ id: 'limit', label: 'Upper limit', default: 100 }],
@@ -193,6 +205,37 @@ export const SAMA_BLOCK_TYPES = {
     description: 'Inverts its single input.',
     compute(inputs) { return inputs[0] >= 0.5 ? 0 : 1; },
   },
+  xor: {
+    signalType: 'digital',
+    label: 'XOR', category: 'logic', inputs: { min: 2, max: 6 },
+    params: [],
+    description: 'TRUE when an ODD number of inputs are TRUE \u2014 for exactly two inputs (the common case) this is the familiar "exactly one, not both" exclusive-or; with more inputs it follows the same parity rule real XOR gate chains do. A genuinely different function from AND/OR, not just their opposite \u2014 useful for detecting a MISMATCH between two signals that should normally agree (e.g. two redundant digital status inputs) rather than requiring both or either.',
+    compute(inputs) { return inputs.filter((v) => v >= 0.5).length % 2 === 1 ? 1 : 0; },
+  },
+  nand: {
+    signalType: 'digital',
+    label: 'NAND', category: 'logic', inputs: { min: 2, max: 6 },
+    params: [],
+    description: 'TRUE unless ALL inputs are TRUE \u2014 the inverse of AND. Wiring a NOT after an AND gives the identical result; this block exists as its own gate purely to match the standard logic-gate family (AND, OR, NOT, NAND, NOR, XOR) and to keep a diagram\u2019s block count and label matching what a real PLC/relay logic drawing would show, rather than a NOT tacked on after every AND that needs inverting.',
+    compute(inputs) { return inputs.every((v) => v >= 0.5) ? 0 : 1; },
+  },
+  nor: {
+    signalType: 'digital',
+    label: 'NOR', category: 'logic', inputs: { min: 2, max: 6 },
+    params: [],
+    description: 'TRUE only when ALL inputs are FALSE \u2014 the inverse of OR, and (with a single input tied to itself) the simplest possible NOT-latch building block in real relay logic. Same reasoning as NAND: its own gate for a complete, standard logic-gate family rather than requiring a separate NOT block after every OR.',
+    compute(inputs) { return inputs.some((v) => v >= 0.5) ? 0 : 1; },
+  },
+  voter: {
+    signalType: 'digital',
+    label: 'M-out-of-N Voter', category: 'logic', inputs: { min: 2, max: 3 },
+    params: [{ id: 'votesNeeded', label: 'Votes needed (M)', default: 2, options: [{ value: 1, label: '1 (any one \u2014 1oo2/1oo3)' }, { value: 2, label: '2 (majority \u2014 2oo2/2oo3)' }, { value: 3, label: '3 (all \u2014 3oo3)' }] }],
+    description: 'The standard SIS/safety voting architecture (1oo2, 2oo2, 2oo3, 1oo3, 3oo3...) as one configurable block: TRUE when at least M of the connected inputs are TRUE. With 2 inputs and M=1 this is 1oo2 (identical to OR); with 2 inputs and M=2 this is 2oo2 (identical to AND) \u2014 the real value is with 3 inputs and M=2 (2oo3), the industry-standard architecture for triple-redundant sensor voting that genuinely cannot be built from a single AND or OR gate, since it must tolerate any ONE input disagreeing (a single failed or spuriously-tripped sensor) without either a nuisance trip (like 3oo3/AND would give) or a loss of protection from a stuck-low sensor (like 1oo3/OR would give).',
+    compute(inputs, params) {
+      const need = Math.round(params.votesNeeded ?? 2);
+      return inputs.filter((v) => v >= 0.5).length >= need ? 1 : 0;
+    },
+  },
   comparator: {
     signalType: 'digital',
     label: 'Comparator (>)', category: 'logic', inputs: { min: 2, max: 2 },
@@ -250,6 +293,23 @@ export const SAMA_BLOCK_TYPES = {
       return state.step(inputs[0], dt);
     },
   },
+  totalizer: {
+    label: 'Totalizer (\u03a3, resettable)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    inputLabels: ['Rate', 'Reset'],
+    params: [
+      { id: 'rateTimeBase', label: 'Rate is per...', default: 3600, options: [{ value: 1, label: 'second' }, { value: 60, label: 'minute' }, { value: 3600, label: 'hour' }] },
+      { id: 'gain', label: 'Scale factor', default: 1 },
+    ],
+    description: 'A real plant flow/energy totalizer: accumulates a RATE signal (e.g. a flow transmitter reading in t/h) into a running TOTAL (e.g. tonnes) over elapsed simulated time, exactly the way a steam or water totalizer accumulates a plant\u2019s consumption. Distinct from the plain Integrator above in two ways that matter for a real totalizer: input 2 is a genuine RESET (holding it TRUE zeros the total immediately, matching a real totalizer\u2019s shift/daily reset button), and the \u201cRate is per...\u201d selector correctly converts an hourly or per-minute rate into the right accumulated amount per second of simulated time, so a 100 t/h flow genuinely adds up to 100 tonnes over one simulated hour, not one simulated second.',
+    createState() { return new Integrator(1, 0, -Infinity, Infinity); },
+    stepCompute(state, inputs, params, dt) {
+      const resetActive = inputs[1] >= 0.5;
+      if (resetActive) { state.reset(0); return 0; }
+      const timeBase = params.rateTimeBase ?? 3600;
+      const gain = params.gain ?? 1;
+      return state.step(inputs[0] * gain, dt / timeBase);
+    },
+  },
   rateLimit: {
     label: 'Rate Limiter', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
     params: [{ id: 'rate', label: 'Max rate (units/s)', default: 5 }],
@@ -270,14 +330,21 @@ export const SAMA_BLOCK_TYPES = {
     params: [
       { id: 'kp', label: 'Kp', default: 1 }, { id: 'ki', label: 'Ki', default: 0.1 }, { id: 'kd', label: 'Kd', default: 0 },
       { id: 'outMin', label: 'Output min', default: 0 }, { id: 'outMax', label: 'Output max', default: 100 },
+      { id: 'mode', label: 'Mode', default: 0, options: [{ value: 0, label: 'Auto' }, { value: 1, label: 'Manual' }] },
+      { id: 'manualOutput', label: 'Manual output', default: 0, sliderWhen: 'mode', sliderMin: 'outMin', sliderMax: 'outMax' },
     ],
-    description: 'Full PID controller \u2014 input 1 is the setpoint (SP), input 2 is the process value (PV). Reuses the same anti-windup PID class used throughout every Control Loops simulation.',
+    description: 'Full PID controller \u2014 input 1 is the setpoint (SP), input 2 is the process value (PV). Reuses the same anti-windup PID class used throughout every Control Loops simulation. Switchable to Manual like a real DCS faceplate: the operator drives the output directly with the Manual output slider, while the controller keeps tracking SP/PV behind the scenes and continuously re-biases its own integral term (the standard "manual reset feedback" technique) so switching back to Auto is bumpless \u2014 no output jump.',
     createState(params) {
       return new PID({ kp: params.kp ?? 1, ki: params.ki ?? 0.1, kd: params.kd ?? 0, outMin: params.outMin ?? 0, outMax: params.outMax ?? 100, initialOutput: params.outMin ?? 0 });
     },
     stepCompute(state, inputs, params, dt) {
       state.kp = params.kp ?? 1; state.ki = params.ki ?? 0.1; state.kd = params.kd ?? 0;
       state.outMin = params.outMin ?? 0; state.outMax = params.outMax ?? 100;
+      const manualMode = (params.mode ?? 0) >= 0.5;
+      if (manualMode) {
+        const manualOut = clamp(params.manualOutput ?? 0, state.outMin, state.outMax);
+        return state.trackManual(inputs[0], inputs[1], manualOut, dt);
+      }
       return state.step(inputs[0], inputs[1], dt);
     },
   },
@@ -384,6 +451,58 @@ export const SAMA_BLOCK_TYPES = {
       if (inputs[1] >= 0.5) { state.peak = inputs[0]; return state.peak; }
       state.peak = Math.max(state.peak, inputs[0]);
       return state.peak;
+    },
+  },
+  trackHold: {
+    label: 'Track/Hold (Sample & Hold)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    inputLabels: ['Signal', 'Hold'],
+    params: [],
+    description: 'While Hold is FALSE, the output tracks Signal live, exactly like a wire. The instant Hold goes TRUE, the output freezes at whatever value it held at that moment and stays there \u2014 the standard SAMA sample-and-hold pattern for capturing a value at a specific instant (e.g. "batch weight at the moment a valve closes") or freezing a display during a known noisy period rather than showing garbage.',
+    createState() { return { y: 0 }; },
+    stepCompute(state, inputs) {
+      const hold = inputs[1] >= 0.5;
+      if (!hold) state.y = inputs[0];
+      return state.y;
+    },
+  },
+  onOffController: {
+    label: 'On/Off Controller (Hysteresis)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    inputLabels: ['SP', 'PV'],
+    params: [
+      { id: 'deadband', label: 'Deadband (\u00b1 around SP)', default: 2 },
+      { id: 'action', label: 'Action', default: 0, options: [{ value: 0, label: 'Direct \u2014 ON above SP+db (cooling-style)' }, { value: 1, label: 'Reverse \u2014 ON below SP-db (heating-style)' }] },
+    ],
+    description: 'A genuinely different control philosophy from PID \u2014 real bang-bang (two-position) control, the way a domestic thermostat, a sump pump level switch, or a simple immersion heater actually works: fully ON or fully OFF, never a modulating percentage. The deadband is essential, not optional \u2014 without it, the output would chatter on and off continuously the instant PV sits exactly at SP; with it, the output only switches when PV crosses the OUTER edge of the deadband, and stays in that state until PV crosses back out the other side, exactly the hysteresis behavior a real mechanical or electronic on/off controller needs to avoid burning out a contactor or pump motor with rapid cycling.',
+    createState() { return { on: false }; },
+    stepCompute(state, inputs, params) {
+      const sp = inputs[0], pv = inputs[1];
+      const db = Math.abs(params.deadband ?? 2);
+      const reverse = (params.action ?? 0) >= 0.5;
+      if (!reverse) {
+        if (pv >= sp + db) state.on = true;
+        else if (pv <= sp - db) state.on = false;
+      } else {
+        if (pv <= sp - db) state.on = true;
+        else if (pv >= sp + db) state.on = false;
+      }
+      return state.on ? 1 : 0;
+    },
+  },
+  firstOut: {
+    signalType: 'digital',
+    label: 'First-Out Annunciator', category: 'dynamic', dynamic: true, inputs: { min: 5, max: 5 },
+    inputLabels: ['Cause 1', 'Cause 2', 'Cause 3', 'Cause 4', 'Reset'],
+    params: [],
+    description: 'The real sequence-of-events pattern behind a plant\u2019s first-out annunciator panel: when several trip causes are wired in, the FIRST one to go TRUE latches (output = that cause\u2019s number, 1-4) and every later cause is ignored until Reset \u2014 exactly what an operator needs after a trip, since the first cause is very often the root cause and everything after it is frequently a consequence, not an independent trip. Output 0 means nothing has latched yet. Pairs naturally with the Turbine & Boiler Protection registry\u2019s own trip parameters as the Cause inputs.',
+    createState() { return { latchedIndex: 0 }; },
+    stepCompute(state, inputs) {
+      if (inputs[4] >= 0.5) { state.latchedIndex = 0; return 0; }
+      if (state.latchedIndex === 0) {
+        for (let i = 0; i < 4; i++) {
+          if (inputs[i] >= 0.5) { state.latchedIndex = i + 1; break; }
+        }
+      }
+      return state.latchedIndex;
     },
   },
   pulseGenerator: {

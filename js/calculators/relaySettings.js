@@ -33,6 +33,7 @@
 // the standard IEC parameter set both are built on.
 
 import * as idmt from './idmt.js';
+import * as sc from './shortCircuit.js';
 
 /** Relay rated current, the near-universal secondary CT standards. */
 export const RATED_CURRENTS_A = [1, 5];
@@ -97,6 +98,9 @@ export function relaySettings({
   pickupMarginPct = 20, stage2MarginPct = 25, stage3MarginPct = 20,
   curveKey = 'SI', desiredStage1TimeS = 0.3, stage2DelayS = 0.15,
   minFaultCurrentA = null, minSensitivityRatio = 2.0,
+  groundingType = 'solid', ngrLetThroughA = null,
+  efPickupPctOfFlc = 20, efCurveKey = 'VI', efDesiredStage1TimeS = 0.3,
+  efStage2MarginPct = 25, efStage2DelayS = 0.15,
 }) {
   if (!(ctPrimaryA > 0)) throw new Error('CT primary rating must be greater than zero.');
   if (!(ctSecondaryA > 0)) throw new Error('CT secondary rating must be greater than zero.');
@@ -161,10 +165,74 @@ export function relaySettings({
     }
   }
 
+  // ---- Earth fault (I0>/I0>>) — every real feeder relay carries this
+  // alongside the phase stages above, not as an afterthought: an
+  // unbalanced/single-phase-to-ground fault is the single most common
+  // fault type on most distribution and industrial feeders, and ground
+  // fault current under healthy conditions is normally near-zero (unlike
+  // load current on the phase elements), which is exactly why I0> can
+  // and should be set far more sensitively than the phase I> stage above.
+  let lgFaultKA = 0;
+  try {
+    lgFaultKA = sc.lineToGroundFaultCurrentKA(maxFaultCurrentA / 1000, groundingType, { ngrLetThroughA });
+  } catch (e) {
+    // Resistance/reactance grounding without a supplied NGR let-through
+    // current -- a real, common state (the engineer hasn't gotten that
+    // figure yet), not a data error that should abort the whole
+    // relay-settings calculation just because one optional section can't
+    // be completed yet. lgFaultKA stays 0, and the else branch below
+    // reports this distinctly from a genuinely ungrounded system.
+  }
+  let earthFault;
+  if (lgFaultKA > 0) {
+    const efFaultA = lgFaultKA * 1000;
+    const ef1PickupA = fullLoadCurrentA * (efPickupPctOfFlc / 100);
+    const ef1PickupPu = primaryToPu(ef1PickupA, ctPrimaryA, ctSecondaryA, relayInA);
+    const efCurve = idmt.CURVES[efCurveKey];
+    if (!efCurve) throw new Error(`Unknown earth fault curve: ${efCurveKey}`);
+    const ef1M = idmt.psm(efFaultA, ef1PickupA);
+    let ef1Tms = null, ef1OperTime = null;
+    if (ef1M > 1) {
+      ef1Tms = idmt.tmsForDesiredTime(efFaultA, ef1PickupA, efDesiredStage1TimeS, efCurveKey);
+      ef1OperTime = idmt.operatingTime(efFaultA, ef1PickupA, ef1Tms, efCurveKey);
+    } else {
+      warnings.push('Earth fault Stage 1 (I0>) pickup is at or above the calculated line-to-ground fault current — the IDMT stage would never operate for this fault. A lower pickup (% of FLC) is normally appropriate for earth fault, since healthy ground current is near zero.');
+    }
+    // I0>> — the same definite-time high-set role as phase Stage 2,
+    // scaled the same way against the through-fault/inrush level so it
+    // does not maloperate on transformer inrush's zero-sequence content
+    // or motor-starting unbalance passing through this feeder.
+    const ef2PickupA = maxThroughFaultA * (1 + efStage2MarginPct / 100);
+    // ^ I0>> is conventionally set as a margin above the feeder's own
+    // through-fault contribution to a DOWNSTREAM ground fault, not simply
+    // scaled off the phase Stage 2 value -- but since this module is not
+    // given a separate zero-sequence through-fault figure, the same
+    // through-fault current used for the phase high-set stage is reused
+    // here as the best available conservative estimate, clearly labelled
+    // as such rather than presented as an independently derived value.
+    const ef2PickupPu = primaryToPu(ef2PickupA, ctPrimaryA, ctSecondaryA, relayInA);
+    earthFault = {
+      applicable: true,
+      groundingType,
+      lgFaultCurrentA: efFaultA,
+      stage1: { pickupA: ef1PickupA, pickupPu: ef1PickupPu, curve: efCurve.name, tms: ef1Tms, operatingTimeS: ef1OperTime, psmAtLgFault: ef1M },
+      stage2: { pickupA: ef2PickupA, pickupPu: ef2PickupPu, delayS: efStage2DelayS, note: 'Estimated from the same through-fault current used for the phase Stage 2 (I>>) \u2014 use an actual zero-sequence through-fault study value if available for a more precise setting.' },
+    };
+  } else {
+    earthFault = {
+      applicable: false,
+      groundingType,
+      note: groundingType === 'ungrounded'
+        ? 'System is ungrounded — a first ground fault produces negligible fault current on this feeder; consider sensitive/directional earth fault or an insulation-monitoring alarm scheme instead of a conventional I0> stage.'
+        : 'Supply the neutral grounding resistor/reactor let-through current (ngrLetThroughA) to calculate the earth fault stage for a resistance- or reactance-grounded system.',
+    };
+  }
+
   return {
     stage1: { pickupA: stage1PickupA, pickupPu: stage1PickupPu, curve: curve.name, tms: stage1Tms, operatingTimeS: stage1OperTime, psmAtMaxFault: stage1M },
     stage2: { pickupA: stage2PickupA, pickupPu: stage2PickupPu, delayS: stage2DelayS, clearsMaxFault: stage2ClearsFault },
     stage3: { pickupA: stage3PickupA, pickupPu: stage3PickupPu, delayS: 0 },
+    earthFault,
     ctRatio: `${ctPrimaryA}/${ctSecondaryA} A`,
     relayInA,
     sensitivity,
