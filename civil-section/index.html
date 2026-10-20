@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZZ6H0JNGP6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZZ6H0JNGP6');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
+     ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
+<title>Beam Section Properties Calculator | EngCalc Hub</title>
+<meta name="description" content="Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.">
+<link rel="canonical" href="https://engineeringhubcalc.com/civil-section/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Engineering Calculator Hub">
+<meta property="og:title" content="Beam Section Properties Calculator | EngCalc Hub">
+<meta property="og:description" content="Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.">
+<meta property="og:url" content="https://engineeringhubcalc.com/civil-section/">
+<meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Beam Section Properties Calculator | EngCalc Hub">
+<meta name="twitter:description" content="Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.">
+<meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Engineering Calculator Hub",
+  "url": "https://engineeringhubcalc.com/",
+  "description": "Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web-based)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dr. Kundan" }
+}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Why does a deeper beam resist bending so much better than a wider one of the same cross-sectional area?","acceptedAnswer":{"@type":"Answer","text":"Both moment of inertia and section modulus for a rectangle scale with the CUBE (or square) of height but only linearly with width — material placed further from the bending axis (further from the centroid) contributes disproportionately more stiffness and strength, which is exactly why I-beams put most of their material in the top and bottom flanges, far from the neutral axis."}},{"@type":"Question","name":"What is the practical difference between moment of inertia and section modulus?","acceptedAnswer":{"@type":"Answer","text":"Moment of inertia (I) is used for deflection and buckling calculations; section modulus (S = I / distance to extreme fibre) is used directly for bending stress (σ = M/S). They come from the same underlying geometry but answer two different questions — \"how much does it deflect\" versus \"what stress does it see\"."}},{"@type":"Question","name":"How is a hollow (tube) section’s moment of inertia different from a solid one?","acceptedAnswer":{"@type":"Answer","text":"It’s the solid section’s moment of inertia minus the \"missing\" inner section’s moment of inertia (I = π(D⁴−d⁴)/64) — removing material from near the center (where it contributes little to bending resistance anyway) barely reduces stiffness while meaningfully reducing weight, which is the whole rationale for using tube sections."}},{"@type":"Question","name":"Does this cover I-beams, channels, or angle sections?","acceptedAnswer":{"@type":"Answer","text":"Not directly — this covers solid rectangles, solid circles, and hollow circles (tubes), which have simple closed-form formulas. Standard rolled steel sections (I-beams, channels, angles) have properties published directly in steel section tables rather than needing to be calculated from basic geometry."}}]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":2,"name":"Civil Engineering","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":3,"name":"Beam Section Properties Calculator","item":"https://engineeringhubcalc.com/civil-section/"}]}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body data-theme="dark">
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/logo.png" alt="Engineering Calculator Hub logo">
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
+    </div>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item " href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item " href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item " href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item " href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item active" href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item " href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item " href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item " href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="themeToggle">☾ Dark</button>
+      <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="search-box">
+        <span>⌕</span>
+        <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
+      </div>
+      <div class="topbar-actions">
+        <span class="pill free">FREE PLAN</span>
+      </div>
+    </div>
+    <main class="content" id="content"><div class="page-head"><div class="eyebrow">Civil Engineering · Structural</div><h1>Section Properties</h1>
+    <p class="lead">Moment of inertia and section modulus for rectangular, circular, and hollow-circular (tube) sections about the centroidal bending axis.</p><div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;
+    border:1px solid var(--amber);border-radius:20px;font-size:.72rem;color:var(--amber);cursor:help;" title="Uses a real, correct engineering method, but deliberately does not cover every case the full standard does. Read the note in the result before relying on it for a final decision.">
+    <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);display:inline-block;"></span>
+    Standard method — stated scope limits apply
+  </div></div><div class="calc-layout"><div class="card">
+    <div class="panel-title">Shape</div>
+    <div class="field"><label>Section shape</label><select id="shape"><option value="rectangle">Rectangle</option><option value="circle">Solid Circle</option><option value="hollow-circle">Hollow Circle (Tube)</option></select></div>
+    <div id="rectFields" class="input-row">
+      <div class="field"><label>Width (mm)</label><input type="number" id="width" step="any" value="100"></div>
+      <div class="field"><label>Height (mm)</label><input type="number" id="height" step="any" value="200"></div>
+    </div>
+    <div id="circFields" class="field" style="display:none;"><label>Diameter (mm)</label><input type="number" id="dia" step="any" value="150"></div>
+    <div id="hollowFields" class="input-row" style="display:none;">
+      <div class="field"><label>Outer diameter (mm)</label><input type="number" id="oDia" step="any" value="150"></div>
+      <div class="field"><label>Inner diameter (mm)</label><input type="number" id="iDia" step="any" value="130"></div>
+    </div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div><div class="card"><div class="empty-state">Choose a shape and enter dimensions.</div></div></div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">About This Calculation</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Moment of inertia and section modulus describe how a cross-section resists bending, independent of the material it’s made from — a bigger moment of inertia means less curvature (and deflection) for the same bending moment, and a bigger section modulus means lower peak bending stress for the same moment. Every beam or column calculation needs one or both of these as an input, which is why this is usually the very first calculation done before a beam deflection or column buckling check.</p>
+    <h2 class="panel-title" style="margin-top:20px;">Frequently Asked Questions</h2>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why does a deeper beam resist bending so much better than a wider one of the same cross-sectional area?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Both moment of inertia and section modulus for a rectangle scale with the CUBE (or square) of height but only linearly with width — material placed further from the bending axis (further from the centroid) contributes disproportionately more stiffness and strength, which is exactly why I-beams put most of their material in the top and bottom flanges, far from the neutral axis.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What is the practical difference between moment of inertia and section modulus?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Moment of inertia (I) is used for deflection and buckling calculations; section modulus (S = I / distance to extreme fibre) is used directly for bending stress (σ = M/S). They come from the same underlying geometry but answer two different questions — "how much does it deflect" versus "what stress does it see".</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">How is a hollow (tube) section’s moment of inertia different from a solid one?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">It’s the solid section’s moment of inertia minus the "missing" inner section’s moment of inertia (I = π(D⁴−d⁴)/64) — removing material from near the center (where it contributes little to bending resistance anyway) barely reduces stiffness while meaningfully reducing weight, which is the whole rationale for using tube sections.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Does this cover I-beams, channels, or angle sections?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Not directly — this covers solid rectangles, solid circles, and hollow circles (tubes), which have simple closed-form formulas. Standard rolled steel sections (I-beams, channels, angles) have properties published directly in steel section tables rather than needing to be calculated from basic geometry.</div>
+    </div>
+  </div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+      <a href="/civil-beam/" class="pill" data-related-link="civil-beam" style="text-decoration:none;cursor:pointer;">─ Beam Analysis (Deflection, Moment, Shear)</a><a href="/civil-column/" class="pill" data-related-link="civil-column" style="text-decoration:none;cursor:pointer;">┃ Column Buckling (Euler)</a><a href="/civil-combined-stress/" class="pill" data-related-link="civil-combined-stress" style="text-decoration:none;cursor:pointer;">± Combined Axial &amp; Bending Stress</a><a href="/civil-steel-weight/" class="pill" data-related-link="civil-steel-weight" style="text-decoration:none;cursor:pointer;">⬛ Steel Weight (Bar/Plate/Pipe)</a><a href="/civil-concrete-volume/" class="pill" data-related-link="civil-concrete-volume" style="text-decoration:none;cursor:pointer;">▦ Concrete Volume &amp; Weight</a><a href="/civil-water-cement/" class="pill" data-related-link="civil-water-cement" style="text-decoration:none;cursor:pointer;">≈ Water-Cement Ratio</a>
+    </div>
+  </div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
+
+    <!-- ============================================================
+         Razorpay Payment Button.
+         Placed directly below the footer (which carries the build number
+         and the "revenue goes to..." line, appended by JS in app.js) so
+         the button sits right under that text, not after the ad further
+         down. Outside #content (the router-controlled area), so it
+         persists across every page navigation instead of getting wiped
+         out. Embed code used exactly as provided by Razorpay, wrapped
+         only in centering/spacing — data-payment_button_id is a real ID
+         (pl_TYqV9ui5mTXTad), not a placeholder.
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:8px 16px 16px;text-align:center;">
+      <form>
+        <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_TYqV9ui5mTXTad" async></script>
+      </form>
+    </div>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
+
+    <!-- Moved out of position:fixed (was overlapping diagram content in
+         the Control Loops simulator whenever a node happened to render in
+         the bottom-right of the viewport) and into normal document flow,
+         as the last item on every page instead. -->
+    <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
+  </div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

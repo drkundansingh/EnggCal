@@ -190,6 +190,27 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .collapse-toggle.open .chevron { transform: rotate(180deg); }
 @keyframes sama-alarm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .sama-alarm-pulse { animation: sama-alarm-pulse 1s ease-in-out infinite; }
+
+/* Final control elements (motor/valve/SOV/lamp): a real actuator moves
+   and settles, it doesn't teleport between states. The live-tick refresh
+   in app.js patches these elements' attributes in place on the SAME
+   persistent DOM nodes every scan (rather than rebuilding the symbol's
+   markup from scratch), so the transitions below actually get to
+   interpolate instead of being reset before they can play. */
+.sama-fc-stem { transition: transform .55s cubic-bezier(.4,0,.2,1); }
+.sama-fc-plug, .sama-fc-fill, .sama-fc-glow, .sama-fc-coil {
+  transition: fill .3s ease, stroke .3s ease, opacity .3s ease, fill-opacity .3s ease;
+}
+.sama-fc-flow { stroke-dasharray: 5 4; animation: sama-fc-flow 1.1s linear infinite; animation-play-state: paused; opacity: 0; transition: opacity .35s ease; }
+.sama-fc-flow.running { animation-play-state: running; }
+@keyframes sama-fc-flow { to { stroke-dashoffset: -18; } }
+.sama-fc-rotor { transform-box: fill-box; transform-origin: center; animation: sama-fc-spin 1.15s linear infinite; animation-play-state: paused; opacity: 0; transition: opacity .3s ease; }
+.sama-fc-rotor.running { animation-play-state: running; opacity: 1; }
+@keyframes sama-fc-spin { to { transform: rotate(360deg); } }
+@keyframes sama-fc-snap { 0% { transform: scale(1); } 40% { transform: scale(1.14); } 70% { transform: scale(.96); } 100% { transform: scale(1); } }
+.sama-fc-snap-anim { transform-box: fill-box; transform-origin: center; animation: sama-fc-snap .28s cubic-bezier(.34,1.56,.64,1); }
+@keyframes sama-fc-flicker { 0%, 100% { opacity: 1; } 10% { opacity: .4; } 18% { opacity: 1; } 27% { opacity: .55; } 36% { opacity: 1; } 48% { opacity: .8; } 60% { opacity: 1; } }
+.sama-fc-flicker-anim { animation: sama-fc-flicker .6s ease-out; }
 @media (max-width: 1100px) { .grid.cols-4 { grid-template-columns: repeat(2, 1fr); } .grid.cols-3 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px) { .grid.cols-4, .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; } }
 

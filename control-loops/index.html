@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZZ6H0JNGP6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZZ6H0JNGP6');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
+     ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
+<title>Power Plant Control Loop Simulator | EngCalc Hub</title>
+<meta name="description" content="Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.">
+<link rel="canonical" href="https://engineeringhubcalc.com/control-loops/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Engineering Calculator Hub">
+<meta property="og:title" content="Power Plant Control Loop Simulator | EngCalc Hub">
+<meta property="og:description" content="Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.">
+<meta property="og:url" content="https://engineeringhubcalc.com/control-loops/">
+<meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Power Plant Control Loop Simulator | EngCalc Hub">
+<meta name="twitter:description" content="Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.">
+<meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Engineering Calculator Hub",
+  "url": "https://engineeringhubcalc.com/",
+  "description": "Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web-based)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dr. Kundan" }
+}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Why does drum level control need three elements instead of one?","acceptedAnswer":{"@type":"Answer","text":"Single-element control (measuring only drum level) reacts too slowly to a sudden steam demand change — a load increase causes drum level to briefly rise (shrink-and-swell) before it falls, which a level-only controller misreads as “level is fine” or even “add less water” at exactly the wrong moment. Three-element control adds steam flow and feedwater flow as feedforward signals so the controller responds to the load change directly, not just to its delayed effect on level."}},{"@type":"Question","name":"What is shrink and swell, and why does it matter for tuning?","acceptedAnswer":{"@type":"Answer","text":"A sudden increase in steam demand drops boiler pressure slightly, which causes existing steam bubbles in the drum water to expand — drum level rises even though water inventory is actually falling (swell). The reverse happens on a load decrease (shrink). A level controller tuned without accounting for this inverse response will tend to move the feedwater valve the wrong way immediately after a load change."}},{"@type":"Question","name":"Why is superheater temperature control often the hardest loop on the unit?","acceptedAnswer":{"@type":"Answer","text":"It combines a long, variable process dead time (spray water takes real time to travel through the remaining superheater tubing before it affects outlet temperature) with a process gain and dead time that both change significantly with load — a PID tuned well at full load is commonly too aggressive or too sluggish at part load."}},{"@type":"Question","name":"Can I use this to actually re-tune a real loop’s PID constants?","acceptedAnswer":{"@type":"Answer","text":"Use it to build tuning intuition and to compare control STRATEGIES (e.g. cascade vs. single-loop, feedforward vs. feedback-only) — not to lift Kp/Ti/Td values directly onto a real DCS. A real loop’s actual process gain, dead time, and time constant depend on that specific unit’s equipment and must come from an actual tuning study or step-test on the real process."}}]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":2,"name":"Power Plant","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":3,"name":"Power Plant Control Loop Simulator","item":"https://engineeringhubcalc.com/control-loops/"}]}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body data-theme="dark">
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/logo.png" alt="Engineering Calculator Hub logo">
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
+    </div>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item " href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item " href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item " href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item active" href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item " href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item " href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item " href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item " href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="themeToggle">☾ Dark</button>
+      <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="search-box">
+        <span>⌕</span>
+        <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
+      </div>
+      <div class="topbar-actions">
+        <span class="pill free">FREE PLAN</span>
+      </div>
+    </div>
+    <main class="content" id="content"><div class="page-head"><div class="eyebrow">Power Plant</div><h1>Control Loops — Visual Reference</h1>
+    <p class="lead">The major control loops of a thermal power plant, drawn as live block diagrams. Move the disturbance slider and watch the signals actually propagate — these loops are far easier to understand seeing them move than reading about them.</p><div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;
+    border:1px solid var(--green);border-radius:20px;font-size:.72rem;color:var(--green);cursor:help;" title="Checked against the named standard’s own equations and, where one exists, a published reference/worked example — not just internal self-consistency.">
+    <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;"></span>
+    Verified against published standard
+  </div></div><div class="card" style="margin-top:14px;padding:14px 16px;">
+    <div style="font-size:.72rem;letter-spacing:.04em;color:var(--text-faint);text-transform:uppercase;margin-bottom:8px;">How to read the tag names (ISA-5.1)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px;font-size:.82rem;color:var(--text-dim);">
+      <span><b style="color:var(--text);">1st letter</b> = what's measured: <b>L</b>evel, <b>F</b>low, <b>P</b>ressure, <b>T</b>emperature</span>
+      <span><b style="color:var(--text);">T</b> = Transmitter (measures it) — e.g. <b style="color:var(--cyan);">LT</b> = Level Transmitter</span>
+      <span><b style="color:var(--text);">IC</b> = Indicating Controller — e.g. <b style="color:var(--amber);">FIC</b> = Flow Indicating Controller</span>
+      <span><b style="color:var(--text);">CV</b> = Control Valve, the final element — e.g. <b style="color:var(--green);">FCV</b> = Flow Control Valve</span>
+      <span><b style="color:var(--blue);">Σ</b> = a compute block (sum, select, ratio) — not a physical instrument</span>
+    </div>
+  </div><div class="tabs" id="loopTabs"><div class="tab active" data-l="drum-level-3e">Three-Element Drum Level Control</div><div class="tab " data-l="combustion-cross-limit">Combustion Control with Cross-Limiting</div><div class="tab " data-l="steam-temp-cascade">Superheater Steam Temperature (Cascade Attemperation)</div><div class="tab " data-l="mill-control">Mill / Pulverizer Control</div><div class="tab " data-l="furnace-draft">Furnace Draft Control</div><div class="tab " data-l="coordinated-master">Coordinated Master Control (CMC) — Unit Load</div><div class="tab " data-l="turbine-bypass">HP / LP Turbine Bypass Control</div><div class="tab " data-l="deaerator-level">Deaerator Level &amp; Pressure Control</div><div class="tab " data-l="hp-heater-level">HP Heater Level Control (3-Element)</div><div class="tab " data-l="condenser-hotwell">Condenser Hotwell Level Control</div><div class="tab " data-l="avr-excitation">AVR / Excitation Control (Generator Voltage)</div><div class="tab " data-l="firewater-ratio">Once-Through Boiler Fire/Water Ratio Control</div><div class="tab " data-l="sliding-pressure">Sliding Pressure / Governor Valve Position</div><div class="tab " data-l="condenser-vacuum">Condenser Vacuum (Backpressure) Control</div></div><div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div class="panel-title" style="margin-bottom:2px;">Three-Element Drum Level Control</div>
+            <div style="font-size:.76rem;color:var(--text-faint);font-family:var(--font-mono);">Feedwater · Core</div>
+          </div>
+        </div>
+        <p style="color:var(--text-dim);font-size:.86rem;margin-top:10px;">The single most important — and most misunderstood — loop on a drum boiler. Level must be held tight: too low uncovers tubes and overheats them, too high carries water into the turbine.</p>
+
+        
+
+        <div class="input-row" style="margin-top:14px;align-items:center;flex-wrap:nowrap;gap:12px;">
+          <div class="field" style="flex:1;min-width:0;margin-bottom:0;">
+            <label>Steam demand (% MCR)</label>
+            <input type="range" id="simSlider" min="20" max="100" step="1" value="60" style="width:100%;">
+          </div>
+          <div style="flex:0 0 auto;text-align:center;">
+            <div style="font-family:var(--font-mono);font-size:1.4rem;color:var(--amber);" id="simVal">60</div>
+            <div style="font-size:.68rem;color:var(--text-faint);">drag to disturb · <span id="simClock">1 s</span></div>
+          </div>
+          <button class="btn secondary" id="simPause" style="flex:0 0 auto;">Pause</button>
+          <button class="btn secondary" id="simReset" style="flex:0 0 auto;">Reset</button>
+        </div>
+
+        <!-- Big live number first: this is the ONE thing to watch. -->
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;">
+          <div class="readout" style="margin:0;">
+            <span class="value" id="liveValue">0</span><span class="unit" id="liveUnit">mm</span>
+          </div>
+          <span class="badge normal" id="liveStatus" style="font-size:.8rem;padding:6px 12px;">ON TARGET</span>
+        </div>
+        <div id="zeroNote" style="display: block; font-size: 0.76rem; color: var(--text-faint); margin-top: 4px;">0 mm here means "at the normal operating level" (the setpoint), not empty — real level transmitters are ranged around normal level, not the full vessel. Positive = above normal, negative = below.</div>
+        <div style="display:flex;gap:16px;align-items:center;margin-top:10px;font-size:.72rem;color:var(--text-dim);">
+          <span style="display:inline-flex;align-items:center;gap:5px;"><span style="display:inline-block;width:16px;height:0;border-top:2px solid var(--cyan);"></span>Process Value (PV) — the live measured trend</span>
+          <span style="display:inline-flex;align-items:center;gap:5px;"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed var(--amber);"></span>Setpoint (SP) — the target</span>
+        </div>
+        <div id="trendChart" style="margin-top:6px;"><svg viewBox="0 0 700 200" style="width:100%;height:auto;">
+        <line x1="34" y1="166" x2="690" y2="166" stroke="var(--line)" stroke-width="1"></line>
+        <line x1="34" y1="14" x2="34" y2="166" stroke="var(--line)" stroke-width="1"></line>
+        <text x="3" y="20" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">1.2</text>
+        <text x="3" y="166" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">-0.2</text>
+        <line x1="34" y1="145.9" x2="690" y2="145.9" stroke="var(--amber)" stroke-width="1" stroke-dasharray="4 3" opacity="0.85"></line>
+           <text x="688" y="141.9" fill="var(--amber)" font-size="9" font-family="var(--font-mono)" text-anchor="end">SP 0</text>
+        <path d="M 34.0 145.9 L 198.0 145.9 L 362.0 145.9 L 526.0 145.9 L 690.0 145.9" fill="none" stroke="var(--cyan)" stroke-width="1.8"></path>
+        <circle cx="690.0" cy="145.9" r="2.5" fill="var(--cyan)"></circle>
+        <text x="684.0" y="158.9" fill="var(--cyan)" font-size="9" font-family="var(--font-mono)" text-anchor="end">PV 0</text>
+        <circle cx="690.0" cy="145.9" r="3" fill="var(--cyan)"></circle>
+        <text x="38" y="191" fill="var(--text-faint)" font-size="9" font-family="var(--font-mono)">Drum level (mm)</text>
+      </svg></div>
+
+        <div class="assumptions-note" id="simInsight" style="margin-top:14px;">Level stable at setpoint. Feedwater is matching steam flow, with the master PI trimming only small residual errors.</div>
+
+        <div style="margin-top:16px;">
+          <div id="loopSvg" style="overflow-x:auto;padding:10px 0;"><svg viewBox="0 0 850 358" style="width:100%;height:auto;min-width:640px;">
+      <defs>
+      <marker id="arrow-normal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line)"></path>
+      </marker>
+      <marker id="arrow-pv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--cyan)"></path>
+      </marker>
+      <marker id="arrow-mv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--green)"></path>
+      </marker>
+      <marker id="arrow-feedback" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--cyan)"></path>
+      </marker>
+      <marker id="arrow-cascade" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--amber)"></path>
+      </marker>
+      <marker id="arrow-ff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--blue)"></path>
+      </marker>
+      <marker id="arrow-crosslimit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--red)"></path>
+      </marker></defs>
+        <path d="M 180 88 L 215 88" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-dasharray="4 3" marker-end="url(#arrow-pv)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--cyan)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.00s" path="M 180 88 L 215 88"></animateMotion>
+        </circle>
+        <text x="197.5" y="83" fill="var(--cyan)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">PV</text>
+        <path d="M 335 88 L 375 133" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#arrow-mv)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--green)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.18s" path="M 335 88 L 375 133"></animateMotion>
+        </circle>
+        <text x="355" y="105.5" fill="var(--green)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">MV</text>
+        <path d="M 180 183 L 375 133" fill="none" stroke="var(--blue)" stroke-width="1.8" stroke-dasharray="6 3" marker-end="url(#arrow-ff)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--blue)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.36s" path="M 180 183 L 375 133"></animateMotion>
+        </circle>
+        <text x="277.5" y="153" fill="var(--blue)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">feedforward</text>
+        <path d="M 495 133 L 530 183" fill="none" stroke="var(--amber)" stroke-width="1.8" marker-end="url(#arrow-cascade)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--amber)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.54s" path="M 495 133 L 530 183"></animateMotion>
+        </circle>
+        <text x="512.5" y="153" fill="var(--amber)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">SP (cascade)</text>
+        <path d="M 180 278 L 530 183" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-dasharray="4 3" marker-end="url(#arrow-pv)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--cyan)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.72s" path="M 180 278 L 530 183"></animateMotion>
+        </circle>
+        <text x="355" y="225.5" fill="var(--cyan)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">PV</text>
+        <path d="M 650 183 L 690 183" fill="none" stroke="var(--green)" stroke-width="1.8" marker-end="url(#arrow-mv)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--green)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.90s" path="M 650 183 L 690 183"></animateMotion>
+        </circle>
+        <text x="670" y="178" fill="var(--green)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">MV</text>
+        <path d="M 750 155 L 750 116" fill="none" stroke="var(--line)" stroke-width="1.8" marker-end="url(#arrow-normal)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--line)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.08s" path="M 750 155 L 750 116"></animateMotion>
+        </circle>
+        <text x="750" y="130.5" fill="var(--line)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">feedwater</text>
+        <path d="M 690 88 Q 435 33 180 88" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-dasharray="4 3" marker-end="url(#arrow-feedback)" opacity="0.95"></path>
+        <circle r="3.5" fill="var(--cyan)">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.26s" path="M 690 88 Q 435 33 180 88"></animateMotion>
+        </circle>
+        <text x="435" y="55.5" fill="var(--cyan)" font-size="9.5" font-family="var(--font-mono)" font-weight="600" text-anchor="middle" opacity="0.95">level</text>
+        <g class="loop-node" data-node="lt" style="cursor:pointer;">
+          <rect x="60" y="60" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--cyan)" stroke-width="1.8"></rect>
+          <text x="120" y="80" fill="var(--cyan)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">LT</text>
+          <text x="120" y="94" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Drum level</text>
+          <text x="120" y="108" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">+0 mm</text>
+          
+        </g>
+        <g class="loop-node" data-node="ft-steam" style="cursor:pointer;">
+          <rect x="60" y="155" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--cyan)" stroke-width="1.8"></rect>
+          <text x="120" y="175" fill="var(--cyan)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">FT</text>
+          <text x="120" y="189" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Steam flow</text>
+          <text x="120" y="203" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">60 %</text>
+          
+        </g>
+        <g class="loop-node" data-node="ft-fw" style="cursor:pointer;">
+          <rect x="60" y="250" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--cyan)" stroke-width="1.8"></rect>
+          <text x="120" y="270" fill="var(--cyan)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">FT</text>
+          <text x="120" y="284" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Feedwater flow</text>
+          <text x="120" y="298" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">60.0 %</text>
+          
+        </g>
+        <g class="loop-node" data-node="lic" style="cursor:pointer;">
+          <rect x="215" y="60" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--amber)" stroke-width="1.8"></rect>
+          <text x="275" y="80" fill="var(--amber)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">LIC</text>
+          <text x="275" y="94" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Level PID (master)</text>
+          <text x="275" y="108" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">trim +0.0</text>
+          
+        <rect x="223" y="120" width="104" height="5" rx="2.5" fill="var(--bg-inset)" stroke="var(--line-soft)" stroke-width="0.5"></rect>
+        <rect x="223" y="120" width="52.0" height="5" rx="2.5" fill="var(--amber)"></rect>
+        </g>
+        <g class="loop-node" data-node="sum" style="cursor:pointer;">
+          <rect x="375" y="105" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--blue)" stroke-width="1.8"></rect>
+          <text x="435" y="125" fill="var(--blue)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">Σ</text>
+          <text x="435" y="139" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Level MV + steam FF</text>
+          <text x="435" y="153" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">60.0 %</text>
+          
+        </g>
+        <g class="loop-node" data-node="fic" style="cursor:pointer;">
+          <rect x="530" y="155" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--amber)" stroke-width="1.8"></rect>
+          <text x="590" y="175" fill="var(--amber)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">FIC</text>
+          <text x="590" y="189" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Flow PID (slave)</text>
+          <text x="590" y="203" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">err 0.00</text>
+          
+        <rect x="538" y="215" width="104" height="5" rx="2.5" fill="var(--bg-inset)" stroke="var(--line-soft)" stroke-width="0.5"></rect>
+        <rect x="538" y="215" width="62.4" height="5" rx="2.5" fill="var(--amber)"></rect>
+        </g>
+        <g class="loop-node" data-node="fcv" style="cursor:pointer;">
+          <rect x="690" y="155" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--green)" stroke-width="1.8"></rect>
+          <text x="750" y="175" fill="var(--green)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">FCV</text>
+          <text x="750" y="189" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Feedwater valve</text>
+          <text x="750" y="203" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">60.0 % open</text>
+          
+        <rect x="698" y="215" width="104" height="5" rx="2.5" fill="var(--bg-inset)" stroke="var(--line-soft)" stroke-width="0.5"></rect>
+        <rect x="698" y="215" width="62.4" height="5" rx="2.5" fill="var(--green)"></rect>
+        </g>
+        <g class="loop-node" data-node="drum" style="cursor:pointer;">
+          <rect x="690" y="60" width="120" height="56" rx="7" fill="var(--bg-panel)" stroke="var(--text-faint)" stroke-width="1.8"></rect>
+          <text x="750" y="80" fill="var(--text-faint)" font-size="11.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">DRUM</text>
+          <text x="750" y="94" fill="var(--text-faint)" font-size="8.5" font-family="var(--font-mono)" text-anchor="middle">Steam drum</text>
+          <text x="750" y="108" fill="var(--text)" font-size="10.5" font-family="var(--font-mono)" font-weight="700" text-anchor="middle">+0 mm</text>
+          
+        </g></svg></div>
+          <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;font-size:.72rem;color:var(--text-faint);">
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px solid var(--line);"></span>Signal</span><span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px dashed var(--cyan);"></span>Measurement (PV)</span><span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px solid var(--green);"></span>Command (MV)</span><span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px dashed var(--cyan);"></span>Measurement feedback</span><span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px solid var(--amber);"></span>Cascade setpoint</span><span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px dashed var(--blue);"></span>Feedforward</span><span style="display:inline-flex;align-items:center;gap:5px;">
+                <span style="display:inline-block;width:18px;height:0;border-top:2px dashed var(--red);"></span>Cross-limit</span>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;border-top:1px solid var(--line-soft);padding-top:12px;">
+          <span id="detailsToggle" role="link" tabindex="0" style="color:var(--amber);font-size:.85rem;cursor:pointer;">▸ Show controller detail &amp; step-by-step signal flow</span>
+        </div>
+        <div id="detailsBody" style="display:none;margin-top:12px;">
+          <div id="ctrlCards">
+        <div class="panel-title" style="margin-top:4px;">Controller Outputs</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        <div style="flex:1 1 230px;min-width:0;background:var(--bg-inset);border:1px solid var(--line-soft);border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+              <b style="color:var(--amber);font-family:var(--font-mono);">LIC</b>
+              
+            </div>
+            <div style="font-size:.7rem;color:var(--text-faint);margin-bottom:8px;">MASTER — holds level</div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-family:var(--font-mono);font-size:.78rem;">
+              <span style="color:var(--text-faint);">SP</span><span>0 mm</span>
+              <span style="color:var(--text-faint);">PV</span><span>0 mm</span>
+              <span style="color:var(--text-faint);">ERR</span><span style="color:var(--cyan);">+0 mm</span>
+              <span style="color:var(--text-faint);">OUT</span><span style="color:var(--amber);font-weight:600;">0 % trim</span>
+            </div>
+            <div style="margin-top:8px;height:7px;background:var(--bg-panel);border-radius:4px;overflow:hidden;">
+              <div style="height:100%;width:50.0%;background:var(--amber);"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text-faint);margin-top:3px;font-family:var(--font-mono);">
+              <span>-40</span><span>50% of range</span><span>40</span>
+            </div>
+          </div><div style="flex:1 1 230px;min-width:0;background:var(--bg-inset);border:1px solid var(--line-soft);border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+              <b style="color:var(--amber);font-family:var(--font-mono);">FIC</b>
+              
+            </div>
+            <div style="font-size:.7rem;color:var(--text-faint);margin-bottom:8px;">SLAVE — holds feedwater flow</div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-family:var(--font-mono);font-size:.78rem;">
+              <span style="color:var(--text-faint);">SP</span><span>60 %</span>
+              <span style="color:var(--text-faint);">PV</span><span>60 %</span>
+              <span style="color:var(--text-faint);">ERR</span><span style="color:var(--cyan);">+0 %</span>
+              <span style="color:var(--text-faint);">OUT</span><span style="color:var(--amber);font-weight:600;">60 % valve</span>
+            </div>
+            <div style="margin-top:8px;height:7px;background:var(--bg-panel);border-radius:4px;overflow:hidden;">
+              <div style="height:100%;width:60.0%;background:var(--amber);"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text-faint);margin-top:3px;font-family:var(--font-mono);">
+              <span>0</span><span>60% of range</span><span>100</span>
+            </div>
+          </div>
+        </div></div>
+          <div id="chainPanel" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px;">
+          <div class="panel-title" style="margin:0;">How the signal flows right now</div>
+          <span class="badge status-predicted" style="font-family:var(--font-mono);">CASCADE + FEEDFORWARD</span>
+        </div>
+        <div style="display:flex;flex-direction:column;margin-top:8px;">
+        
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;">
+            <div style="flex:0 0 22px;height:22px;border-radius:50%;background:var(--bg-inset);border:1px solid var(--amber);
+                        color:var(--amber);display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-mono);font-size:.7rem;">1</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:.85rem;">Steam flow (feedforward)</b>
+                <span style="font-family:var(--font-mono);color:var(--cyan);font-size:.85rem;">60.0 %</span>
+              </div>
+              <div style="font-size:.78rem;color:var(--text-dim);margin-top:2px;">The bulk demand. Feeding this FORWARD means feedwater tracks steam immediately instead of waiting for a level error.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line-soft);">
+            <div style="flex:0 0 22px;height:22px;border-radius:50%;background:var(--bg-inset);border:1px solid var(--amber);
+                        color:var(--amber);display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-mono);font-size:.7rem;">2</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:.85rem;">Level master trim</b>
+                <span style="font-family:var(--font-mono);color:var(--cyan);font-size:.85rem;">+0.00 %</span>
+              </div>
+              <div style="font-size:.78rem;color:var(--text-dim);margin-top:2px;">The master only corrects the small leftover error — it does not set flow by itself.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line-soft);">
+            <div style="flex:0 0 22px;height:22px;border-radius:50%;background:var(--bg-inset);border:1px solid var(--amber);
+                        color:var(--amber);display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-mono);font-size:.7rem;">3</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:.85rem;">Sum → slave setpoint</b>
+                <span style="font-family:var(--font-mono);color:var(--cyan);font-size:.85rem;">60.0 %</span>
+              </div>
+              <div style="font-size:.78rem;color:var(--text-dim);margin-top:2px;">feedforward 60.0 + trim +0.00 = 60.0. This is the CASCADE handover: the master output becomes the slave SETPOINT.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line-soft);">
+            <div style="flex:0 0 22px;height:22px;border-radius:50%;background:var(--bg-inset);border:1px solid var(--amber);
+                        color:var(--amber);display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-mono);font-size:.7rem;">4</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:.85rem;">Slave flow controller</b>
+                <span style="font-family:var(--font-mono);color:var(--cyan);font-size:.85rem;">60.0 → 60.0 %</span>
+              </div>
+              <div style="font-size:.78rem;color:var(--text-dim);margin-top:2px;">The slave drives the valve until measured feedwater flow equals that setpoint.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line-soft);">
+            <div style="flex:0 0 22px;height:22px;border-radius:50%;background:var(--bg-inset);border:1px solid var(--amber);
+                        color:var(--amber);display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-mono);font-size:.7rem;">5</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:.85rem;">Valve position</b>
+                <span style="font-family:var(--font-mono);color:var(--cyan);font-size:.85rem;">60.0 % open</span>
+              </div>
+              <div style="font-size:.78rem;color:var(--text-dim);margin-top:2px;">Final element.</div>
+            </div>
+          </div>
+        </div></div>
+        </div>
+      </div>
+
+      <div class="calc-layout" style="margin-top:16px;">
+        <div class="card">
+          <div class="panel-title">The Problem</div>
+          <p style="color:var(--text-dim);font-size:.86rem;">Shrink and swell. When steam demand suddenly rises, drum pressure drops, steam bubbles expand, and the level appears to RISE even though the boiler is actually losing water. A naive level controller reads "high level" and closes the feedwater valve — exactly the wrong action, at exactly the wrong moment.</p>
+          <div class="panel-title" style="margin-top:16px;">The Solution</div>
+          <p style="color:var(--text-dim);font-size:.86rem;">Feed the steam flow FORWARD into the level loop so the controller anticipates the demand change instead of reacting to a misleading level signal, and CASCADE the level controller onto a fast feedwater flow loop so supply-pressure disturbances are caught before they ever affect level.</p>
+        </div>
+        <div class="card">
+          <div class="panel-title">Key Elements</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <span style="color:var(--amber);flex-shrink:0;">▸</span>
+              <span style="font-size:.85rem;color:var(--text-dim);">Element 1 — Drum level (the controlled variable)</span></div><div style="display:flex;gap:8px;align-items:flex-start;">
+              <span style="color:var(--amber);flex-shrink:0;">▸</span>
+              <span style="font-size:.85rem;color:var(--text-dim);">Element 2 — Steam flow (the disturbance, fed forward)</span></div><div style="display:flex;gap:8px;align-items:flex-start;">
+              <span style="color:var(--amber);flex-shrink:0;">▸</span>
+              <span style="font-size:.85rem;color:var(--text-dim);">Element 3 — Feedwater flow (the fast inner loop)</span></div>
+          </div>
+          <div class="panel-title" style="margin-top:18px;">Block Types</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+            <span class="badge" style="border:1px solid var(--cyan);color:var(--cyan);">Measurement / transmitter</span><span class="badge" style="border:1px solid var(--amber);color:var(--amber);">PID controller</span><span class="badge" style="border:1px solid var(--blue);color:var(--blue);">Function block (sum, select, ratio, f(x))</span><span class="badge" style="border:1px solid var(--green);color:var(--green);">Final control element</span><span class="badge" style="border:1px solid var(--text-faint);color:var(--text-faint);">Physical process</span>
+          </div>
+          <div class="panel-title" style="margin-top:18px;">Sources</div>
+          <ul style="margin:6px 0 0 16px;padding:0;color:var(--text-faint);font-size:.76rem;line-height:1.7;">
+            <li>Yokogawa/MG SC200 three-element drum level application note (cascade + feedforward structure)</li><li>Cross Company — Three Element Drum Level Control</li><li>WARE — 3-Element Steam Drum Level Control (shrink/swell explanation)</li>
+          </ul>
+        </div>
+      </div></div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">About This Calculation</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">A power plant runs on dozens of interacting control loops — boiler drum level (three-element), superheater/reheater temperature (via attemperation spray), combustion (fuel-air ratio), deaerator pressure and level, feedwater flow — each with its own dynamics, its own coupling to neighboring loops, and its own reason a naive single-loop PID tune can go wrong. This page runs live, interactive simulations of several of the most consequential ones, showing the actual process response (not just a static formula) so the effect of a tuning change, a disturbance, or a control-strategy choice (single-element vs. three-element level control, for instance) is genuinely visible rather than just described.</p>
+    <h2 class="panel-title" style="margin-top:20px;">Frequently Asked Questions</h2>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why does drum level control need three elements instead of one?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Single-element control (measuring only drum level) reacts too slowly to a sudden steam demand change — a load increase causes drum level to briefly rise (shrink-and-swell) before it falls, which a level-only controller misreads as “level is fine” or even “add less water” at exactly the wrong moment. Three-element control adds steam flow and feedwater flow as feedforward signals so the controller responds to the load change directly, not just to its delayed effect on level.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What is shrink and swell, and why does it matter for tuning?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">A sudden increase in steam demand drops boiler pressure slightly, which causes existing steam bubbles in the drum water to expand — drum level rises even though water inventory is actually falling (swell). The reverse happens on a load decrease (shrink). A level controller tuned without accounting for this inverse response will tend to move the feedwater valve the wrong way immediately after a load change.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why is superheater temperature control often the hardest loop on the unit?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">It combines a long, variable process dead time (spray water takes real time to travel through the remaining superheater tubing before it affects outlet temperature) with a process gain and dead time that both change significantly with load — a PID tuned well at full load is commonly too aggressive or too sluggish at part load.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Can I use this to actually re-tune a real loop’s PID constants?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Use it to build tuning intuition and to compare control STRATEGIES (e.g. cascade vs. single-loop, feedforward vs. feedback-only) — not to lift Kp/Ti/Td values directly onto a real DCS. A real loop’s actual process gain, dead time, and time constant depend on that specific unit’s equipment and must come from an actual tuning study or step-test on the real process.</div>
+    </div>
+  </div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+      <a href="/thermal-plant/" class="pill" data-related-link="thermal-plant" style="text-decoration:none;cursor:pointer;">⚡ Thermal Plant Estimator</a><a href="/protection/" class="pill" data-related-link="protection" style="text-decoration:none;cursor:pointer;">🛡 Turbine &amp; Boiler Protection</a><a href="/plant-performance/" class="pill" data-related-link="plant-performance" style="text-decoration:none;cursor:pointer;">📊 Plant Performance Indicators</a><a href="/boiler-blowdown/" class="pill" data-related-link="boiler-blowdown" style="text-decoration:none;cursor:pointer;">≣ Boiler Blowdown Rate</a><a href="/cooling-tower/" class="pill" data-related-link="cooling-tower" style="text-decoration:none;cursor:pointer;">❄ Cooling Tower Performance</a><a href="/feedwater-heater/" class="pill" data-related-link="feedwater-heater" style="text-decoration:none;cursor:pointer;">♨ Feedwater Heater (TTD &amp; DCA)</a>
+    </div>
+  </div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
+
+    <!-- ============================================================
+         Razorpay Payment Button.
+         Placed directly below the footer (which carries the build number
+         and the "revenue goes to..." line, appended by JS in app.js) so
+         the button sits right under that text, not after the ad further
+         down. Outside #content (the router-controlled area), so it
+         persists across every page navigation instead of getting wiped
+         out. Embed code used exactly as provided by Razorpay, wrapped
+         only in centering/spacing — data-payment_button_id is a real ID
+         (pl_TYqV9ui5mTXTad), not a placeholder.
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:8px 16px 16px;text-align:center;">
+      <form>
+        <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_TYqV9ui5mTXTad" async></script>
+      </form>
+    </div>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
+
+    <!-- Moved out of position:fixed (was overlapping diagram content in
+         the Control Loops simulator whenever a node happened to render in
+         the bottom-right of the viewport) and into normal document flow,
+         as the last item on every page instead. -->
+    <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
+  </div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
