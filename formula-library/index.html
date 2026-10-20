@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZZ6H0JNGP6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZZ6H0JNGP6');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
+     ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
+<title>Engineering Formula Library | EngCalc Hub</title>
+<meta name="description" content="Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.">
+<link rel="canonical" href="https://engineeringhubcalc.com/formula-library/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Engineering Calculator Hub">
+<meta property="og:title" content="Engineering Formula Library | EngCalc Hub">
+<meta property="og:description" content="Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.">
+<meta property="og:url" content="https://engineeringhubcalc.com/formula-library/">
+<meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Engineering Formula Library | EngCalc Hub">
+<meta name="twitter:description" content="Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.">
+<meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Engineering Calculator Hub",
+  "url": "https://engineeringhubcalc.com/",
+  "description": "Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web-based)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dr. Kundan" }
+}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":3,"name":"Engineering Formula Library","item":"https://engineeringhubcalc.com/formula-library/"}]}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body data-theme="dark">
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/logo.png" alt="Engineering Calculator Hub logo">
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
+    </div>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item " href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item " href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item " href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item " href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item " href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item active" href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item " href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item " href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="themeToggle">☾ Dark</button>
+      <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="search-box">
+        <span>⌕</span>
+        <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
+      </div>
+      <div class="topbar-actions">
+        <span class="pill free">FREE PLAN</span>
+      </div>
+    </div>
+    <main class="content" id="content"><div class="page-head"><div class="eyebrow">Reference</div><h1>Formula Library</h1>
+    <p class="lead">Searchable engineering formulas with variables, units, worked examples, and assumptions.</p></div><div class="field" style="max-width:420px;"><input type="text" id="flSearch" placeholder="Search formulas, e.g. 'orifice', 'Cv', 'RTD'..."></div><div class="tabs" id="flCats"><div class="tab active">All</div><div class="tab ">Instrumentation</div><div class="tab ">Fluid Mechanics</div><div class="tab ">Control Systems</div><div class="tab ">Power Plant</div><div class="tab ">Process</div><div class="tab ">Mechanical</div><div class="tab ">Civil</div><div class="tab ">Control</div></div><div class="grid cols-2" id="flGrid"><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation</span></div>
+          <h4>4-20 mA Signal Scaling</h4>
+          <div class="formula-box">PV = LRV + [(I − 4)/(20 − 4)] × (URV − LRV)</div>
+          <p>Converts a linear 4-20mA transmitter signal to an engineering value given the lower and upper range values.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">PV = process value, I = current signal (mA), LRV/URV = lower/upper range values</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">mA, engineering units</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Range 0-100 bar, I = 14.5 mA → PV = 0 + [(14.5-4)/16]×100 = 65.625 bar</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Any linear 4-20mA transmitter or I/O card scaling</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Linear transmitter response, no damping/offset error</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ISA/IEC 60381</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Fluid Mechanics</span></div>
+          <h4>Orifice Plate Flow</h4>
+          <div class="formula-box">Q = Cd · E · (π/4)·d² · √(2·ΔP/ρ),  E = 1/√(1−β⁴)</div>
+          <p>Volumetric flow rate through a square-edged concentric orifice plate.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Q = flow, Cd = discharge coefficient, E = velocity of approach factor, d = bore, ΔP = differential pressure, ρ = density, β = d/D</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">m3/s, Pa, kg/m3, m</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">d=0.05m, D=0.1m, ΔP=5000Pa, ρ=1000kg/m3, Cd=0.6 → Q ≈ 0.0112 m3/s</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Custody metering, process flow measurement</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Fully developed turbulent flow, square-edged plate, incompressible fluid</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ISO 5167 (simplified constant-Cd form)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Control Systems</span></div>
+          <h4>Liquid Valve Sizing (Cv)</h4>
+          <div class="formula-box">Cv = Q(gpm) / √(ΔP(psi)/SG)</div>
+          <p>Required flow coefficient for a control valve in non-flashing, non-cavitating liquid service.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Cv = valve flow coefficient, Q = flow rate, ΔP = pressure drop, SG = specific gravity</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">gpm, psi</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Q=100gpm, ΔP=25psi, SG=1.0 → Cv = 100/√25 = 20</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Control valve preliminary sizing</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">No flashing/cavitation, negligible piping geometry factor (Fp≈1)</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ISA-75.01 (simplified)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Power Plant</span></div>
+          <h4>Plant Heat Rate</h4>
+          <div class="formula-box">Heat Rate (kcal/kWh) = 860.42 / Overall Efficiency</div>
+          <p>Relates thermal efficiency to the fuel energy required per unit of electrical output.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">860.42 = kcal equivalent of 1 kWh</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">kcal/kWh, fraction</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Efficiency = 38% → Heat rate = 860.42/0.38 ≈ 2264 kcal/kWh</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Thermal power plant performance and fuel cost estimation</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Steady-state operation, efficiency includes boiler×turbine×generator</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">IEEE/ASME PTC-6 concepts (indicative use)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation</span></div>
+          <h4>RTD Callendar-Van Dusen</h4>
+          <div class="formula-box">R(t) = R0·(1 + A·t + B·t²)  [t ≥ 0°C]</div>
+          <p>Standard resistance-temperature relationship for platinum RTDs.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">R0 = resistance at 0°C, A = 3.9083e-3, B = -5.775e-7</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">Ω, °C</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Pt100 at 100°C → R ≈ 138.5 Ω</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Temperature measurement with Pt100/Pt1000 elements</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">IEC 60751 class curve, negligible self-heating and lead-wire error</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">IEC 60751</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation</span></div>
+          <h4>DP-Flow Square Root Relationship</h4>
+          <div class="formula-box">Flow% = √(ΔP%)</div>
+          <p>Differential-pressure flow transmitters produce a signal proportional to the square of flow; extraction linearizes it.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Flow% = percent of max flow, ΔP% = percent of max differential pressure</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">% span</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">ΔP at 25% of span → Flow = √0.25 = 50% of max flow</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Orifice/venturi/flow-nozzle DP flow measurement</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Beta ratio and fluid density constant across the range</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ISO 5167 / general DP flow theory</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Process</span></div>
+          <h4>Hydrostatic Pressure / Level</h4>
+          <div class="formula-box">P = ρ · g · h</div>
+          <p>Pressure exerted by a column of liquid, used for level measurement via pressure/DP transmitters.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">P = pressure, ρ = fluid density, g = gravitational acceleration, h = liquid column height</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">Pa, kg/m3, m/s2, m</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">ρ=1000kg/m3, h=2m → P = 1000×9.807×2 = 19,614 Pa</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Open/closed tank level measurement</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Constant density, static (no acceleration) column</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Fundamental fluid statics</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Control Systems</span></div>
+          <h4>PID Controller (parallel form)</h4>
+          <div class="formula-box">Output = Bias + Kp·e + Ki·∫e dt + Kd·de/dt</div>
+          <p>Standard parallel-form proportional-integral-derivative control law.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">e = SP−PV error, Kp/Ki/Kd = gains, Bias = output at zero error</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">controller engineering units, seconds</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">SP=50, PV=45, Kp=2 → P-term = 2×5 = 10</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Process control loop tuning and output prediction</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Linear control law, no output clamping/anti-windup modeled</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ISA-5.1 / IEC 61131-3 concepts</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Fluid Mechanics</span></div>
+          <h4>Reynolds Number (pipe flow)</h4>
+          <div class="formula-box">Re = 4·ṁ / (π·μ·D)</div>
+          <p>Dimensionless number indicating laminar vs turbulent flow regime.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">ṁ = mass flow rate, μ = dynamic viscosity, D = pipe internal diameter</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">kg/s, Pa·s, m</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">ṁ=5kg/s, μ=0.001Pa·s, D=0.1m → Re ≈ 63,700 (turbulent)</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Flow meter selection, discharge coefficient validity checks</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Fully developed, Newtonian fluid</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Fundamental fluid mechanics</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>Pump Head &amp; Hydraulic Power</h4>
+          <div class="formula-box">P(kW) = ρ·g·Q·H / (1000·η)</div>
+          <p>Shaft power required to deliver a given flow against a given head at a stated pump efficiency.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">ρ = density, Q = flow (m3/s), H = head (m), η = pump efficiency (fraction)</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">kg/m3, m3/s, m, kW</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">ρ=1000, Q=0.05m3/s, H=30m, η=0.75 → P ≈ 19.6 kW</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Pump selection and motor sizing</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Constant density, steady flow, efficiency includes hydraulic+mechanical losses</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Fundamental hydraulics</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Civil</span></div>
+          <h4>Simply Supported Beam Deflection (Point Load)</h4>
+          <div class="formula-box">δ_max = PL³ / (48EI)</div>
+          <p>Maximum deflection of a simply supported beam under a center point load, classical Euler-Bernoulli beam theory.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">δ_max = max deflection, P = point load, L = span, E = modulus of elasticity, I = moment of inertia</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">N, m, Pa, m⁴ → result in m</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">P=10000 N, L=4 m, E=200 GPa, I=6.6667×10⁻⁵ m⁴ → δ = (10000×4³)/(48×200e9×6.6667e-5) = 0.001 m = 1 mm</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Simply supported beam design and deflection serviceability check</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Linear elastic material, small deflections, uniform cross-section</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Classical mechanics of materials (Euler-Bernoulli beam theory)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Civil</span></div>
+          <h4>Euler Column Buckling</h4>
+          <div class="formula-box">P_cr = π²EI / (KL)²</div>
+          <p>Elastic critical buckling load for a slender column, for any standard end-support condition via the effective length factor K.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">P_cr = critical load, E = modulus of elasticity, I = moment of inertia, K = effective length factor, L = unsupported length</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">Pa, m⁴, m → result in N</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Pinned-pinned (K=1), L=4 m, E=200 GPa, I=6.6667×10⁻⁵ m⁴ → P_cr = π²×200e9×6.6667e-5 / 4² ≈ 8,224,700 N</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Preliminary column buckling check</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Perfectly elastic, initially straight, centrally loaded column — no safety factor included</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Classical mechanics of materials (Euler 1757)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Civil</span></div>
+          <h4>Concrete Nominal Mix Quantities</h4>
+          <div class="formula-box">Material volume = Dry volume × (ratio part / sum of ratio parts)</div>
+          <p>Cement, sand and aggregate quantities for an IS 456:2000 nominal concrete mix, using the standard 1.54 dry volume factor.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Dry volume = wet volume × 1.54 (typical), ratio = fixed cement:sand:aggregate proportion by grade</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">m³</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">M20 (1:1.5:3), 1 m³ wet volume → dry volume 1.54 m³ → cement = 1.54×(1/5.5) = 0.28 m³ → ×1440 kg/m³ / 50 kg/bag ≈ 8.06 bags</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Material quantity estimation for ordinary grade concrete (M5–M20)</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">IS 456:2000 nominal mix method; M25 and above require a design mix, not covered by this method</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">IS 456:2000, Table 9 (nominal mixes)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Civil</span></div>
+          <h4>Rebar (Reinforcement Bar) Weight</h4>
+          <div class="formula-box">W = ρ × (πd²/4) × L  (site rule of thumb: W/L ≈ d²/162 kg/m)</div>
+          <p>Weight of a rebar/reinforcement bar from its diameter and length, using steel density; the familiar d²/162 site approximation gives the same result within about 0.1%.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">W = weight, ρ = steel density (7850 kg/m³), d = bar diameter (mm), L = length (m)</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">mm, m → result in kg</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">16 mm bar, 1 m long → W = 7850 × (π×0.016²/4) × 1 = 1.578 kg (rule of thumb 16²/162 = 1.580 kg)</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Reinforcement material takeoff and procurement</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Standard steel density 7850 kg/m³</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Standard construction industry practice</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Civil</span></div>
+          <h4>Rankine Active Earth Pressure</h4>
+          <div class="formula-box">Kₐ = tan²(45° − φ/2)   σₐ = Kₐσv − 2c√Kₐ</div>
+          <p>Active earth pressure coefficient and pressure on a retaining wall from Rankine theory, for a cohesionless or cohesive soil.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Kₐ = active pressure coefficient, φ = soil friction angle, σv = vertical (overburden) stress, c = cohesion</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">degrees, kPa → result in kPa</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">φ=30°, depth=3 m, γ=18 kN/m³, c=0 → Kₐ = tan²(30°) = 0.333 → σₐ = 0.333×(18×3) = 18 kPa</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Retaining wall design, preliminary lateral earth pressure estimate</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Vertical wall face, horizontal backfill, no wall friction (real design should also check Coulomb theory)</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Rankine earth pressure theory (1857)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Civil</span></div>
+          <h4>Manning's Equation (Open Channel Flow)</h4>
+          <div class="formula-box">V = (1/n) × R^(2/3) × S^(1/2)</div>
+          <p>Mean flow velocity in an open channel under uniform flow conditions, from the channel's roughness, hydraulic radius, and slope.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">V = velocity, n = Manning's roughness coefficient, R = hydraulic radius (A/P), S = longitudinal channel slope</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">SI units (k=1); m/s result</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Rectangular channel, b=2 m, depth=1 m, n=0.013, S=0.001 → A=2 m², P=4 m, R=0.5 m → V=1.53 m/s, Q=3.06 m³/s</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Open channel and storm drain flow capacity calculations</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Uniform (steady, normal) flow, constant cross-section and slope</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Manning's equation (Robert Manning, 1889)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Civil</span></div>
+          <h4>Effective Stress (Terzaghi)</h4>
+          <div class="formula-box">σ' = σ − u</div>
+          <p>Effective stress carried by the soil skeleton, equal to total stress minus pore water pressure — the fundamental principle underlying settlement, bearing capacity, and slope stability analysis.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">σ' = effective stress, σ = total stress (from soil self-weight), u = pore water pressure</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">kPa</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Depth 5 m, water table at 2 m, γ(above)=17, γ(below)=19 kN/m³ → σ=17×2+19×3=91 kPa, u=9.81×3=29.43 kPa → σ'=61.57 kPa</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Foundation settlement and bearing capacity analysis</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Hydrostatic pore pressure (no seepage flow)</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Terzaghi's principle of effective stress (1925)</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>Pump Specific Speed</h4>
+          <div class="formula-box">Ns = N√Q / H^0.75</div>
+          <p>Dimensional specific speed used to indicate centrifugal pump impeller geometry family (radial, mixed, or axial flow) at a given duty point.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Ns = specific speed, N = pump speed (rpm), Q = flow at best efficiency point (US gpm), H = head per stage (ft)</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">US customary (rpm, gpm, ft)</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">N=1770 rpm, Q=500 gpm, H=150 ft → Ns = 1770√500/150^0.75 ≈ 923 (radial flow range)</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Early-stage pump type / impeller family selection</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">US customary unit form; numerically different in other unit systems for the same physical pump</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Standard turbomachinery similarity theory</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>HVAC Sensible Heat Load</h4>
+          <div class="formula-box">Q(BTU/hr) = 1.08 × CFM × ΔT(°F)   Q(kW) = 1.2 × (L/s) × ΔT(°C)</div>
+          <p>Standard ASHRAE air-side sensible heat formula, relating airflow and temperature change to cooling or heating load.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Q = sensible heat load, CFM/L⁄s = airflow, ΔT = temperature difference across the coil or space</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">Imperial (CFM, °F) or metric (L/s, °C)</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">2000 CFM, 20°F ΔT → Q = 1.08×2000×20 = 43,200 BTU/hr = 3.6 tons</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">HVAC sensible cooling/heating load estimation</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Sensible heat only — excludes latent (moisture) load, solar gain, occupancy and infiltration</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ASHRAE Fundamentals</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>Bolt Torque-Tension Relationship</h4>
+          <div class="formula-box">T = K × D × F</div>
+          <p>Standard fastener torque-tension relationship relating tightening torque to target clamp force via the nut factor K.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">T = tightening torque, K = nut factor (lubrication/thread condition dependent, typically 0.10–0.20), D = bolt diameter, F = target clamp force</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">N, m → result in N·m</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">M12 bolt (D=0.012 m), K=0.2, F=20,000 N → T = 0.2×0.012×20000 = 48.0 N·m</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Bolted joint tightening specification</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">K is not universal — varies with lubrication and plating; use the bolt's own datasheet value where available</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Shigley's Mechanical Engineering Design; standard fastener engineering practice</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>Refrigeration Ton Conversion</h4>
+          <div class="formula-box">1 ton = 12,000 BTU/hr = 3.5168 kW</div>
+          <p>Standard definition of a ton of refrigeration, used throughout HVAC and refrigeration capacity ratings.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Defined from the latent heat to freeze one short ton of 0°C water to ice in 24 hours</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">tons, kW, BTU/hr</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">5 tons × 3.5168 = 17.58 kW</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Converting between chiller/AC capacity units</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Exact definitional constant, not an approximation</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Standard refrigeration industry definition</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>Duct Sizing (Velocity Method)</h4>
+          <div class="formula-box">Area = Flow ÷ Velocity</div>
+          <p>Required duct cross-sectional area and equivalent round-duct diameter from airflow and a chosen design velocity.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Area = required duct cross-section, Flow = airflow (CFM or L/s), Velocity = target design velocity</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">Imperial (CFM, fpm) or metric (L/s, m/s)</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">2000 CFM at 1000 fpm → Area = 2 ft² → round duct diameter ≈ 19.1 in</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Sizing a single HVAC duct section for a target velocity</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Target velocity is a design choice (noise/pressure-drop trade-off), not a fixed physical constant</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ASHRAE Fundamentals duct design guidance</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>Gear Ratio (Speed and Torque)</h4>
+          <div class="formula-box">N₁/N₂ = D₂/D₁ = T₂/T₁</div>
+          <p>Ideal kinematic relationship between gear tooth counts, rotational speed, and torque across a gear mesh.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">N = rotational speed, D = pitch diameter (or tooth count), T = torque; subscripts 1=driving gear, 2=driven gear</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">rpm, N·m</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">1800 rpm input, 20 teeth driving 60 teeth → ratio 3:1 → output speed 600 rpm</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Gearbox/gear train speed and torque calculation</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Ideal kinematic relationship — real torque output is reduced by mesh efficiency losses</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Standard mechanical power transmission theory</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Mechanical</span></div>
+          <h4>Belt and Pulley Speed Ratio</h4>
+          <div class="formula-box">N₁ × D₁ = N₂ × D₂</div>
+          <p>Exact kinematic relationship between belt-driven pulley diameters and rotational speeds, assuming no belt slip.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">N = rotational speed, D = pulley diameter; subscripts 1=driving pulley, 2=driven pulley</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">rpm, mm</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">1450 rpm motor with 100 mm pulley driving a 250 mm pulley → output speed = 1450×100/250 = 580 rpm</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Belt drive speed reduction/increase calculation</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">No belt slip — real belts under heavy load can slip slightly, reducing actual output speed below this ideal value</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">Standard mechanical power transmission theory</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Control</span></div>
+          <h4>SAMA Logic Blocks (Summer, Select, Limit, AND/OR)</h4>
+          <div class="formula-box">Summer: out = Σ(gain_i × input_i) + bias   High/Low Select: out = max/min(inputs)</div>
+          <p>Standard SAMA (Scientific Apparatus Makers Association) function blocks used throughout combustion and boiler control interlock/permissive logic diagrams.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">Summer: weighted sum plus bias; High/Low Select: outputs the highest/lowest input; Limiters clamp output to a bound; AND/OR/NOT are standard boolean logic (&gt;=0.5 treated as TRUE)</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">Engineering units of the signal being summed/selected/limited; dimensionless for logic blocks</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">High Select of fuel demand (70%) and air feedforward (65%) → output = max(70,65) = 70%, the standard cross-limiting air floor</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Building and simulating custom interlock/permissive control logic from standard symbols</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Static/algebraic blocks only — no dynamic (lag, integrator, timer) blocks, which need time-stepped simulation instead</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">SAMA (Scientific Apparatus Makers Association) PMC 22.1 standard symbols</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation</span></div>
+          <h4>Cable Overall Diameter &amp; Gland Size</h4>
+          <div class="formula-box">OD = [(d_cond + 2t_ins) × k_layup + 2t_inner + 2t_armour] + 2t_outer, then match OD to a standard gland's clamping range</div>
+          <p>Builds up a multicore cable's overall diameter layer by layer -- conductor, insulation, the geometric lay-up factor for the core/pair count, inner sheath, optional armour, and outer sheath -- then selects the standard cable gland whose clamping range covers that OD.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">d_cond = conductor diameter, t_ins = insulation thickness, k_layup = lay-up (cabling) factor for the element count, t_inner/t_outer = sheath thickness, t_armour = armour wire diameter</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">mm</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">4 pair × 1.5 sqmm instrumentation cable, unarmoured → OD ≈ 14.1 mm → M25 gland (10-17 mm range)</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Selecting cable glands for junction boxes, marshalling cabinets, and field instrument enclosures</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">Standard IEC 60228 stranding allowance, IS 5831/IS 1554-based insulation thickness, geometric circle-packing lay-up factors (exact for 1/2/3/4/7 cores, interpolated for other standard counts). An estimate, not a specific manufacturer's datasheet -- actual cable OD varies between manufacturers even at the same nominal size.</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">IEC 60228, IS 1554, IS 5831, IEC 62444</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Power Plant</span></div>
+          <h4>Boiler Efficiency (Indirect / Heat Loss Method)</h4>
+          <div class="formula-box">η = 100 − (L1+L2+L3+L4+L5+L6+L7+L8), L1 = m×Cp×(Tf−Ta)/GCV×100, L2 = 9H₂×[584+Cp(Tf−Ta)]/GCV×100</div>
+          <p>Computes boiler efficiency from individually calculated heat losses (dry flue gas, H2 in fuel, moisture in fuel/air, CO, surface radiation, unburnt carbon) rather than an assumed efficiency percentage. The standard method used for real boiler performance testing.</p>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">Variables</span><span class="v">m = dry flue gas mass (kg/kg fuel), Cp = specific heat, Tf/Ta = flue gas/ambient temperature, H2 = hydrogen % in fuel, GCV = gross calorific value</span></div>
+            <div class="result-item"><span class="k">Units</span><span class="v">kcal/kg, %, °C</span></div>
+            <div class="result-item"><span class="k">Example</span><span class="v">Coal (C=55%, H2=3.5%, moisture=8%), GCV=4200 kcal/kg, flue gas O2=5%, Tf=160°C, Ta=30°C → efficiency ≈ 85%</span></div>
+            <div class="result-item"><span class="k">Application</span><span class="v">Real boiler performance testing and energy audits (ASME PTC 4.1 / BEE India standard procedure) — available as Mode 5 of the Thermal Plant Estimator</span></div>
+            <div class="result-item"><span class="k">Assumptions</span><span class="v">L1-L5 computed from fuel ultimate analysis and flue gas data. L6 (surface loss) and L7/L8 (unburnt carbon in ash) require direct measurement and are user-supplied, not derived. Result is GCV-basis — differs from NCV-basis figures often quoted for high-hydrogen fuels like natural gas.</span></div>
+            <div class="result-item"><span class="k">Standard</span><span class="v">ASME PTC 4.1, BEE India standard procedure, BS 845 / DIN 1942 equivalent</span></div>
+          </div>
+        </div></div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+      <a href="/converter/" class="pill" data-related-link="converter" style="text-decoration:none;cursor:pointer;">⇌ Unit Converter</a><a href="/kks-reference/" class="pill" data-related-link="kks-reference" style="text-decoration:none;cursor:pointer;">🏷 KKS Code Reference</a><a href="/isa-tag-reference/" class="pill" data-related-link="isa-tag-reference" style="text-decoration:none;cursor:pointer;">🔤 ISA-5.1 Tag Reference</a><a href="/history/" class="pill" data-related-link="history" style="text-decoration:none;cursor:pointer;">🕘 Calculation History</a><a href="/support/" class="pill" data-related-link="support" style="text-decoration:none;cursor:pointer;">❤ Support the Project</a><a href="/reviews/" class="pill" data-related-link="reviews" style="text-decoration:none;cursor:pointer;">★ Reviews &amp; Ratings</a>
+    </div>
+  </div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
+
+    <!-- ============================================================
+         Razorpay Payment Button.
+         Placed directly below the footer (which carries the build number
+         and the "revenue goes to..." line, appended by JS in app.js) so
+         the button sits right under that text, not after the ad further
+         down. Outside #content (the router-controlled area), so it
+         persists across every page navigation instead of getting wiped
+         out. Embed code used exactly as provided by Razorpay, wrapped
+         only in centering/spacing — data-payment_button_id is a real ID
+         (pl_TYqV9ui5mTXTad), not a placeholder.
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:8px 16px 16px;text-align:center;">
+      <form>
+        <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_TYqV9ui5mTXTad" async></script>
+      </form>
+    </div>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
+
+    <!-- Moved out of position:fixed (was overlapping diagram content in
+         the Control Loops simulator whenever a node happened to render in
+         the bottom-right of the viewport) and into normal document flow,
+         as the last item on every page instead. -->
+    <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
+  </div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZZ6H0JNGP6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZZ6H0JNGP6');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
+     ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
+<title>ISA-5.1 Instrument Tag Reference | EngCalc Hub</title>
+<meta name="description" content="Complete ANSI/ISA-5.1 instrument identification letter table and common tag combinations (PT, FIC, PSHH...), with a direct comparison to KKS — free searchable reference.">
+<link rel="canonical" href="https://engineeringhubcalc.com/isa-tag-reference/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Engineering Calculator Hub">
+<meta property="og:title" content="ISA-5.1 Instrument Tag Reference | EngCalc Hub">
+<meta property="og:description" content="Complete ANSI/ISA-5.1 instrument identification letter table and common tag combinations (PT, FIC, PSHH...), with a direct comparison to KKS — free searchable reference.">
+<meta property="og:url" content="https://engineeringhubcalc.com/isa-tag-reference/">
+<meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="ISA-5.1 Instrument Tag Reference | EngCalc Hub">
+<meta name="twitter:description" content="Complete ANSI/ISA-5.1 instrument identification letter table and common tag combinations (PT, FIC, PSHH...), with a direct comparison to KKS — free searchable reference.">
+<meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Engineering Calculator Hub",
+  "url": "https://engineeringhubcalc.com/",
+  "description": "Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web-based)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dr. Kundan" }
+}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do I read a multi-letter tag like PDIT or TRC?","acceptedAnswer":{"@type":"Answer","text":"Left to right: the first letter is the measured variable (or a modifier applied to it, like D for differential), and every letter after that adds a function. PDIT is Pressure Differential Indicating Transmitter — P (pressure) + D (differential modifier) + I (indicate) + T (transmit). TRC is Temperature Recording Controller: the passive/readout function (R, record — for a human) comes before the active/output function (C, control — automated), which is the standard ISA-5.1 letter ordering, not specific to temperature."}},{"@type":"Question","name":"Why does the same letter mean different things in different positions?","acceptedAnswer":{"@type":"Answer","text":"ISA-5.1’s table has separate columns for exactly this reason: a letter’s meaning depends on whether it’s the first letter or a succeeding letter. R as a first letter means Radiation; as a succeeding letter it means Record. S as a first letter means Speed; as a succeeding letter it can mean Safety, Switch, or Stop depending on which succeeding-letter column it appears in. Always check the column, not just the letter."}},{"@type":"Question","name":"What’s the difference between FE, FT, and FIC on the same flow loop?","acceptedAnswer":{"@type":"Answer","text":"They’re three different devices on one measurement, not three names for the same thing: FE is the Flow Element, the physical primary sensor (e.g. an orifice plate) that actually contacts the process; FT is the Flow Transmitter that converts the element’s signal into a transmittable value; FIC is the Flow Indicating Controller that displays it to an operator and can act on it. A real loop diagram often shows all three tied to the same loop number."}},{"@type":"Question","name":"How does a KKS tag and an ISA-5.1 tag relate to the same physical device?","acceptedAnswer":{"@type":"Answer","text":"They can both exist on the same instrument, answering different questions: the KKS tag (e.g. 10LAC01CT001) fixes its location in the plant hierarchy — which unit, which system, which item number — while the ISA-5.1 tag (e.g. FT-101) fixes its function — what it measures and what it does. A project using both typically cross-references the two in its instrument index, rather than picking one over the other."}},{"@type":"Question","name":"Are \"N\" and \"O\" really left undefined by the standard?","acceptedAnswer":{"@type":"Answer","text":"Yes, deliberately — ISA-5.1 reserves certain letters (most notably N and, in some editions, parts of the table) as \"User’s Choice\", handed back to each project to define in its own instrumentation legend sheet. This reference marks those slots as User’s Choice rather than inventing a meaning for them; always check the specific project’s legend for what they’ve been assigned to mean there."}}]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":3,"name":"ISA-5.1 Instrument Tag Reference","item":"https://engineeringhubcalc.com/isa-tag-reference/"}]}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body data-theme="dark">
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/logo.png" alt="Engineering Calculator Hub logo">
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
+    </div>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item " href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item " href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item " href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item " href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item " href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item " href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item " href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item active" href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="themeToggle">☾ Dark</button>
+      <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="search-box">
+        <span>⌕</span>
+        <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
+      </div>
+      <div class="topbar-actions">
+        <span class="pill free">FREE PLAN</span>
+      </div>
+    </div>
+    <main class="content" id="content"><div class="page-head"><div class="eyebrow">Reference</div><h1>ISA-5.1 Instrument Tag Reference</h1>
+    <p class="lead">The companion identification system to KKS: where KKS identifies plant systems and equipment (area-first), ANSI/ISA-5.1 identifies the individual field instrument itself, by the variable it measures and the function it performs — the FT/PIC/LAH-style tags you see in a P&amp;ID bubble. Complete official letter table, plus the everyday tag combinations built from it.</p></div><div class="card">
+    <h2 class="panel-title" style="margin-top:0;">How a tag is built — and how it relates to KKS</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;">An ISA-5.1 tag reads left to right as: <b>first letter</b> (the measured/initiating variable, or a modifier) + <b>one or more succeeding letters</b> (the function the instrument performs) + a <b>loop number</b>. <code>PT-101</code> is a Pressure Transmitter on loop 101; <code>TIC-205</code> is a Temperature Indicating Controller on loop 205. Redundant instruments on one loop add a trailing letter — <code>FT-101A</code> and <code>FT-101B</code> are two transmitters on the same loop.</p>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;">KKS and ISA-5.1 solve genuinely different halves of the same identification problem, and a real plant typically carries both: KKS’s multi-segment code (e.g. <code>10LAC01CT001</code>) identifies <i>where</i> a device sits in the plant — unit, system, sub-system, item number — largely independent of what the device actually does. An ISA-5.1 tag (e.g. <code>FT-101</code>) identifies <i>what the device does</i> — measures flow, transmits it — largely independent of where it physically sits. KKS is the dominant convention in German-influenced and much of European/Indian power-station engineering; ISA-5.1 dominates North America and most international process-industry P&amp;IDs. On a real project using both, the same physical transmitter can carry a KKS location tag on the plant equipment list and an ISA-5.1 loop tag on the P&amp;ID and instrument index — two labels for one device, answering two different questions.</p>
+  </div><h2 class="panel-title" style="margin-top:20px;">Complete Letter Table</h2><div class="field" style="max-width:420px;"><input type="text" id="isaLetterSearch" placeholder="Search by letter or meaning, e.g. 'F', 'flow', 'totalize'..."></div><div class="grid cols-2" id="isaLetterGrid"><div class="card fl-card">
+          <h4>A</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Analysis</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Alarm</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>B</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Burner, Combustion</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">User's Choice</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>C</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Control</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">Close</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>D</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Differential, Deviation</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>E</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Voltage</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Sensor, Primary Element</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>F</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Flow, Flow Rate</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Ratio</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>G</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Glass, Gauge, Viewing Device</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>H</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Hand</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">High</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>I</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Current</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Indicate</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>J</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Power</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Scan</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>K</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Time, Schedule</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Time Rate of Change</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Control Station</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>L</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Level</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Light</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">Low</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>M</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">Middle, Intermediate</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>N</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">User's Choice</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>O</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">User's Choice</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Orifice, Restriction</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">Open</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>P</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Pressure</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Point (Test Connection)</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>Q</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Quantity</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Integrate, Totalize</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Integrate, Totalize</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>R</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Radiation</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Record</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">Run</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>S</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Speed, Frequency</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Safety</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Switch</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">Stop</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>T</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Temperature</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Transmit</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>U</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Multivariable</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Multifunction</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Multifunction</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>V</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Vibration, Mechanical Analysis</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Valve, Damper, Louver</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>W</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Weight, Force</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Well, Probe</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">—</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>X</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Unclassified</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">X-axis</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Accessory Devices, Unclassified</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">Unclassified</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>Y</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Event, State, Presence</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Y-axis</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Auxiliary Devices</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div><div class="card fl-card">
+          <h4>Z</h4>
+          <div class="result-grid">
+            <div class="result-item"><span class="k">As first letter</span><span class="v">Position, Dimension</span></div>
+            <div class="result-item"><span class="k">Readout/passive function</span><span class="v">Z-axis, Safety Instrumented System</span></div>
+            <div class="result-item"><span class="k">Output/active function</span><span class="v">Driver, Actuator, Unclassified final control element</span></div>
+            <div class="result-item"><span class="k">Function modifier</span><span class="v">—</span></div>
+          </div>
+        </div></div><h2 class="panel-title" style="margin-top:20px;">Common Tag Combinations</h2><div class="field" style="max-width:420px;"><input type="text" id="isaComboSearch" placeholder="Search by tag or name, e.g. 'PSHH', 'flow controller'..."></div><div class="grid cols-2" id="isaComboGrid"><div class="card fl-card">
+          <h4>PT <span style="color:var(--text-dim);font-weight:400;">— Pressure Transmitter</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>PI <span style="color:var(--text-dim);font-weight:400;">— Pressure Indicator</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>PIC <span style="color:var(--text-dim);font-weight:400;">— Pressure Indicating Controller</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>PIT <span style="color:var(--text-dim);font-weight:400;">— Pressure Indicating Transmitter</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>PDT <span style="color:var(--text-dim);font-weight:400;">— Pressure Differential Transmitter</span></h4>
+          <p>The D is a variable modifier applied right after the first letter, not a separate function — same pattern as TDT (Temperature Differential Transmitter) or FDT.</p>
+        </div><div class="card fl-card">
+          <h4>PSH <span style="color:var(--text-dim);font-weight:400;">— Pressure Switch High</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>PSL <span style="color:var(--text-dim);font-weight:400;">— Pressure Switch Low</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>PSHH <span style="color:var(--text-dim);font-weight:400;">— Pressure Switch High-High</span></h4>
+          <p>A doubled modifier (HH, LL) marks a second, more severe alarm/trip threshold above the first — e.g. PSH warns, PSHH trips.</p>
+        </div><div class="card fl-card">
+          <h4>PSLL <span style="color:var(--text-dim);font-weight:400;">— Pressure Switch Low-Low</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>PSV <span style="color:var(--text-dim);font-weight:400;">— Pressure Safety Valve</span></h4>
+          <p>S here is the "Safety" modifier, not "Switch" — context (a valve, not an electrical contact) disambiguates it; this is the mechanical relief valve, not an instrument loop.</p>
+        </div><div class="card fl-card">
+          <h4>FT <span style="color:var(--text-dim);font-weight:400;">— Flow Transmitter</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>FIC <span style="color:var(--text-dim);font-weight:400;">— Flow Indicating Controller</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>FFRC <span style="color:var(--text-dim);font-weight:400;">— Flow Ratio Recording Controller</span></h4>
+          <p>F as a succeeding letter (ratio) plus F as the first letter (flow) — the two F's mean different things depending on position.</p>
+        </div><div class="card fl-card">
+          <h4>FCV <span style="color:var(--text-dim);font-weight:400;">— Flow Control Valve</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>FE <span style="color:var(--text-dim);font-weight:400;">— Flow Element</span></h4>
+          <p>The primary sensing element itself (e.g. an orifice plate) — distinct from FT, the transmitter reading it.</p>
+        </div><div class="card fl-card">
+          <h4>LT <span style="color:var(--text-dim);font-weight:400;">— Level Transmitter</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>LIC <span style="color:var(--text-dim);font-weight:400;">— Level Indicating Controller</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>LG <span style="color:var(--text-dim);font-weight:400;">— Level Gauge</span></h4>
+          <p>G here is "Glass, Gauge, Viewing Device" — a local sight glass, not a transmitted signal at all.</p>
+        </div><div class="card fl-card">
+          <h4>LAH <span style="color:var(--text-dim);font-weight:400;">— Level Alarm High</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>LAL <span style="color:var(--text-dim);font-weight:400;">— Level Alarm Low</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>TE <span style="color:var(--text-dim);font-weight:400;">— Temperature Element</span></h4>
+          <p>The sensor itself (e.g. an RTD or thermocouple) — distinct from TT, the transmitter.</p>
+        </div><div class="card fl-card">
+          <h4>TT <span style="color:var(--text-dim);font-weight:400;">— Temperature Transmitter</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>TIC <span style="color:var(--text-dim);font-weight:400;">— Temperature Indicating Controller</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>TRC <span style="color:var(--text-dim);font-weight:400;">— Temperature Recording Controller</span></h4>
+          <p>The first succeeding letter (R, passive/readout) records for a human operator; the second (C, active/output) is the automated control action — this passive-then-active letter order is a general ISA-5.1 convention, not specific to temperature.</p>
+        </div><div class="card fl-card">
+          <h4>AIT <span style="color:var(--text-dim);font-weight:400;">— Analytical Indicating Transmitter</span></h4>
+          <p>A covers any analysis not given its own letter — the specific analysis (O2, pH, conductivity...) is defined outside the tag bubble, in the instrument index or P&amp;ID note.</p>
+        </div><div class="card fl-card">
+          <h4>AE <span style="color:var(--text-dim);font-weight:400;">— Analyzer Element</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>SIC <span style="color:var(--text-dim);font-weight:400;">— Speed Indicating Controller</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>ST <span style="color:var(--text-dim);font-weight:400;">— Speed Transmitter</span></h4>
+          
+        </div><div class="card fl-card">
+          <h4>ZI <span style="color:var(--text-dim);font-weight:400;">— Position Indicator</span></h4>
+          <p>Commonly a valve limit-switch or damper position indication.</p>
+        </div><div class="card fl-card">
+          <h4>ZSO <span style="color:var(--text-dim);font-weight:400;">— Position Switch, valve confirmed Open</span></h4>
+          <p>A common project-level extension: O/C suffixes for open/closed confirmation aren't in the base ISA table itself, but are near-universal practice.</p>
+        </div><div class="card fl-card">
+          <h4>HS <span style="color:var(--text-dim);font-weight:400;">— Hand Switch</span></h4>
+          <p>An operator pushbutton or selector switch — H as first letter means "Hand" (manually initiated), not a measured process variable at all.</p>
+        </div><div class="card fl-card">
+          <h4>HIC <span style="color:var(--text-dim);font-weight:400;">— Hand Indicating Controller</span></h4>
+          <p>A manual loader/setpoint station — the operator directly sets the output, there's no automatic control action.</p>
+        </div><div class="card fl-card">
+          <h4>YS <span style="color:var(--text-dim);font-weight:400;">— Relay/Compute, Switch function</span></h4>
+          <p>Y is reserved for a function that doesn't fit the standard measured-variable categories — commonly a relay, solenoid, or logic/compute block.</p>
+        </div></div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">About This Calculation</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">ANSI/ISA-5.1 is the standard used across most process, power, and manufacturing industries worldwide — dominant in North America, and widely used internationally alongside KKS and its own IEC 60617 counterpart — to identify what an individual field instrument actually measures and does. Where KKS answers "where in the plant does this sit", ISA-5.1 answers "what does this device do": a tag like FT-101 or TIC-205 is built entirely from a first letter (the measured variable), one or more succeeding letters (the function performed), and a loop number. This reference presents the complete official identification letter table from ANSI/ISA-5.1-2009 — not an abbreviated vendor cheat sheet — alongside the everyday tag combinations (PT, FIC, PSHH, and dozens more) actually built from it, each with a short note on why the combination reads the way it does.</p>
+    <h2 class="panel-title" style="margin-top:20px;">Frequently Asked Questions</h2>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">How do I read a multi-letter tag like PDIT or TRC?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Left to right: the first letter is the measured variable (or a modifier applied to it, like D for differential), and every letter after that adds a function. PDIT is Pressure Differential Indicating Transmitter — P (pressure) + D (differential modifier) + I (indicate) + T (transmit). TRC is Temperature Recording Controller: the passive/readout function (R, record — for a human) comes before the active/output function (C, control — automated), which is the standard ISA-5.1 letter ordering, not specific to temperature.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why does the same letter mean different things in different positions?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">ISA-5.1’s table has separate columns for exactly this reason: a letter’s meaning depends on whether it’s the first letter or a succeeding letter. R as a first letter means Radiation; as a succeeding letter it means Record. S as a first letter means Speed; as a succeeding letter it can mean Safety, Switch, or Stop depending on which succeeding-letter column it appears in. Always check the column, not just the letter.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What’s the difference between FE, FT, and FIC on the same flow loop?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">They’re three different devices on one measurement, not three names for the same thing: FE is the Flow Element, the physical primary sensor (e.g. an orifice plate) that actually contacts the process; FT is the Flow Transmitter that converts the element’s signal into a transmittable value; FIC is the Flow Indicating Controller that displays it to an operator and can act on it. A real loop diagram often shows all three tied to the same loop number.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">How does a KKS tag and an ISA-5.1 tag relate to the same physical device?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">They can both exist on the same instrument, answering different questions: the KKS tag (e.g. 10LAC01CT001) fixes its location in the plant hierarchy — which unit, which system, which item number — while the ISA-5.1 tag (e.g. FT-101) fixes its function — what it measures and what it does. A project using both typically cross-references the two in its instrument index, rather than picking one over the other.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Are "N" and "O" really left undefined by the standard?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Yes, deliberately — ISA-5.1 reserves certain letters (most notably N and, in some editions, parts of the table) as "User’s Choice", handed back to each project to define in its own instrumentation legend sheet. This reference marks those slots as User’s Choice rather than inventing a meaning for them; always check the specific project’s legend for what they’ve been assigned to mean there.</div>
+    </div>
+  </div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+      <a href="/converter/" class="pill" data-related-link="converter" style="text-decoration:none;cursor:pointer;">⇌ Unit Converter</a><a href="/formula-library/" class="pill" data-related-link="formula-library" style="text-decoration:none;cursor:pointer;">𝑓 Formula Library</a><a href="/kks-reference/" class="pill" data-related-link="kks-reference" style="text-decoration:none;cursor:pointer;">🏷 KKS Code Reference</a><a href="/history/" class="pill" data-related-link="history" style="text-decoration:none;cursor:pointer;">🕘 Calculation History</a><a href="/support/" class="pill" data-related-link="support" style="text-decoration:none;cursor:pointer;">❤ Support the Project</a><a href="/reviews/" class="pill" data-related-link="reviews" style="text-decoration:none;cursor:pointer;">★ Reviews &amp; Ratings</a>
+    </div>
+  </div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
+
+    <!-- ============================================================
+         Razorpay Payment Button.
+         Placed directly below the footer (which carries the build number
+         and the "revenue goes to..." line, appended by JS in app.js) so
+         the button sits right under that text, not after the ad further
+         down. Outside #content (the router-controlled area), so it
+         persists across every page navigation instead of getting wiped
+         out. Embed code used exactly as provided by Razorpay, wrapped
+         only in centering/spacing — data-payment_button_id is a real ID
+         (pl_TYqV9ui5mTXTad), not a placeholder.
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:8px 16px 16px;text-align:center;">
+      <form>
+        <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_TYqV9ui5mTXTad" async></script>
+      </form>
+    </div>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
+
+    <!-- Moved out of position:fixed (was overlapping diagram content in
+         the Control Loops simulator whenever a node happened to render in
+         the bottom-right of the viewport) and into normal document flow,
+         as the last item on every page instead. -->
+    <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
+  </div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
