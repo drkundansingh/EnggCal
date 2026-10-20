@@ -67,3 +67,11 @@ happened, since GitHub Pages' cache headers could let the browser satisfy
 that fetch from its own cache instead. This was a real, silent cause of
 "pushed but the browser still shows the old version" even when the stamped
 build ID and committed files were both correct.
+
+---
+## GitHub Pages notes (v11)
+- Pages are real files: `/<route>/index.html`. `.htaccess` is irrelevant on GitHub Pages (kept for Apache hosts).
+- `CNAME` pins the custom domain; `.nojekyll` makes Pages serve the files untouched.
+- After changing content run: `node stamp-build.js`, start `python3 -m http.server 8899`, then `node prerender.js 8899`
+  (regenerates every `/<route>/index.html`, the home snapshot in `index.html`, and `sitemap.xml`).
+- See `ADSENSE-CHECKLIST.md` for the AdSense re-application steps.

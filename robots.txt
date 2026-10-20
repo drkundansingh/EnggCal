@@ -1,7 +1,14 @@
+User-agent: Mediapartners-Google
+Allow: /
+
 User-agent: *
 Allow: /
 Disallow: /?page=admin
 Disallow: /?page=history
 Disallow: /?page=reviews
+# Utility screens that are client-side only and not useful in search results.
+Disallow: /admin/
+Disallow: /history/
+Disallow: /reviews/
 
 Sitemap: https://engineeringhubcalc.com/sitemap.xml

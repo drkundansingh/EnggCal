@@ -14,35 +14,33 @@
 
 <!-- ============================================================
      Google AdSense
-     The adsbygoogle.js loader script and the actual <ins> ad unit are
-     intentionally NOT placed here as static markup. This app renders
-     its content client-side into #content (see js/app.js), so a
-     script tag and ad container sitting here in the raw HTML would
-     exist in the DOM before any real page content does -- exactly the
-     "ads on screens without publisher content" pattern AdSense's own
-     policy explicitly prohibits, and exactly what a crawler that
-     doesn't fully wait for this app's JavaScript to render would see.
-     Both are instead injected by applySeo() in js/app.js, which only
-     ever runs AFTER the current page's real content has already been
-     rendered into the DOM -- so the ad can never appear without the
-     content it is meant to sit alongside. See applySeo() and
-     ensureAdSenseScriptLoaded() there for the actual injection logic.
-     ca-pub-6794299102016509  ->  your AdSense publisher/client ID
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
      ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
 
-<title>Engineering Calculator Hub — Power Plant & Electrical Tools</title>
+<title>Engineering Calculator Hub — Power Plant &amp; Electrical Tools</title>
 <meta name="description" content="Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers — real formulas, verified against standards, no signup required.">
 <link rel="canonical" href="https://engineeringhubcalc.com/">
 <meta name="robots" content="index, follow">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Engineering Calculator Hub">
-<meta property="og:title" content="Engineering Calculator Hub — Power Plant & Electrical Tools">
+<meta property="og:title" content="Engineering Calculator Hub — Power Plant &amp; Electrical Tools">
 <meta property="og:description" content="Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers — real formulas, verified against standards, no signup required.">
 <meta property="og:url" content="https://engineeringhubcalc.com/">
 <meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Engineering Calculator Hub — Power Plant & Electrical Tools">
+<meta name="twitter:title" content="Engineering Calculator Hub — Power Plant &amp; Electrical Tools">
 <meta name="twitter:description" content="Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers — real formulas, verified against standards, no signup required.">
 <meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
 
@@ -59,7 +57,6 @@
   "author": { "@type": "Person", "name": "Dr. Kundan" }
 }
 </script>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/styles.css">
@@ -75,7 +72,215 @@
       <img class="brand-mark" src="./assets/logo.png" alt="Engineering Calculator Hub logo">
       <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
     </div>
-    <nav class="nav" id="nav-root"></nav>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item active" href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item " href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item " href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item " href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item " href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item " href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item " href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item " href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
     <div class="sidebar-foot">
       <button class="theme-toggle" id="themeToggle">☾ Dark</button>
       <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
@@ -93,30 +298,628 @@
         <span class="pill free">FREE PLAN</span>
       </div>
     </div>
-    <main class="content" id="content">
-      <!-- ==========================================================
-           Static fallback content -- NOT decorative, NOT a loading
-           spinner. This app renders everything else client-side (see
-           render() in js/app.js, which clears and rebuilds this
-           element on load and on every navigation), so without this,
-           a crawler that doesn't execute JavaScript, or that gives up
-           before this app's script has finished loading and running,
-           would see a genuinely empty page here. The text below is
-           accurate and matches what a JS-enabled visitor sees on the
-           dashboard a moment later (see pageDashboard() in js/app.js)
-           -- this is a real description of the site, not a distinct
-           version served only to crawlers, so there is no cloaking
-           concern: the same content, just rendered once here as plain
-           HTML and then replaced by the identical live app.
-           ========================================================== -->
-      <div class="page-head">
-        <div class="eyebrow">Engineering Calculator Hub</div>
-        <h1>Plant, instrumentation &amp; process calculations — in one place</h1>
-        <p class="lead">Modular calculators built on transparent, unit-consistent engineering equations. Every estimate shows its formula and assumptions — nothing is a hardcoded lookup.</p>
-      </div>
-      <p style="color:var(--text-dim);line-height:1.7;max-width:70ch;margin-top:14px;">Engineering Calculator Hub is a free collection of calculators for power plant, instrumentation, electrical, civil, and mechanical engineering work — thermal plant estimation, turbine and boiler protection trip parameters, control loop simulation, 4–20&nbsp;mA and DP-to-flow conversions, RTD and thermocouple tables, PID tuning, short-circuit and relay coordination studies, motor and transformer protection settings, SIL/PFDavg verification, HVAC load estimation, and a full SAMA logic diagram simulator with genuine time-stepped dynamic blocks, alarm management, and a real Auto/Manual PID faceplate. Every calculator states how it was verified — against a published standard, a standard method with its scope noted, or as an order-of-magnitude estimation tool — rather than presenting every result with the same unearned confidence.</p>
-    </main>
-    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="?page=about" style="color:inherit;text-decoration:underline;">About</a> · <a href="?page=privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a></footer>
+    <main class="content" id="content"><div class="page-head">
+      <div class="eyebrow">Engineering Calculator Hub</div>
+      <h1>Plant, instrumentation &amp; process calculations — in one place</h1>
+      <p class="lead">Modular calculators built on transparent, unit-consistent engineering equations. Every estimate shows its formula and assumptions — nothing is a hardcoded lookup.</p>
+    </div><h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">Logic Simulator</h2><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:22px;padding:24px 28px;border-color:var(--amber);">
+        <div class="card-icon" style="font-size:2.2rem;margin:0;">⌗</div>
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:10px;"><h3 style="margin:0;font-size:1.15rem;">Simulator</h3><span class="tag free">free</span></div>
+          <p style="margin:6px 0 0;">Build and simulate control logic from standard SAMA function blocks — summers, selects, limiters, logic gates, timers — chained together with live values.</p>
+        </div>
+      </div><h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">Analytics and Calculator</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚡</div>
+          <h3>Thermal Plant Estimator</h3>
+          <p>Estimate thermal power plant heat rate, efficiency, fuel consumption and coal/gas cost from unit MW rating — free online calculator.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇌</div>
+          <h3>Unit Converter</h3>
+          <p>Convert between engineering units for pressure, flow, temperature, length, and more.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🛡</div>
+          <h3>Turbine &amp; Boiler Protection</h3>
+          <p>Reference registry of 117 turbine and boiler protection trip parameters — ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">↻</div>
+          <h3>Control Loops</h3>
+          <p>Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🧭</div>
+          <h3>DP → Flow Wizard</h3>
+          <p>Convert differential pressure to mass or volumetric flow for orifice plates, venturis and flow nozzles — step-by-step wizard.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">↯</div>
+          <h3>4–20 mA Transmitter</h3>
+          <p>Convert between 4–20 mA signal, percentage of range, and engineering units for any transmitter.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≈</div>
+          <h3>DP &amp; Level</h3>
+          <p>Calculate differential pressure level transmitter range for open and closed (wet-leg/dry-leg) tank applications.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇄</div>
+          <h3>I/P Converter</h3>
+          <p>Convert between 4–20 mA current signal and 3–15 psi pneumatic output for I/P converters.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">Ω</div>
+          <h3>RTD</h3>
+          <p>Convert between RTD resistance and temperature for Pt100 and other platinum resistance thermometers.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">μV</div>
+          <h3>Thermocouple</h3>
+          <p>Convert between thermocouple millivolt output and temperature for Type J, K, T, R, S and other types.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">∫</div>
+          <h3>PID Controller</h3>
+          <p>Calculate PID controller gains and simulate step response for process control loop tuning.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⏚</div>
+          <h3>Cable &amp; Gland Sizing</h3>
+          <p>Predict instrumentation or power cable overall diameter from core count, size and armouring, and get the matching standard cable gland size.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⟳</div>
+          <h3>Motor Protection</h3>
+          <p>Calculate motor thermal overload, overcurrent and earth fault protection settings from motor nameplate FLC and locked-rotor data.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⧉</div>
+          <h3>Transformer Protection</h3>
+          <p>Auto-generate transformer overcurrent, earth fault, differential and REF protection settings from nameplate data.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚙</div>
+          <h3>Relay Settings (ABB/Siemens-style)</h3>
+          <p>Calculate I&gt;, I&gt;&gt;, I&gt;&gt;&gt; phase overcurrent and I0&gt;/I0&gt;&gt; earth fault relay pickup settings in primary amps and per-unit — for ABB, Siemens and equivalent numerical relays.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:26px 0 12px;">About &amp; Support</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+        <div class="card-icon">ℹ</div>
+        <h3>About</h3>
+        <p>Who runs Engineering Calculator Hub, what it is for, and the methodology behind its calculators — standards cited, assumptions disclosed, confidence tiers shown.</p>
+      </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+        <div class="card-icon">★</div>
+        <h3>Reviews &amp; Ratings</h3>
+        <p>Read reviews and ratings from engineers using Engineering Calculator Hub.</p>
+      </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+        <div class="card-icon">❤</div>
+        <h3>Support the Project</h3>
+        <p>Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.</p>
+      </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+        <div class="card-icon">✉</div>
+        <h3>Contact</h3>
+        <p>Have a question, found an issue with a calculator, or need assistance? Get in touch with Engineering Calculator Hub.</p>
+      </div></div><div style="margin-top:30px;padding-top:18px;border-top:1px solid var(--line);text-align:center;">
+    <button class="btn secondary collapse-toggle" id="toggleAllCalcsBtn" style="max-width:340px;margin:0 auto;">
+      <span id="toggleAllCalcsLabel">Browse All Calculators by Category</span><span class="chevron">▾</span>
+    </button>
+  </div><div class="collapse-wrap" id="allCalcsCollapseWrap"><div class="collapse-inner" style="margin-top: 10px;"><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">Logic Simulator</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⌗</div>
+          <h3>Simulator</h3>
+          <p>Build and simulate control logic from standard SAMA function blocks — summers, selects, limiters, logic gates, timers — chained together with live values.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">Power Plant</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚡</div>
+          <h3>Thermal Plant Estimator</h3>
+          <p>Estimate thermal power plant heat rate, efficiency, fuel consumption and coal/gas cost from unit MW rating — free online calculator.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🛡</div>
+          <h3>Turbine &amp; Boiler Protection</h3>
+          <p>Reference registry of 117 turbine and boiler protection trip parameters — ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">↻</div>
+          <h3>Control Loops</h3>
+          <p>Live time-stepped simulation of 13 real power plant control loops: drum level, combustion cross-limiting, steam temperature cascade, and more.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">📊</div>
+          <h3>Plant Performance Indicators</h3>
+          <p>Calculate Plant Load Factor, Plant Availability Factor, Auxiliary Power Consumption %, and specific coal/oil consumption from a day’s or shift’s generation and fuel figures.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≣</div>
+          <h3>Boiler Blowdown Rate</h3>
+          <p>Calculate boiler blowdown rate and percentage from steam generation rate and feedwater/boiler water TDS limits.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">❄</div>
+          <h3>Cooling Tower Performance</h3>
+          <p>Calculate cooling tower range, approach, thermal effectiveness, and makeup water demand (evaporation, drift, blowdown) against ambient wet-bulb temperature.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">♨</div>
+          <h3>Feedwater Heater (TTD &amp; DCA)</h3>
+          <p>Calculate Terminal Temperature Difference and Drain Cooler Approach for a feedwater heater from extraction pressure and process temperatures.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⌀</div>
+          <h3>DP Flow — ISO 5167</h3>
+          <p>Steam, water and gas flow from differential pressure using full ISO 5167: Reader-Harris/Gallagher discharge coefficient, IF97 steam properties, thermal expansion, limits of use and uncertainty.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚙</div>
+          <h3>Turbine Stage Flow (Stodola)</h3>
+          <p>Steam flow through a turbine stage group from inlet and exit pressures with the Stodola ellipse law and exact IAPWS-IF97 specific volume.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">♨</div>
+          <h3>FW Heater Extraction Flow</h3>
+          <p>Extraction steam flow of a closed feedwater heater from an exact IF97 energy balance, with cascaded drain and heat-loss factor; also TTD and DCA.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">☔</div>
+          <h3>Desuperheater Spray Flow</h3>
+          <p>Spray-water flow to cool superheated steam to a target temperature from an exact IAPWS-IF97 mass and energy balance, with superheat-margin check.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≋</div>
+          <h3>Condenser Cooling-Water Flow</h3>
+          <p>Cooling-water flow for a steam surface condenser from exhaust heat load using IF97 enthalpies, with TTD, LMTD and water-to-steam ratio.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◐</div>
+          <h3>Tracer Dilution Flow</h3>
+          <p>Primary flow measurement by tracer dilution: constant-rate injection with GUM uncertainty and slug injection by trapezoid integration.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇥</div>
+          <h3>Duct Flow — Pitot Traverse</h3>
+          <p>Flue-gas and air flow in ducts from a multi-point pitot traverse: gas density from Orsat and moisture, actual, standard and normal flow.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">〰</div>
+          <h3>Ultrasonic Transit-Time Flow</h3>
+          <p>Flow and speed of sound from upstream and downstream ultrasonic transit times, with an IAPWS-IF97 water sound-speed plausibility check.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">💧</div>
+          <h3>DM Plant Resin Regeneration</h3>
+          <p>Calculate cation/softener resin bed run length and throughput before regeneration from exchange capacity and raw water hardness.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⛏</div>
+          <h3>Coal &amp; Fuel Handling</h3>
+          <p>GCV to NCV conversion, daily coal requirement, and stock days-of-cover calculators for thermal power plant fuel planning.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🏭</div>
+          <h3>Combustion Emissions (CO₂/SO₂)</h3>
+          <p>Calculate stoichiometric CO2 and SO2 emission rate from fuel ultimate analysis (carbon and sulfur content) and firing rate.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">Instrumentation</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🧭</div>
+          <h3>DP → Flow Wizard</h3>
+          <p>Convert differential pressure to mass or volumetric flow for orifice plates, venturis and flow nozzles — step-by-step wizard.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">√</div>
+          <h3>DP → Flow (Calibrated)</h3>
+          <p>Calculate steam, water, or air flow from a DP transmitter’s calibrated range alone — real IAPWS-IF97 steam tables, no pipe or orifice diameter required.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">♨</div>
+          <h3>Steam Properties</h3>
+          <p>Calculate real steam density and specific volume from pressure and temperature using IAPWS-IF97 — not an ideal-gas approximation.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">↯</div>
+          <h3>4–20 mA Transmitter</h3>
+          <p>Convert between 4–20 mA signal, percentage of range, and engineering units for any transmitter.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≈</div>
+          <h3>DP &amp; Level</h3>
+          <p>Calculate differential pressure level transmitter range for open and closed (wet-leg/dry-leg) tank applications.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◎</div>
+          <h3>Orifice Plate</h3>
+          <p>Size an orifice plate flow element and calculate discharge coefficient, beta ratio and differential pressure.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⏛</div>
+          <h3>Control Valve Sizing</h3>
+          <p>Calculate control valve flow coefficient (Cv) for liquid and gas service.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇄</div>
+          <h3>I/P Converter</h3>
+          <p>Convert between 4–20 mA current signal and 3–15 psi pneumatic output for I/P converters.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">Ω</div>
+          <h3>RTD</h3>
+          <p>Convert between RTD resistance and temperature for Pt100 and other platinum resistance thermometers.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">μV</div>
+          <h3>Thermocouple</h3>
+          <p>Convert between thermocouple millivolt output and temperature for Type J, K, T, R, S and other types.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">∫</div>
+          <h3>PID Controller</h3>
+          <p>Calculate PID controller gains and simulate step response for process control loop tuning.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">±</div>
+          <h3>Loop Uncertainty</h3>
+          <p>Calculate total measurement loop uncertainty by combining individual instrument accuracy contributions.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◌</div>
+          <h3>Valve Cavitation</h3>
+          <p>Check a control valve for cavitation and flashing risk from upstream/downstream pressure and vapor pressure.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⏚</div>
+          <h3>Cable &amp; Gland Sizing</h3>
+          <p>Predict instrumentation or power cable overall diameter from core count, size and armouring, and get the matching standard cable gland size.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🛡</div>
+          <h3>SIL / PFDavg Verification</h3>
+          <p>Calculate PFDavg and the achievable SIL for a safety instrumented function from subsystem failure rates, architecture, and proof-test interval.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⏲</div>
+          <h3>Pressure Gauge Range Selection</h3>
+          <p>Select a standard pressure gauge range so normal operating pressure falls in the recommended 25-75% of full scale.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≋</div>
+          <h3>Interface Level (Two-Liquid DP)</h3>
+          <p>Calculate DP transmitter calibration values and current interface level for a two-liquid (e.g. oil-water) interface measurement.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🔋</div>
+          <h3>4–20 mA Loop Power Budget</h3>
+          <p>Check whether a 4-20mA loop’s supply voltage covers the transmitter’s minimum voltage plus all series wiring and load resistances at 20mA.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">Electrical</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚡</div>
+          <h3>Short Circuit / Fault</h3>
+          <p>Calculate three-phase and single-phase-to-ground short circuit fault current per IEC 60909 — free online electrical fault calculator.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⌒</div>
+          <h3>IDMT Relay Curves</h3>
+          <p>Calculate IDMT relay operating time for Standard/Very/Extremely Inverse curves per IEC 60255 and IEEE C37.112 — free relay curve calculator.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚙</div>
+          <h3>Relay Settings (ABB/Siemens-style)</h3>
+          <p>Calculate I&gt;, I&gt;&gt;, I&gt;&gt;&gt; phase overcurrent and I0&gt;/I0&gt;&gt; earth fault relay pickup settings in primary amps and per-unit — for ABB, Siemens and equivalent numerical relays.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⧖</div>
+          <h3>CT Sizing &amp; Burden</h3>
+          <p>Size current transformers for protection and metering — knee-point voltage, burden, and accuracy class calculations.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⧉</div>
+          <h3>Transformer Protection</h3>
+          <p>Auto-generate transformer overcurrent, earth fault, differential and REF protection settings from nameplate data.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⟳</div>
+          <h3>Motor Protection</h3>
+          <p>Calculate motor thermal overload, overcurrent and earth fault protection settings from motor nameplate FLC and locked-rotor data.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⌶</div>
+          <h3>LSIG Breaker Settings</h3>
+          <p>Calculate Long-time, Short-time, Instantaneous and Ground fault (LSIG) circuit breaker trip unit settings.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇅</div>
+          <h3>Relay Coordination</h3>
+          <p>Check time-current coordination and discrimination margin between upstream and downstream protection relays.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≡</div>
+          <h3>Cable Sizing &amp; Volt Drop</h3>
+          <p>Size power cables for current-carrying capacity and voltage drop, with derating for grouping, temperature and installation method.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚡</div>
+          <h3>Short-Circuit Withstand</h3>
+          <p>Calculate minimum cable cross-sectional area to withstand short-circuit fault current using the adiabatic equation.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">↓</div>
+          <h3>Motor Starting Dip</h3>
+          <p>Estimate voltage dip during DOL motor starting and its impact on the supply network and other connected loads.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≅</div>
+          <h3>Power Factor Correction</h3>
+          <p>Calculate the capacitor bank kVAR needed to correct power factor from an existing value to a target value.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">▤</div>
+          <h3>Battery / DC Sizing</h3>
+          <p>Size a substation DC battery bank for control, protection and emergency load duty cycles.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◱</div>
+          <h3>Transformer Loading</h3>
+          <p>Calculate transformer iron loss, copper loss, efficiency and loading at any load point from nameplate data.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚓</div>
+          <h3>Grounding Grid Design</h3>
+          <p>Calculate substation grounding grid resistance and screen ground potential rise against IEEE 80 tolerable touch voltage.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⊙</div>
+          <h3>NGR Sizing</h3>
+          <p>Size a neutral grounding resistor for a resistance-grounded MV system from system voltage and target fault current.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚡</div>
+          <h3>Generator Sizing</h3>
+          <p>Size a standby generator for connected running load and the DOL starting surge of the largest motor.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≈</div>
+          <h3>Voltage Unbalance &amp; Derating</h3>
+          <p>Calculate three-phase voltage unbalance and the resulting motor derating factor per NEMA MG-1.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⤴</div>
+          <h3>Transformer Inrush</h3>
+          <p>Estimate transformer energization inrush current and decay time to check protection relay settings.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">Process &amp; Mechanical</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">→</div>
+          <h3>Pipe Pressure Drop</h3>
+          <p>Calculate pipe friction pressure drop, velocity and flow regime using the Darcy-Weisbach equation with Swamee-Jain friction factor.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◯</div>
+          <h3>Pipe Wall Thickness (ASME B31.3)</h3>
+          <p>Calculate minimum required process piping wall thickness per ASME B31.3, with corrosion allowance and mill tolerance.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚠</div>
+          <h3>Relief Valve Sizing (API 520)</h3>
+          <p>Preliminary relief valve orifice area sizing for gas/vapor and liquid service per API 520 Part I core equations.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">↻</div>
+          <h3>Pump NPSH &amp; Affinity Laws</h3>
+          <p>Calculate NPSH available, check margin against NPSH required, and apply pump affinity laws for a speed change.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">§</div>
+          <h3>Pump Specific Speed</h3>
+          <p>Calculate centrifugal pump specific speed (Ns) and get an impeller type (radial/mixed/axial) selection guide.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≈</div>
+          <h3>Fan / Blower Laws &amp; Power</h3>
+          <p>Apply fan affinity laws for a speed change and calculate fan shaft power from flow, pressure rise and efficiency.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇗</div>
+          <h3>Compressor Power (Adiabatic)</h3>
+          <p>Calculate ideal-gas adiabatic compression work, discharge temperature, and shaft power from suction/discharge pressure and mass flow.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">●</div>
+          <h3>Bearing L10 Life (ISO 281)</h3>
+          <p>Calculate rolling element bearing L10 life in revolutions and hours from dynamic load rating and equivalent load.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇌</div>
+          <h3>Heat Exchanger LMTD &amp; Area</h3>
+          <p>Calculate log mean temperature difference (LMTD) and required heat transfer area for a heat exchanger from its four terminal temperatures.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">▭</div>
+          <h3>Horizontal Tank Volume (Dip Chart)</h3>
+          <p>Calculate partial and total volume of a horizontal cylindrical tank from diameter, length and liquid fill depth — exact circular-segment geometry.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">▯</div>
+          <h3>Vertical Tank Volume</h3>
+          <p>Calculate vertical storage tank volume from diameter and cylinder height, with optional hemispherical or conical heads.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◎</div>
+          <h3>Pressure Vessel Wall Thickness (ASME VIII)</h3>
+          <p>Calculate minimum shell thickness for a thin-wall pressure vessel per ASME Section VIII Division 1, UG-27.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≋</div>
+          <h3>Pipe Insulation Heat Loss</h3>
+          <p>Calculate steady-state heat loss through cylindrical pipe or vessel insulation from thickness, conductivity and surface conditions.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">↔</div>
+          <h3>Thermal (Linear) Expansion</h3>
+          <p>Calculate linear thermal expansion of pipe or equipment from length, material coefficient, and temperature change.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇑</div>
+          <h3>Gas Compression Work</h3>
+          <p>Calculate ideal-gas isothermal and adiabatic compression work and power for compressor sizing estimates.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚙</div>
+          <h3>Bolt Torque &amp; Preload</h3>
+          <p>Calculate bolt tightening torque from target clamp force and nut factor (T=K×D×F), or clamp force from ISO 898-1 bolt grade and ISO 724 stress area.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⊙</div>
+          <h3>Gear Ratio &amp; Speed/Torque</h3>
+          <p>Calculate gear ratio, output speed and output torque from tooth counts and mesh efficiency.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◐</div>
+          <h3>Belt / Pulley Speed Ratio</h3>
+          <p>Calculate driven pulley speed and belt speed from pulley diameters and driving speed.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">HVAC &amp; Refrigeration</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">❄</div>
+          <h3>Sensible Heat Load</h3>
+          <p>Calculate HVAC sensible cooling or heating load from airflow and temperature difference, in imperial or metric units.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">▤</div>
+          <h3>Duct Sizing (Velocity Method)</h3>
+          <p>Calculate required duct cross-sectional area and round-duct diameter from airflow and design velocity.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≈</div>
+          <h3>Refrigeration Tons ⇌ kW/BTU</h3>
+          <p>Convert refrigeration capacity between tons, kW and BTU/hr using the standard 1 ton = 3.5168 kW definition.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">Civil Engineering</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">─</div>
+          <h3>Beam Analysis (Deflection, Moment, Shear)</h3>
+          <p>Calculate beam deflection, maximum bending moment and shear force for simply-supported and cantilever beams, point load or UDL.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">▭</div>
+          <h3>Section Properties (I, S)</h3>
+          <p>Calculate moment of inertia and section modulus for rectangular, circular, and hollow-circular sections.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">┃</div>
+          <h3>Column Buckling (Euler)</h3>
+          <p>Calculate Euler critical buckling load and slenderness ratio for a column with any standard end-support condition.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">±</div>
+          <h3>Combined Axial &amp; Bending Stress</h3>
+          <p>Calculate combined axial and bending stress on a structural section from axial load, bending moment, area and section modulus.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⬛</div>
+          <h3>Steel Weight (Bar/Plate/Pipe)</h3>
+          <p>Calculate the weight of round bar, flat plate, or pipe steel sections from dimensions and density.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">▦</div>
+          <h3>Concrete Volume &amp; Weight</h3>
+          <p>Calculate concrete volume and weight for slabs, columns, and footings from dimensions and unit weight.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≈</div>
+          <h3>Water-Cement Ratio</h3>
+          <p>Calculate water-cement ratio, or solve for water or cement quantity from a target ratio.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">▤</div>
+          <h3>Concrete Nominal Mix (IS 456)</h3>
+          <p>Calculate cement, sand and aggregate quantities for IS 456:2000 nominal concrete mixes M5 to M20.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">#</div>
+          <h3>Rebar Weight &amp; Quantity</h3>
+          <p>Calculate reinforcement bar weight from diameter and length, with the familiar d²/162 site rule of thumb shown alongside.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">◺</div>
+          <h3>Earth Pressure (Rankine)</h3>
+          <p>Calculate active and passive earth pressure on a retaining wall using Rankine theory, with optional cohesion.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">○</div>
+          <h3>Soil Phase &amp; Effective Stress</h3>
+          <p>Calculate void ratio, porosity, and effective (Terzaghi) stress from total stress and pore water pressure.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">≋</div>
+          <h3>Manning's Open Channel Flow</h3>
+          <p>Calculate open channel flow velocity and discharge using Manning’s equation for rectangular and trapezoidal channels.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⊓</div>
+          <h3>Weir Flow (Rectangular)</h3>
+          <p>Calculate discharge over a rectangular sharp-crested weir using the Francis formula.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">△</div>
+          <h3>Land Area &amp; Earthwork Volume</h3>
+          <p>Calculate triangle and trapezoid land area, slope grade, and cut/fill earthwork volume by the average end area method.</p>
+        </div></div><h2 class="panel-title" style="font-size:.78rem;margin:22px 0 12px;">Reference</h2><div class="grid cols-4"><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⇌</div>
+          <h3>Unit Converter</h3>
+          <p>Convert between engineering units for pressure, flow, temperature, length, and more.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">𝑓</div>
+          <h3>Formula Library</h3>
+          <p>Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🏷</div>
+          <h3>KKS Code Reference</h3>
+          <p>Kraftwerk-Kennzeichensystem (KKS) tag-building methodology and a click-down Area → System → Subsystem explorer, plus signal suffix codes (XB, XG, XH, XQ...) — for a supercritical coal-fired unit.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🔤</div>
+          <h3>ISA-5.1 Tag Reference</h3>
+          <p>Complete ANSI/ISA-5.1 instrument identification letter table and common tag combinations (PT, FIC, PSHH...), with a direct comparison to KKS — free searchable reference.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">🕘</div>
+          <h3>Calculation History</h3>
+          <p>Your saved calculation history for this device.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">❤</div>
+          <h3>Support the Project</h3>
+          <p>Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">★</div>
+          <h3>Reviews &amp; Ratings</h3>
+          <p>Read reviews and ratings from engineers using Engineering Calculator Hub.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">📖</div>
+          <h3>Engineering Guides</h3>
+          <p>Plain-language engineering guides for power plant and instrumentation engineers: ISO 5167 flow measurement, IAPWS-IF97 steam tables, feedwater heaters, SAMA diagrams, heat rate and condensers.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">ℹ</div>
+          <h3>About</h3>
+          <p>Who runs Engineering Calculator Hub, what it is for, and the methodology behind its calculators — standards cited, assumptions disclosed, confidence tiers shown.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">✉</div>
+          <h3>Contact</h3>
+          <p>Have a question, found an issue with a calculator, or need assistance? Get in touch with Engineering Calculator Hub.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">⚿</div>
+          <h3>Privacy Policy</h3>
+          <p>How Engineering Calculator Hub handles data: Google Analytics, Google AdSense, Razorpay payments, and browser-local calculation history storage.</p>
+        </div><div class="card hover-link" role="link" tabindex="0" style="text-decoration:none;color:inherit;border-color:var(--amber);">
+          <span class="tag free">free</span>
+          <div class="card-icon">§</div>
+          <h3>Terms of Use</h3>
+          <p>Terms of use and disclaimer for Engineering Calculator Hub: informational use only, no warranty, acceptable use and third-party services.</p>
+        </div></div></div></div><div style="margin-top:22px;"><div class="disclaimer">This application is intended for engineering education, preliminary calculations, estimation, and reference purposes. Results should be verified against approved engineering standards, manufacturer data, plant design documents, calibrated instruments, and qualified engineering personnel before being used for operational, safety, or design decisions.</div></div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
 
     <!-- ============================================================
          Razorpay Payment Button.

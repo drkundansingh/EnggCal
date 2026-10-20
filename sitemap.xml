@@ -2,512 +2,650 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://engineeringhubcalc.com/</loc>
-    <lastmod>2026-09-14</lastmod>
-    <changefreq>weekly</changefreq>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=thermal-plant</loc>
-    <lastmod>2026-09-11</lastmod>
+    <loc>https://engineeringhubcalc.com/guide-orifice-venturi-flow-measurement/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=protection</loc>
-    <lastmod>2026-09-11</lastmod>
+    <loc>https://engineeringhubcalc.com/guide-steam-tables-iapws-if97/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=control-loops</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/guide-feedwater-heaters-ttd-dca/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=short-circuit</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/guide-sama-diagrams-explained/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=idmt</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/guide-heat-rate-and-efficiency/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=relay-settings</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/guide-condenser-performance-cooling-water/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=ct-sizing</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/iso5167-flow/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=transformer-prot</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/stodola-flow/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=motor-prot</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/heater-extraction-flow/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=lsig</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/desuperheater-spray/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=coordination</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/condenser-cw-flow/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=cable-sizing</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/tracer-dilution-flow/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=cable-withstand</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/pitot-duct-flow/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=motor-start</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/ultrasonic-flow/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=pf-correction</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/thermal-plant/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=battery-sizing</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/protection/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=tx-loading</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/control-loops/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=grounding-grid</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/short-circuit/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=ngr-sizing</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/idmt/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=generator-sizing</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/relay-settings/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=voltage-unbalance</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/ct-sizing/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=tx-inrush</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/transformer-prot/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=dp-flow-wizard</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/motor-prot/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=dp-flow-cal</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/lsig/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=steam-props</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/coordination/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=converter</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/cable-sizing/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=transmitter</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/cable-withstand/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=dp-level</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/motor-start/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=orifice</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/pf-correction/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=control-valve</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/battery-sizing/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=ip-converter</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/tx-loading/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=rtd</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/grounding-grid/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=thermocouple</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/ngr-sizing/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=pid</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/generator-sizing/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=loop-uncertainty</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/voltage-unbalance/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=cavitation</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/tx-inrush/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=cable-gland</loc>
-    <lastmod>2026-09-11</lastmod>
+    <loc>https://engineeringhubcalc.com/dp-flow-wizard/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=formula-library</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/dp-flow-cal/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=support</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/steam-props/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=pipe-pressure-drop</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/converter/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=pipe-wall-thickness</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/transmitter/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=relief-valve</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/dp-level/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=pump-npsh</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/orifice/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=pump-specific-speed</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/control-valve/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=fan-laws</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/ip-converter/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=bearing-life</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/rtd/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=heat-exchanger</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/thermocouple/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=horizontal-tank</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/pid/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=vertical-tank</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/loop-uncertainty/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=vessel-wall</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/cavitation/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=insulation-loss</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/sil-verification/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=thermal-expansion</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/gauge-range/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=gas-compression</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/interface-level/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=bolt-torque</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/loop-power/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=gear-ratio</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/cable-gland/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=belt-pulley</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/formula-library/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=hvac-load</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/kks-reference/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=duct-sizing</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/isa-tag-reference/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=refrigeration-tons</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/support/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=sama-logic</loc>
-    <lastmod>2026-09-11</lastmod>
+    <loc>https://engineeringhubcalc.com/about/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-beam</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/contact/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-section</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/privacy/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-column</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/terms/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-combined-stress</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/guides/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-steel-weight</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/pipe-pressure-drop/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-concrete-volume</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/pipe-wall-thickness/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-water-cement</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/relief-valve/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-concrete-mix</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/pump-npsh/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-rebar</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/pump-specific-speed/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-earth-pressure</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/fan-laws/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-soil-phase</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/compressor-power/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-manning</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/plant-performance/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-weir</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/boiler-blowdown/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=civil-earthwork</loc>
-    <lastmod>2026-09-08</lastmod>
+    <loc>https://engineeringhubcalc.com/cooling-tower/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=sil-verification</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/feedwater-heater/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=gauge-range</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/water-chemistry/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=interface-level</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/coal-fuel/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=loop-power</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/emissions/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=compressor-power</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/bearing-life/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=boiler-blowdown</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/heat-exchanger/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=cooling-tower</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/horizontal-tank/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=about</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/vertical-tank/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/vessel-wall/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/insulation-loss/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/thermal-expansion/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/gas-compression/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/bolt-torque/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/gear-ratio/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/belt-pulley/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/hvac-load/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/duct-sizing/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/refrigeration-tons/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/sama-logic/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-beam/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-section/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-column/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-combined-stress/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-steel-weight/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-concrete-volume/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-water-cement/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-concrete-mix/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-rebar/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-earth-pressure/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-soil-phase/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=privacy</loc>
-    <lastmod>2026-09-14</lastmod>
+    <loc>https://engineeringhubcalc.com/civil-manning/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://engineeringhubcalc.com/civil-weir/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://engineeringhubcalc.com/?page=contact</loc>
-    <lastmod>2026-09-17</lastmod>
+    <loc>https://engineeringhubcalc.com/civil-earthwork/</loc>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.8</priority>
   </url>
 </urlset>
