@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZZ6H0JNGP6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZZ6H0JNGP6');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
+     ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
+<title>KKS Code Reference — Supercritical Thermal Plant | EngCalc Hub</title>
+<meta name="description" content="Kraftwerk-Kennzeichensystem (KKS) tag-building methodology and a click-down Area → System → Subsystem explorer, plus signal suffix codes (XB, XG, XH, XQ...) — for a supercritical coal-fired unit.">
+<link rel="canonical" href="https://engineeringhubcalc.com/kks-reference/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Engineering Calculator Hub">
+<meta property="og:title" content="KKS Code Reference — Supercritical Thermal Plant | EngCalc Hub">
+<meta property="og:description" content="Kraftwerk-Kennzeichensystem (KKS) tag-building methodology and a click-down Area → System → Subsystem explorer, plus signal suffix codes (XB, XG, XH, XQ...) — for a supercritical coal-fired unit.">
+<meta property="og:url" content="https://engineeringhubcalc.com/kks-reference/">
+<meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="KKS Code Reference — Supercritical Thermal Plant | EngCalc Hub">
+<meta name="twitter:description" content="Kraftwerk-Kennzeichensystem (KKS) tag-building methodology and a click-down Area → System → Subsystem explorer, plus signal suffix codes (XB, XG, XH, XQ...) — for a supercritical coal-fired unit.">
+<meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Engineering Calculator Hub",
+  "url": "https://engineeringhubcalc.com/",
+  "description": "Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web-based)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dr. Kundan" }
+}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What do the letters in a KKS code actually mean?","acceptedAnswer":{"@type":"Answer","text":"Reading left to right, each letter narrows the identification further: the first letter is the main plant area (H for the boiler, L for the steam-water cycle, M for the turbine-generator, and so on), the second letter narrows that to a system within the area, and a third letter (where used) narrows it to a specific sub-system. The digits that follow number the individual instance — e.g. which of several identical pumps."}},{"@type":"Question","name":"Why does this reference call out HAG specifically as \"not used in a natural-circulation boiler\"?","acceptedAnswer":{"@type":"Answer","text":"It’s one of the few places the KKS code itself tells you something about the unit’s design: HAG is the boiler’s circulation system. A drum-type (natural or forced circulation) boiler has one; a once-through supercritical boiler, which has no steam drum at all, does not — so whether a real KKS list for a given unit includes an HAG tag is itself a quick, genuine tell for which boiler type you’re looking at."}},{"@type":"Question","name":"Why does the steam-water cycle (L) have its own water treatment codes (LD) separate from the plant’s general water treatment (G)?","acceptedAnswer":{"@type":"Answer","text":"They serve genuinely different water qualities and purposes. G covers raw, service, and drinking water treatment for the plant as a whole. L’s own LD codes cover condensate polishing and deaeration — treatment of the actual high-purity boiler feedwater circulating inside the steam-water cycle itself, which has far stricter chemistry requirements than general plant water."}},{"@type":"Question","name":"Is KKS still the current standard, or has it been replaced?","acceptedAnswer":{"@type":"Answer","text":"KKS remains very widely used, especially on existing plants and across India, China, and the Middle East, but it is gradually being superseded on new projects by RDS-PP (Reference Designation System for Power Plants), an IEC-aligned successor with a broadly similar area-first structure. Most engineers working on brownfield or existing supercritical units will still encounter KKS directly."}},{"@type":"Question","name":"Does every plant use exactly these codes?","acceptedAnswer":{"@type":"Answer","text":"The main-group letters and the most common subgroups (economizer, superheater, feedwater pump, and so on) are standardized and consistent project to project, which is the whole point of KKS. Lower-level details — exact numbering, some project-specific subgroup assignments — are agreed per project, so always confirm against your own plant’s actual KKS list for anything safety- or maintenance-critical; treat this as a reference for understanding the system, not a substitute for your plant’s documentation."}},{"@type":"Question","name":"What do the numbers after the letters mean in a full tag like 10HAC01AP001?","acceptedAnswer":{"@type":"Answer","text":"They come from two entirely different, separately-agreed number tables, which is easy to miss. 01 (right after HAC) numbers WHICH instance of the economizer system this is — relevant if the unit has more than one. 001 (at the very end) numbers a specific component belonging to the equipment unit AP identifies — e.g. one particular sensor or terminal box on that pump. Neither number is arbitrary, but they answer different questions: \"which system instance\" versus \"which part of this specific device\"."}},{"@type":"Question","name":"The explorer shows some systems with no subsystems listed below them — is that a gap in this reference?","acceptedAnswer":{"@type":"Answer","text":"No — for a system like CW (control rooms), the two-letter system code is itself the most specific standardized KKS tag; there’s no further F3 breakdown to show because the real system doesn’t have project-agnostic subsystem codes at that level. The explorer says so directly rather than just showing an empty, unexplained space."}},{"@type":"Question","name":"How is a specific feedback or command signal actually named — e.g. the \"on\" feedback for a pump?","acceptedAnswer":{"@type":"Answer","text":"That’s what the signal suffix codes (further down this page) are for, a finer layer within the same KKS system: appended directly after a device’s own equipment tag, a code like XB01 identifies one individual feedback bit read back from it. XB01 specifically covers \"on/open\" feedback — confirmation from the drive that it is actually on, not the command that told it to turn on — and many projects also wire the complementary \"confirmed off\" feedback 50 numbers later (XB51) alongside it, so a genuine OFF state can be told apart from a stuck contact."}},{"@type":"Question","name":"What code is used for a command signal, and how do DI, DO, AI, and AO map to KKS?","acceptedAnswer":{"@type":"Answer","text":"Commands use a separate KKS suffix scheme from the X-prefix Signal Code covered above — the Application Code, prefixed Y instead of X, officially listed in the McGraw-Hill KKS appendix alongside its Signal Code counterpart. Mapped to the usual PLC/DCS signal classes: DI is XG (a binary signal wired straight from a field switch); AI is XQ (a continuous incoming analog reading); DO is YB (a binary/discrete command — on/off, open/close — sent out to a drive); AO is YQ (a continuous outgoing analog value, e.g. a 4-20mA setpoint to a valve positioner). All four are covered in the Signal Suffix Codes section below, alongside the confirmed XB01/YB01 command-versus-feedback pair."}}]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":3,"name":"KKS Code Reference — Supercritical Thermal Plant","item":"https://engineeringhubcalc.com/kks-reference/"}]}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body data-theme="dark">
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/logo.png" alt="Engineering Calculator Hub logo">
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
+    </div>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item " href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item " href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item " href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item " href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item " href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item " href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item active" href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item " href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="themeToggle">☾ Dark</button>
+      <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="search-box">
+        <span>⌕</span>
+        <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
+      </div>
+      <div class="topbar-actions">
+        <span class="pill free">FREE PLAN</span>
+      </div>
+    </div>
+    <main class="content" id="content"><div class="page-head"><div class="eyebrow">Reference</div><h1>KKS Code Reference — Supercritical Thermal Plant</h1>
+    <p class="lead">Kraftwerk-Kennzeichensystem (Power Plant Identification System) codes for a coal-fired supercritical unit, with a full tag-building methodology and a click-down Area → System → Subsystem explorer — boiler, turbine-generator, coal handling, cooling water, water treatment, electrical, and I&amp;C — plus the finer signal suffix codes (XB, XG, XH, XQ...) appended after an equipment tag to identify an individual command or feedback signal. Searchable by code or by what a system actually does.</p></div><h2 class="panel-title" style="margin-top:4px;">KKS Tag Methodology</h2><div class="card">
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;">A complete KKS tag is built from four breakdown levels, read left to right, each narrowing the identification further. Worked example — a specific pump on the economizer system of Unit 1:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;font-family:monospace;font-size:1.05rem;">
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(96,165,250,.15);color:var(--blue);">10</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(251,191,36,.15);color:var(--amber);">HAC</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(74,222,128,.15);color:var(--green);">01</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(244,114,182,.15);color:#f472b6;">AP</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(168,85,247,.15);color:#a855f7;">001</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 0 — Total Plant Key: <code>10</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">Identifies the unit itself (e.g. Unit 1 of a multi-unit station). Plant-and-project-specific, agreed once at project start.</div></div>
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 1 — Function Key (Process Code): <code>HAC</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">The area/system/subsystem code covered by the explorer below: F1 (H, the main group — boiler), F2 (A, narrows to the pressure system), F3 (C, narrows to the economizer specifically). This is the part that says WHAT the equipment does, independent of how many identical ones exist.</div></div>
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 2 — Equipment Unit Key: <code>01</code> + <code>AP</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">A sequence number (01 = the first economizer on this system, distinguishing it from a second if one exists) followed by an equipment-unit letter code from a separate table (AP = pump, AA = valve, AC = heat exchanger, and so on) identifying WHAT KIND of physical device this specific item is.</div></div>
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 3 — Component Key: <code>001</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">Numbers one individual component belonging to that equipment unit, e.g. a specific motor, sensor, or terminal box mounted on the pump itself. Not every tag needs this level — it’s only added when identifying a part OF the equipment unit, not the unit as a whole.</div></div>
+    </div>
+    <p style="color:var(--text-dim);font-size:.85rem;line-height:1.6;margin-top:14px;">Put together: <code>10HAC01AP001</code> reads as "Unit 1, economizer system, first instance, a pump, component 001 of it" — unique, and readable without a lookup table once you know the four levels. The area/system/subsystem explorer below builds exactly the Level 1 portion of this — pick an area, then a system, then a subsystem, to land on its F1F2F3 code.</p>
+  </div><h2 class="panel-title" style="margin-top:28px;">Explore by Area → System → Subsystem</h2><div class="card"><div style="color:var(--text-dim);font-size:.82rem;margin-bottom:10px;min-height:1.2em;">Select an area to begin</div><div class="tabs" id="kksExpAreas" style="flex-wrap:wrap;"><div class="tab ">Boiler / Steam Generator (H)</div><div class="tab ">Ash &amp; Flue Gas Treatment (H)</div><div class="tab ">Steam-Water Cycle (L)</div><div class="tab ">Turbine-Generator (M)</div><div class="tab ">Coal Handling &amp; Fuel Supply (E)</div><div class="tab ">Cooling Water (P)</div><div class="tab ">Water Treatment &amp; Supply (G)</div><div class="tab ">Electrical (A, B)</div><div class="tab ">Instrumentation &amp; Control (C)</div><div class="tab ">Structures / Civil (U)</div></div><div class="tabs" id="kksExpSystems" style="flex-wrap:wrap;margin-top:10px;"></div><div class="grid cols-2" id="kksExpSubsystems" style="margin-top:14px;"></div></div><h2 class="panel-title" style="margin-top:28px;">Full Code List</h2><div class="field" style="max-width:420px;"><input type="text" id="kksSearch" placeholder="Search by code or system, e.g. 'HAG', 'economizer', 'circulating water'..."></div><div class="tabs" id="kksCats" style="flex-wrap:wrap;"><div class="tab active">All</div><div class="tab ">Boiler / Steam Generator (H)</div><div class="tab ">Ash &amp; Flue Gas Treatment (H)</div><div class="tab ">Steam-Water Cycle (L)</div><div class="tab ">Turbine-Generator (M)</div><div class="tab ">Coal Handling &amp; Fuel Supply (E)</div><div class="tab ">Cooling Water (P)</div><div class="tab ">Water Treatment &amp; Supply (G)</div><div class="tab ">Electrical (A, B)</div><div class="tab ">Instrumentation &amp; Control (C)</div><div class="tab ">Structures / Civil (U)</div></div><div class="grid cols-2" id="kksGrid"><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>H <span style="color:var(--text-dim);font-weight:400;">— Conventional heat generation</span></h4>
+          <p>KKS main group letter for the whole boiler/steam generator area.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HA <span style="color:var(--text-dim);font-weight:400;">— Pressure system — feedwater and steam sections</span></h4>
+          <p>The boiler's actual pressure parts, in flow order.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAA <span style="color:var(--text-dim);font-weight:400;">— IP/LP part-flow feed heating system (flue-gas-heated)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAB <span style="color:var(--text-dim);font-weight:400;">— HP part-flow feed heating system (flue-gas-heated)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAC <span style="color:var(--text-dim);font-weight:400;">— Economizer system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAD <span style="color:var(--text-dim);font-weight:400;">— Evaporator system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAG <span style="color:var(--text-dim);font-weight:400;">— Circulation system</span></h4>
+          <p>Not used in a natural-circulation boiler — its presence or absence in a real HAG tag is itself a quick sanity check on whether the unit is drum-type or once-through supercritical.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAH <span style="color:var(--text-dim);font-weight:400;">— HP superheater system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAJ <span style="color:var(--text-dim);font-weight:400;">— Reheater system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAK <span style="color:var(--text-dim);font-weight:400;">— Secondary reheater system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAM <span style="color:var(--text-dim);font-weight:400;">— Triflux system</span></h4>
+          <p>A combined economizer/evaporator/superheater surface arrangement used in some once-through supercritical designs.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAN <span style="color:var(--text-dim);font-weight:400;">— Pressure system drainage and venting systems</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAV <span style="color:var(--text-dim);font-weight:400;">— Lubricant supply system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAW <span style="color:var(--text-dim);font-weight:400;">— Sealing fluid supply system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAX <span style="color:var(--text-dim);font-weight:400;">— Fluid supply system for control and protection equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HAY <span style="color:var(--text-dim);font-weight:400;">— Control and protection equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HB <span style="color:var(--text-dim);font-weight:400;">— Support structure, enclosure, steam generator interior</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HBA <span style="color:var(--text-dim);font-weight:400;">— Frame incl. foundations</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HBB <span style="color:var(--text-dim);font-weight:400;">— Enclosures</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HBC <span style="color:var(--text-dim);font-weight:400;">— Brick linings incl. insulating brickwork</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HBD <span style="color:var(--text-dim);font-weight:400;">— Platforms, stairways</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HF <span style="color:var(--text-dim);font-weight:400;">— Bunker, feeder and pulverizing system</span></h4>
+          <p>The mills/pulverizers, not the raw coal handling &amp; stacking system (that's under E).</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HFA <span style="color:var(--text-dim);font-weight:400;">— Bunker for pulverizing system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HFB <span style="color:var(--text-dim);font-weight:400;">— Feeder system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HFC <span style="color:var(--text-dim);font-weight:400;">— Pulverizing system (incl. classifier)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HFD <span style="color:var(--text-dim);font-weight:400;">— Flue gas return system (mill)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HFE <span style="color:var(--text-dim);font-weight:400;">— Mill air system, carrier air system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HFG <span style="color:var(--text-dim);font-weight:400;">— Pulverized coal temporary storage bunker after central pulverizing system</span></h4>
+          <p>Only present with indirect (central) firing, not direct/unit firing.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HH <span style="color:var(--text-dim);font-weight:400;">— Main firing system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHA <span style="color:var(--text-dim);font-weight:400;">— Main burners</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHB <span style="color:var(--text-dim);font-weight:400;">— Retarded combustion grate</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHE <span style="color:var(--text-dim);font-weight:400;">— Pulverized coal bin, forwarding and distribution system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHF <span style="color:var(--text-dim);font-weight:400;">— Oil temporary storage, pump and distribution system</span></h4>
+          <p>Light/heavy fuel oil for start-up and flame stabilization.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHG <span style="color:var(--text-dim);font-weight:400;">— Gas pressure reduction, distribution system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHL <span style="color:var(--text-dim);font-weight:400;">— Combustion air supply system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHM <span style="color:var(--text-dim);font-weight:400;">— Atomized medium supply system (steam)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HHV <span style="color:var(--text-dim);font-weight:400;">— Electric heating system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HL <span style="color:var(--text-dim);font-weight:400;">— Combustion air system (primary, secondary air)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HLA <span style="color:var(--text-dim);font-weight:400;">— Ducting system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HLB <span style="color:var(--text-dim);font-weight:400;">— Fan system, forced-draught fan (FD fan) system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HLC <span style="color:var(--text-dim);font-weight:400;">— External air heating system (not flue-gas-heated)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HLD <span style="color:var(--text-dim);font-weight:400;">— Air heating system (flue-gas-heated)</span></h4>
+          <p>Regenerative/tubular air preheater.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HN <span style="color:var(--text-dim);font-weight:400;">— Flue gas exhaust (without flue gas treatment)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HNA <span style="color:var(--text-dim);font-weight:400;">— Ducting system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HNC <span style="color:var(--text-dim);font-weight:400;">— Induced-draught fan system (ID fan)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HNE <span style="color:var(--text-dim);font-weight:400;">— Smoke stack system (chimney)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Boiler / Steam Generator (H)</span></div>
+          <h4>HNF <span style="color:var(--text-dim);font-weight:400;">— Flue gas recirculation system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HD <span style="color:var(--text-dim);font-weight:400;">— Furnace ash, slag and dust removal</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HDA <span style="color:var(--text-dim);font-weight:400;">— Furnace ash removal, furnace slag removal, bed ash removal</span></h4>
+          <p>Bottom ash system.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HDB <span style="color:var(--text-dim);font-weight:400;">— Bed ash return system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HDC <span style="color:var(--text-dim);font-weight:400;">— Flue dust discharge and return system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HDD <span style="color:var(--text-dim);font-weight:400;">— Mechanical dust handling system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HDE <span style="color:var(--text-dim);font-weight:400;">— Electrostatic precipitator (ESP)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HDF <span style="color:var(--text-dim);font-weight:400;">— Cyclone dust removal and return system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HDT <span style="color:var(--text-dim);font-weight:400;">— Fluid supply system for ash, slag and dust moistening</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HR <span style="color:var(--text-dim);font-weight:400;">— Chemical flue gas treatment, adsorptive process</span></h4>
+          <p>e.g. dry sorbent injection.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HS <span style="color:var(--text-dim);font-weight:400;">— Chemical flue gas treatment, catalytic process</span></h4>
+          <p>e.g. SCR/DeNOx.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Ash &amp; Flue Gas Treatment (H)</span></div>
+          <h4>HSA <span style="color:var(--text-dim);font-weight:400;">— Flue gas ducting system within HS</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>L <span style="color:var(--text-dim);font-weight:400;">— Steam, water, gas cycles</span></h4>
+          <p>KKS main group letter for the whole steam-water cycle area (feedwater, steam, condensate).</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LA <span style="color:var(--text-dim);font-weight:400;">— Feedwater system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LAA <span style="color:var(--text-dim);font-weight:400;">— Storage, deaeration (incl. feedwater tank)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LAB <span style="color:var(--text-dim);font-weight:400;">— Feedwater piping system (excl. feedwater pump and heating)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LAC <span style="color:var(--text-dim);font-weight:400;">— Feedwater pump system</span></h4>
+          <p>Boiler feed pumps — in a supercritical unit these run at markedly higher discharge pressure than a subcritical drum plant.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LAD <span style="color:var(--text-dim);font-weight:400;">— HP feedwater heating system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LAE <span style="color:var(--text-dim);font-weight:400;">— HP desuperheating (attemperation) spray system</span></h4>
+          <p>Especially critical on a once-through supercritical boiler, which has no steam drum to passively damp temperature swings — spray attemperation is the primary means of steam temperature control.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LB <span style="color:var(--text-dim);font-weight:400;">— Steam system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBA <span style="color:var(--text-dim);font-weight:400;">— Main steam piping system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBB <span style="color:var(--text-dim);font-weight:400;">— Hot reheat piping system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBC <span style="color:var(--text-dim);font-weight:400;">— Cold reheat piping system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBD <span style="color:var(--text-dim);font-weight:400;">— Extraction piping system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBF <span style="color:var(--text-dim);font-weight:400;">— HP reducing station</span></h4>
+          <p>Part of the HP bypass system, routing main steam around the turbine during start-up/trip.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBG <span style="color:var(--text-dim);font-weight:400;">— Auxiliary steam piping system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBH <span style="color:var(--text-dim);font-weight:400;">— Start-up steam system, shutdown steam system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBJ <span style="color:var(--text-dim);font-weight:400;">— Moisture separator/reheater (MSR)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBQ <span style="color:var(--text-dim);font-weight:400;">— Extraction steam piping for HP feedwater heating</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBS <span style="color:var(--text-dim);font-weight:400;">— Extraction steam piping for LP feedwater heating (main condensate)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LBW <span style="color:var(--text-dim);font-weight:400;">— Sealing steam system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LC <span style="color:var(--text-dim);font-weight:400;">— Condensate system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LCA <span style="color:var(--text-dim);font-weight:400;">— Main condensate piping system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LCB <span style="color:var(--text-dim);font-weight:400;">— Main condensate pump system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LCC <span style="color:var(--text-dim);font-weight:400;">— LP feedwater heating system, condensate polishing plant</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LD <span style="color:var(--text-dim);font-weight:400;">— Water treatment (for the cycle itself)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LDH <span style="color:var(--text-dim);font-weight:400;">— Deaeration</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Steam-Water Cycle (L)</span></div>
+          <h4>LDB <span style="color:var(--text-dim);font-weight:400;">— Independent demineralizing plant system</span></h4>
+          <p>Condensate polishing.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>M <span style="color:var(--text-dim);font-weight:400;">— Main machine sets</span></h4>
+          <p>KKS main group letter for the turbine and generator.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MA <span style="color:var(--text-dim);font-weight:400;">— Steam turbine plant</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAA <span style="color:var(--text-dim);font-weight:400;">— HP turbine</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAB <span style="color:var(--text-dim);font-weight:400;">— IP turbine</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAC <span style="color:var(--text-dim);font-weight:400;">— LP turbine</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAD <span style="color:var(--text-dim);font-weight:400;">— Bearings</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAG <span style="color:var(--text-dim);font-weight:400;">— Condensing system</span></h4>
+          <p>Includes the condenser and its flash boxes.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAJ <span style="color:var(--text-dim);font-weight:400;">— Air removal system</span></h4>
+          <p>Condenser vacuum/air ejector system.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAK <span style="color:var(--text-dim);font-weight:400;">— Transmission gear between prime mover and driven machine, incl. turning gear</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAL <span style="color:var(--text-dim);font-weight:400;">— Drain and vent systems</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAM <span style="color:var(--text-dim);font-weight:400;">— Leak-off steam system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAN <span style="color:var(--text-dim);font-weight:400;">— Turbine bypass station, incl. desuperheating spray system</span></h4>
+          <p>HP bypass — dumps main steam to the reheat line / condenser, bypassing the HP turbine.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAP <span style="color:var(--text-dim);font-weight:400;">— LP turbine bypass system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAV <span style="color:var(--text-dim);font-weight:400;">— Lubricant supply system, dirty oil collection system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAW <span style="color:var(--text-dim);font-weight:400;">— Sealing, heating and cooling steam system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAX <span style="color:var(--text-dim);font-weight:400;">— Non-electric control and protection equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MAY <span style="color:var(--text-dim);font-weight:400;">— Electric control and protection equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MK <span style="color:var(--text-dim);font-weight:400;">— Generator plant</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Turbine-Generator (M)</span></div>
+          <h4>MKA <span style="color:var(--text-dim);font-weight:400;">— Generator, complete, incl. stator and rotor</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>E <span style="color:var(--text-dim);font-weight:400;">— Conventional fuel supply and residues disposal</span></h4>
+          <p>KKS main group letter for fuel handling.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EA <span style="color:var(--text-dim);font-weight:400;">— Unloading and storage of solid fuels</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAA <span style="color:var(--text-dim);font-weight:400;">— Ship unloading system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAB <span style="color:var(--text-dim);font-weight:400;">— Rail wagon / truck unloading bay</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAC <span style="color:var(--text-dim);font-weight:400;">— Transport system</span></h4>
+          <p>Belt conveyors from unloading to storage.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAD <span style="color:var(--text-dim);font-weight:400;">— Stacking system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAE <span style="color:var(--text-dim);font-weight:400;">— Bunker system, storage area (stockyard)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAF <span style="color:var(--text-dim);font-weight:400;">— Bucket wheel system, reclaimer system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAT <span style="color:var(--text-dim);font-weight:400;">— Weighing equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EAU <span style="color:var(--text-dim);font-weight:400;">— Sampling equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EB <span style="color:var(--text-dim);font-weight:400;">— Mechanical treatment of solid fuels</span></h4>
+          <p>Crushing, mixing, drying — the coal preparation plant, distinct from the mills under HF which sit right at the boiler.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EBA <span style="color:var(--text-dim);font-weight:400;">— Transport system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EBC <span style="color:var(--text-dim);font-weight:400;">— Crushing system, pulverizing system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EBD <span style="color:var(--text-dim);font-weight:400;">— Screening system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EBF <span style="color:var(--text-dim);font-weight:400;">— Temporary storage system for milled raw coal</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EC <span style="color:var(--text-dim);font-weight:400;">— Distribution of solid fuels</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EG <span style="color:var(--text-dim);font-weight:400;">— Supply of liquid fuels (light fuel oil)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EGA <span style="color:var(--text-dim);font-weight:400;">— Receiving equipment incl. pipeline</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EGB <span style="color:var(--text-dim);font-weight:400;">— Tank farm</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Coal Handling &amp; Fuel Supply (E)</span></div>
+          <h4>EGC <span style="color:var(--text-dim);font-weight:400;">— Pump system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>P <span style="color:var(--text-dim);font-weight:400;">— Cooling water systems</span></h4>
+          <p>KKS main group letter for the whole cooling water area.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PA <span style="color:var(--text-dim);font-weight:400;">— Circulating water system</span></h4>
+          <p>Main condenser cooling water — the largest single water flow in the plant.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PAA <span style="color:var(--text-dim);font-weight:400;">— Extraction, mechanical cleaning for direct cooling</span></h4>
+          <p>Intake screens/trash racks.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PAB <span style="color:var(--text-dim);font-weight:400;">— Circulating water piping and culvert system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PAC <span style="color:var(--text-dim);font-weight:400;">— Circulating water pump system</span></h4>
+          <p>CW pumps — typically the single largest auxiliary electrical load in the plant.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PAD <span style="color:var(--text-dim);font-weight:400;">— Recirculation cooling system, outfall cooling system</span></h4>
+          <p>Natural draft / mechanical draft cooling tower, where used.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PAE <span style="color:var(--text-dim);font-weight:400;">— Cooling tower pump system (if separate)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PAH <span style="color:var(--text-dim);font-weight:400;">— Condenser cleaning system</span></h4>
+          <p>e.g. ball cleaning/Taprogge system.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PAR <span style="color:var(--text-dim);font-weight:400;">— Make-up water piping system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PB <span style="color:var(--text-dim);font-weight:400;">— Circulating water treatment system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PC <span style="color:var(--text-dim);font-weight:400;">— Auxiliary cooling water system</span></h4>
+          <p>Cools auxiliary equipment (oil coolers, air coolers, sampling coolers) separately from the main condenser CW.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PCC <span style="color:var(--text-dim);font-weight:400;">— Pump system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PCH <span style="color:var(--text-dim);font-weight:400;">— Heat exchanger cleaning system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PG <span style="color:var(--text-dim);font-weight:400;">— Closed cooling water system</span></h4>
+          <p>Closed-loop, treated-water cooling circuit for critical equipment, isolated from raw circulating water.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PGA <span style="color:var(--text-dim);font-weight:400;">— Closed cooling water supply system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Cooling Water (P)</span></div>
+          <h4>PGD <span style="color:var(--text-dim);font-weight:400;">— Cooler</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>G <span style="color:var(--text-dim);font-weight:400;">— Water supply and disposal</span></h4>
+          <p>KKS main group letter for raw/service/drinking water and effluent — distinct from the boiler-cycle-specific treatment under L.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GD <span style="color:var(--text-dim);font-weight:400;">— Water treatment plant</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GDB <span style="color:var(--text-dim);font-weight:400;">— Filtering, mechanical cleaning system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GDF <span style="color:var(--text-dim);font-weight:400;">— Ion exchange, reverse osmosis system</span></h4>
+          <p>e.g. for demineralization — makeup water treatment plant (DM plant).</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GDG <span style="color:var(--text-dim);font-weight:400;">— Evaporation system</span></h4>
+          <p>Alternative demineralization route in some plants.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GDN <span style="color:var(--text-dim);font-weight:400;">— Chemicals supply system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GDP <span style="color:var(--text-dim);font-weight:400;">— Regeneration, flushing equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GH <span style="color:var(--text-dim);font-weight:400;">— Distribution systems (not drinking water, not cooling water)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GHB <span style="color:var(--text-dim);font-weight:400;">— Distribution system after treatment (demineralization)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GK <span style="color:var(--text-dim);font-weight:400;">— Drinking (potable) water supply</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GM <span style="color:var(--text-dim);font-weight:400;">— Plant drainage system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GMA <span style="color:var(--text-dim);font-weight:400;">— Drainage system for storm water drains</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GMB <span style="color:var(--text-dim);font-weight:400;">— Drainage system for oily drains</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GMC <span style="color:var(--text-dim);font-weight:400;">— Drainage system for sewage drains</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GT <span style="color:var(--text-dim);font-weight:400;">— Water recovery from waste water</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Water Treatment &amp; Supply (G)</span></div>
+          <h4>GU <span style="color:var(--text-dim);font-weight:400;">— Rainwater collection and drainage, incl. treatment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>A <span style="color:var(--text-dim);font-weight:400;">— Grid and distribution systems</span></h4>
+          <p>KKS main group letter for the switchyard/grid connection, subdivided by voltage level.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>AC <span style="color:var(--text-dim);font-weight:400;">— 380 (420) kV systems</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>AD <span style="color:var(--text-dim);font-weight:400;">— 220 (245) kV systems</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>AE <span style="color:var(--text-dim);font-weight:400;">— 110 (150) kV systems</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>AR <span style="color:var(--text-dim);font-weight:400;">— Protection equipment (grid)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>B <span style="color:var(--text-dim);font-weight:400;">— Power transmission and auxiliary power supply</span></h4>
+          <p>KKS main group letter for generator output, station transformers, and the entire in-plant electrical distribution hierarchy.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BA <span style="color:var(--text-dim);font-weight:400;">— Power transmission</span></h4>
+          <p>Generator leads and generator transformer.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BAA <span style="color:var(--text-dim);font-weight:400;">— Generator leads</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BAC <span style="color:var(--text-dim);font-weight:400;">— Generator circuit breaker, incl. cooling system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BAT <span style="color:var(--text-dim);font-weight:400;">— Generator transformers, incl. cooling system</span></h4>
+          <p>Steps generator voltage up to grid voltage.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BB <span style="color:var(--text-dim);font-weight:400;">— Medium-voltage distribution boards and transformers, normal system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BD <span style="color:var(--text-dim);font-weight:400;">— Medium-voltage emergency distribution boards, (diesel) emergency power system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BF <span style="color:var(--text-dim);font-weight:400;">— Low-voltage main distribution boards and transformers, normal system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BJ <span style="color:var(--text-dim);font-weight:400;">— Low-voltage sub-distribution boards and transformers, normal system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BP <span style="color:var(--text-dim);font-weight:400;">— Power installations for large variable-speed drives</span></h4>
+          <p>e.g. boiler feed pump VFDs.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BT <span style="color:var(--text-dim);font-weight:400;">— Battery systems</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BTL <span style="color:var(--text-dim);font-weight:400;">— Rectifiers, battery chargers</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BU <span style="color:var(--text-dim);font-weight:400;">— DC distribution board</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>C <span style="color:var(--text-dim);font-weight:400;">— Instrumentation and control equipment</span></h4>
+          <p>KKS main group letter for control rooms, DCS cabinets, and unit-wide I&amp;C functions that serve more than one process system.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CJA <span style="color:var(--text-dim);font-weight:400;">— Unit control system, incl. cabinets</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CJD <span style="color:var(--text-dim);font-weight:400;">— Start-up control, set-point control (unit), incl. cabinets</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CJF <span style="color:var(--text-dim);font-weight:400;">— Boiler control system, incl. cabinets</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CJJ-CJN <span style="color:var(--text-dim);font-weight:400;">— Instrumentation and control cabinets for steam turbine set</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CW <span style="color:var(--text-dim);font-weight:400;">— Control rooms</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CWA-CWE <span style="color:var(--text-dim);font-weight:400;">— Main control consoles</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CWF-CWP <span style="color:var(--text-dim);font-weight:400;">— Main control panels</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CX <span style="color:var(--text-dim);font-weight:400;">— Local control stations</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>U <span style="color:var(--text-dim);font-weight:400;">— Structures</span></h4>
+          <p>KKS main group letter for buildings, taking the code of whichever process system they primarily house.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UHA <span style="color:var(--text-dim);font-weight:400;">— Steam generator enclosure, boiler house</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UHF <span style="color:var(--text-dim);font-weight:400;">— Bunker bay</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UMA <span style="color:var(--text-dim);font-weight:400;">— Steam turbine building</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>ULA <span style="color:var(--text-dim);font-weight:400;">— Feedwater pump house</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>ULC <span style="color:var(--text-dim);font-weight:400;">— Structure for condensate system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>ULD <span style="color:var(--text-dim);font-weight:400;">— Structure for condensate polishing plant</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BC <span style="color:var(--text-dim);font-weight:400;">— Medium-voltage distribution boards and transformers, general-purpose</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BH <span style="color:var(--text-dim);font-weight:400;">— Low-voltage main distribution boards and transformers, general-purpose</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BL <span style="color:var(--text-dim);font-weight:400;">— Low-voltage sub-distribution boards and transformers, general-purpose</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BR <span style="color:var(--text-dim);font-weight:400;">— Low-voltage distribution boards, converter, UPS and stand-by diesel power system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BFA <span style="color:var(--text-dim);font-weight:400;">— LV main distribution board</span></h4>
+          <p>The specific switchboard itself, as distinct from the auxiliary transformer (BFT) that feeds it.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BFT <span style="color:var(--text-dim);font-weight:400;">— LV auxiliary power transformer</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BFY <span style="color:var(--text-dim);font-weight:400;">— Control and protection equipment</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BJA <span style="color:var(--text-dim);font-weight:400;">— LV sub-distribution board</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BJT <span style="color:var(--text-dim);font-weight:400;">— LV auxiliary power transformer</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BTA <span style="color:var(--text-dim);font-weight:400;">— Batteries</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BRU <span style="color:var(--text-dim);font-weight:400;">— Converter (static), inverter</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Electrical (A, B)</span></div>
+          <h4>BRV <span style="color:var(--text-dim);font-weight:400;">— Emergency power generating equipment</span></h4>
+          <p>e.g. the emergency diesel generator set, if not classified under X (heavy machinery).</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UH <span style="color:var(--text-dim);font-weight:400;">— Structures for conventional heat generation</span></h4>
+          <p>The system-level grouping that UHA (boiler house) and the other boiler-related structure codes sit under.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UHB <span style="color:var(--text-dim);font-weight:400;">— Auxiliary boiler structure</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UHN <span style="color:var(--text-dim);font-weight:400;">— Flue gas stack structure</span></h4>
+          <p>Includes structure for flue gas circulation where applicable.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UHQ <span style="color:var(--text-dim);font-weight:400;">— Structure for flue gas filtering system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UHW <span style="color:var(--text-dim);font-weight:400;">— Foundation for blowdown tank</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UL <span style="color:var(--text-dim);font-weight:400;">— Structures for steam, water, gas cycles</span></h4>
+          <p>The system-level grouping that ULA (feedwater pump house) and related structure codes sit under.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>ULB <span style="color:var(--text-dim);font-weight:400;">— Structures for steam systems</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>ULF <span style="color:var(--text-dim);font-weight:400;">— Structures for common installations of steam-water cycle</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UM <span style="color:var(--text-dim);font-weight:400;">— Structures for main machine sets</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UMB <span style="color:var(--text-dim);font-weight:400;">— Gas turbine building</span></h4>
+          <p>Relevant for a combined-cycle or dual-fuel configuration; not applicable to a pure steam-only supercritical unit.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UG <span style="color:var(--text-dim);font-weight:400;">— Structures for water supply and disposal</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UGK <span style="color:var(--text-dim);font-weight:400;">— Structures for drinking water supply system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UGM <span style="color:var(--text-dim);font-weight:400;">— Structures for process drainage system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Structures / Civil (U)</span></div>
+          <h4>UGN <span style="color:var(--text-dim);font-weight:400;">— Water storage tank structures</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Instrumentation &amp; Control (C)</span></div>
+          <h4>CJ <span style="color:var(--text-dim);font-weight:400;">— Control system cabinets</span></h4>
+          <p>The system-level grouping for the unit control, boiler control, and turbine I&amp;C cabinet codes below it.</p>
+        </div></div><h2 class="panel-title" style="margin-top:28px;">Signal Suffix Codes</h2><div class="card">
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;">A KKS equipment tag identifies a device (a drive, a valve). A <b>signal suffix</b> appended after it identifies one individual command or feedback bit on that device: <code>MAB10AA001</code> might be a specific pump, and <code>MAB10AA001XB01</code> its "on" <b>feedback</b> — XB is the signal category letter, 01 is the specific function within it. This is the layer that actually answers "which signal is the ON feedback": an X-prefix code specifically marks a signal coming back FROM the field (a status/confirmation), as distinct from a command going TO it, which instead uses the separate <b>Application Code</b> scheme (Y-prefix, e.g. <code>MAB10AA001YB01</code>) covered further down — real projects commonly also wire the complementary "confirmed OFF" feedback 50 numbers later (XB51) alongside XB01, so a genuine OFF state can be told apart from a stuck or failed-to-report contact.</p>
+  </div><div class="field" style="max-width:420px;margin-top:10px;"><input type="text" id="kksSigSearch" placeholder="Search by code or meaning, e.g. 'XB01', 'feedback', 'auto mode'..."></div><div class="tabs" id="kksSigCats" style="flex-wrap:wrap;"><div class="tab active">All</div><div class="tab ">Signal Category (X_)</div><div class="tab ">Signal Origin Prefix</div><div class="tab ">XB — Control Interface (drive status/feedback)</div><div class="tab ">XG — Binary Process Signals (limit/level switches)</div><div class="tab ">XH — Binary Limits Derived From Analog Signals</div><div class="tab ">XM — Higher-Level Static Alarm Signals</div><div class="tab ">YB — Application/Command Interface</div></div><div class="grid cols-2" id="kksSigGrid"><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XA <span style="color:var(--text-dim);font-weight:400;">— Functional group control / subloop control</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XB <span style="color:var(--text-dim);font-weight:400;">— Control interface</span></h4>
+          <p>Confirmation/status signals read back from a drive or final control element about its own state — an X-prefix code (see Signal Origin Prefix below) marks a signal as coming FROM the field, distinct from a command going TO it. The numbered codes XB01, XB02 etc. below are this category’s specific, standardized meanings.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XC <span style="color:var(--text-dim);font-weight:400;">— Closed-loop control</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XG <span style="color:var(--text-dim);font-weight:400;">— Binary process signals</span></h4>
+          <p>This is the DI (digital/binary input) category in KKS terms — conditioned by binary signal conditioning modules, e.g. a limit/level switch’s raw contact wired straight into the system.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XH <span style="color:var(--text-dim);font-weight:400;">— Binary limit signals derived from analog process signals</span></h4>
+          <p>Also a binary (DI-type) signal, but computed rather than wired directly — e.g. a high/low alarm derived from a 4-20mA transmitter’s reading, not a dedicated physical switch.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XJ <span style="color:var(--text-dim);font-weight:400;">— Signals from non-standard areas</span></h4>
+          <p>e.g. black-box or dedicated, packaged I&amp;C not otherwise covered.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XK <span style="color:var(--text-dim);font-weight:400;">— Equipment unit / component protection</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XL <span style="color:var(--text-dim);font-weight:400;">— Control room and control stations</span></h4>
+          <p>Signals not assigned to a specific control system, e.g. control interface tiles.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XM <span style="color:var(--text-dim);font-weight:400;">— Higher-level static individual and group alarm signals</span></h4>
+          <p>e.g. power supply failure, fuse status — persistent fault conditions.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XN <span style="color:var(--text-dim);font-weight:400;">— Status-display computer / criterion display</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XP <span style="color:var(--text-dim);font-weight:400;">— Supervisory computer (process computer)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XQ <span style="color:var(--text-dim);font-weight:400;">— Analog signals</span></h4>
+          <p>This is the AI (analog input) category in KKS terms — a continuous measured value (e.g. a live 4-20mA reading) rather than a binary state. Unlike XB’s command/feedback codes, an analog value has no fixed per-number "meaning" table to look up — the number just identifies which analog point on the device it is.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XS <span style="color:var(--text-dim);font-weight:400;">— Functional group control step signals</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XT <span style="color:var(--text-dim);font-weight:400;">— Turbine-generator I&amp;C, binary signals</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XU <span style="color:var(--text-dim);font-weight:400;">— Higher-level dynamic individual and group alarm signals</span></h4>
+          <p>Transient/momentary alarm conditions, as distinct from XM's static ones.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XV <span style="color:var(--text-dim);font-weight:400;">— Signal gating</span></h4>
+          <p>Protective logic, alarm logic, etc.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>XW <span style="color:var(--text-dim);font-weight:400;">— Hardwired alarm annunciation system</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Origin Prefix</span></div>
+          <h4>X <span style="color:var(--text-dim);font-weight:400;">— Direct signal</span></h4>
+          <p>Used in the "Signal Code" scheme (feedback/status signals FROM the field) — a signal taken straight from its source, e.g. directly from a switch contact. See the Application Code (Y) entry below for the separate scheme used for commands.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Origin Prefix</span></div>
+          <h4>Z <span style="color:var(--text-dim);font-weight:400;">— Gated signal</span></h4>
+          <p>Used in the "Signal Code" scheme (feedback/status signals FROM the field) — a signal that has passed through logic, e.g. the output of an AND gate. Distinguishes a raw input from a processed/interlocked one carrying the same category letter.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB01 <span style="color:var(--text-dim);font-weight:400;">— On / Open (feedback)</span></h4>
+          <p>A feedback/acknowledgment signal read back FROM the drive confirming it is actually on/open — not the command sent TO it. The corresponding command uses a separate KKS suffix scheme, the "Application Code" (Y-prefix, e.g. YB01) — confirmed in Siemens TXP-CLC training documentation, and listed further down this page. XB, as a Signal Code (X-prefix), specifically identifies a signal coming back from the field.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB02 <span style="color:var(--text-dim);font-weight:400;">— Off / Close (feedback)</span></h4>
+          <p>The corresponding "closed/off confirmed" feedback read back from the drive, paired with XB01 the same way — not a command.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB03 <span style="color:var(--text-dim);font-weight:400;">— RTS (ready to start)</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB05 <span style="color:var(--text-dim);font-weight:400;">— Higher</span></h4>
+          <p>e.g. raise frequency/voltage/setpoint.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB06 <span style="color:var(--text-dim);font-weight:400;">— Lower</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB09 <span style="color:var(--text-dim);font-weight:400;">— Revision</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB10 <span style="color:var(--text-dim);font-weight:400;">— Normal operation mode</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB11 <span style="color:var(--text-dim);font-weight:400;">— Hand On / Open</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB12 <span style="color:var(--text-dim);font-weight:400;">— Hand Off / Close</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB13 <span style="color:var(--text-dim);font-weight:400;">— Local</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB14 <span style="color:var(--text-dim);font-weight:400;">— Remote</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB15 <span style="color:var(--text-dim);font-weight:400;">— Hand stop</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB16 <span style="color:var(--text-dim);font-weight:400;">— Quick shutdown</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB17 <span style="color:var(--text-dim);font-weight:400;">— Reset</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB18 <span style="color:var(--text-dim);font-weight:400;">— Acknowledge / Confirm</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB19 <span style="color:var(--text-dim);font-weight:400;">— Blocked / Interlock</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB21 <span style="color:var(--text-dim);font-weight:400;">— Auto On / Auto mode</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB22 <span style="color:var(--text-dim);font-weight:400;">— Auto Off</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB23 <span style="color:var(--text-dim);font-weight:400;">— Standstill</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB24 <span style="color:var(--text-dim);font-weight:400;">— Spinning reserve</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB25 <span style="color:var(--text-dim);font-weight:400;">— Generating</span></h4>
+          <p>Generator/pump-turbine unit running in generating mode.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB26 <span style="color:var(--text-dim);font-weight:400;">— Generator condenser mode</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB27 <span style="color:var(--text-dim);font-weight:400;">— Pumping</span></h4>
+          <p>Running in pumping mode (pumped-storage units).</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB28 <span style="color:var(--text-dim);font-weight:400;">— Pump condenser mode</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB29 <span style="color:var(--text-dim);font-weight:400;">— Back-to-back / step mode</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB30 <span style="color:var(--text-dim);font-weight:400;">— Quick changeover</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB31 <span style="color:var(--text-dim);font-weight:400;">— Protection on</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB32 <span style="color:var(--text-dim);font-weight:400;">— Test on</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB33 <span style="color:var(--text-dim);font-weight:400;">— Step by step</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB41 <span style="color:var(--text-dim);font-weight:400;">— PLC 1 active</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB42 <span style="color:var(--text-dim);font-weight:400;">— PLC 2 active</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB43 <span style="color:var(--text-dim);font-weight:400;">— FCL local</span></h4>
+          <p>Field control level, local.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB44 <span style="color:var(--text-dim);font-weight:400;">— FCL remote</span></h4>
+          <p>Field control level, remote.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB51 <span style="color:var(--text-dim);font-weight:400;">— "Not on / Not open" feedback</span></h4>
+          <p>The complementary "off-state confirmed" feedback paired with XB01 for the same drive — a real drive typically wires BOTH XB01 and XB51 so the control system can distinguish a genuine OFF state from a stuck or failed-to-report contact, rather than inferring OFF purely from the absence of the XB01 ON feedback.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XB — Control Interface (drive status/feedback)</span></div>
+          <h4>XB52 <span style="color:var(--text-dim);font-weight:400;">— "Not closed" feedback</span></h4>
+          <p>The complementary feedback paired with XB02.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG01 <span style="color:var(--text-dim);font-weight:400;">— On / Open / &gt; Max 1</span></h4>
+          <p>A raw NO-contact signal, e.g. from a level or limit switch — distinct from XH, which is a limit derived from an analog transmitter rather than a dedicated switch.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG02 <span style="color:var(--text-dim);font-weight:400;">— Off / Close / &lt; Min 1</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG03 <span style="color:var(--text-dim);font-weight:400;">— &gt; Max 2</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG04 <span style="color:var(--text-dim);font-weight:400;">— &lt; Min 2</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG05 <span style="color:var(--text-dim);font-weight:400;">— &gt; Max 3</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG06 <span style="color:var(--text-dim);font-weight:400;">— &lt; Min 3</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG07 <span style="color:var(--text-dim);font-weight:400;">— &gt; Max 4</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG08 <span style="color:var(--text-dim);font-weight:400;">— &lt; Min 4</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG10 <span style="color:var(--text-dim);font-weight:400;">— In transition</span></h4>
+          <p>e.g. a valve caught mid-travel, neither confirmed open nor closed.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG11 <span style="color:var(--text-dim);font-weight:400;">— Hand On / Open</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG12 <span style="color:var(--text-dim);font-weight:400;">— Hand Off / Close</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG18 <span style="color:var(--text-dim);font-weight:400;">— Ready</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG19 <span style="color:var(--text-dim);font-weight:400;">— Blocked</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG20 <span style="color:var(--text-dim);font-weight:400;">— Disturbed</span></h4>
+          <p>A fault/disturbance condition on this signal.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG21 <span style="color:var(--text-dim);font-weight:400;">— Auto on</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XG — Binary Process Signals (limit/level switches)</span></div>
+          <h4>XG32 <span style="color:var(--text-dim);font-weight:400;">— Test on</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH01 <span style="color:var(--text-dim);font-weight:400;">— &gt; Max 1</span></h4>
+          <p>A high-limit alarm computed from a continuous analog transmitter's reading (e.g. 4-20mA), not a dedicated physical switch — the functional counterpart to XG for signals with an analog source instead of a switch.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH02 <span style="color:var(--text-dim);font-weight:400;">— &lt; Min 1</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH03 <span style="color:var(--text-dim);font-weight:400;">— &gt; Max 2</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH04 <span style="color:var(--text-dim);font-weight:400;">— &lt; Min 2</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH19 <span style="color:var(--text-dim);font-weight:400;">— Value simulated</span></h4>
+          <p>The underlying analog value is a simulated/forced value, not a live process reading — an important distinction to know during commissioning or maintenance.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH20 <span style="color:var(--text-dim);font-weight:400;">— Disturbed</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH21 <span style="color:var(--text-dim);font-weight:400;">— Low failure</span></h4>
+          <p>e.g. transmitter signal below 4mA — indicates a wiring/instrument fault, not a genuine low process value.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XH — Binary Limits Derived From Analog Signals</span></div>
+          <h4>XH22 <span style="color:var(--text-dim);font-weight:400;">— High failure</span></h4>
+          <p>e.g. transmitter signal above 20mA.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XM — Higher-Level Static Alarm Signals</span></div>
+          <h4>XM01 <span style="color:var(--text-dim);font-weight:400;">— Power supply 1 failure</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XM — Higher-Level Static Alarm Signals</span></div>
+          <h4>XM02 <span style="color:var(--text-dim);font-weight:400;">— Power supply 2 failure</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">XM — Higher-Level Static Alarm Signals</span></div>
+          <h4>XM03 <span style="color:var(--text-dim);font-weight:400;">— 24VDC fuse OK</span></h4>
+          
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">YB — Application/Command Interface</span></div>
+          <h4>YB01 <span style="color:var(--text-dim);font-weight:400;">— On / Open (command)</span></h4>
+          <p>The command mirror of the confirmed feedback code XB01: this is the instruction sent TO the drive to turn on/open, as distinct from XB01, the confirmation read back FROM it that it has done so.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">YB — Application/Command Interface</span></div>
+          <h4>YB02 <span style="color:var(--text-dim);font-weight:400;">— Off / Close (command)</span></h4>
+          <p>The command mirror of the confirmed feedback code XB02.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">YB — Application/Command Interface</span></div>
+          <h4>YB22 <span style="color:var(--text-dim);font-weight:400;">— Application code (sourced example)</span></h4>
+          <p>The specific example given in Siemens TXP-CLC training documentation for a real device (MBV41AA001) — the source does not spell out what function 22 represents, so it’s listed here as the directly-sourced reference point for the numbering range, not a decoded meaning.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Origin Prefix</span></div>
+          <h4>Y <span style="color:var(--text-dim);font-weight:400;">— Signal applications (command)</span></h4>
+          <p>The complete, officially-sourced counterpart list to the X (Signal Origins) table above, from the same McGraw-Hill KKS appendix (Siemens 1995 source booklet): YA, YB, YC, YJ, YL, YN, YP, YQ, YT, YV, YW. Notably shorter than the X list -- there is no YG, YH, YK, YM, YS, or YU, because a binary process signal, a derived limit, a protection trip, a static/dynamic alarm, or a turbine speed reading are inherently things the system reads, not things it commands.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">YB — Application/Command Interface</span></div>
+          <h4>YB <span style="color:var(--text-dim);font-weight:400;">— Control interface (command)</span></h4>
+          <p>The command-side counterpart to XB, confirmed in both the McGraw-Hill KKS appendix and Siemens TXP-CLC training documentation: an output sent TO a drive or final control element, as opposed to XB’s status read back FROM it. This is the category to use for a DO (digital/binary output) in KKS terms -- there is no separate YG for that, since Control Interface already covers on/off, open/close-type commands.</p>
+        </div><div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">Signal Category (X_)</span></div>
+          <h4>YQ <span style="color:var(--text-dim);font-weight:400;">— Analog signals (command)</span></h4>
+          <p>This is the AO (analog output) category in KKS terms -- the command-side counterpart to XQ (AI). A continuous outgoing value, e.g. a 4-20mA setpoint sent to a control valve positioner or a VFD speed reference, as opposed to XQ’s continuous incoming reading.</p>
+        </div></div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">About This Calculation</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">KKS (Kraftwerk-Kennzeichensystem, the Power Plant Identification System) is the standard used across most large coal and gas thermal plants worldwide — including the great majority of Indian supercritical units — to give every system, piece of equipment, and signal a unique, unambiguous tag, independent of language or drawing. A code like HAC10 or LBA20 isn’t arbitrary: reading left to right, the letters narrow down from plant area to specific system, and the trailing digits number the individual instance. This reference organizes the codes actually used on a supercritical coal-fired unit by the plant area an engineer would actually search by — boiler pressure parts, steam-water cycle, turbine-generator, coal handling, cooling water, and the rest — rather than requiring you to already know which of the roughly two dozen KKS main-group letters a system falls under. It draws on the VGB KKS guidelines and real project-issued KKS lists (including supercritical unit documentation), not a single vendor’s abbreviated cheat sheet.</p>
+    <h2 class="panel-title" style="margin-top:20px;">Frequently Asked Questions</h2>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What do the letters in a KKS code actually mean?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Reading left to right, each letter narrows the identification further: the first letter is the main plant area (H for the boiler, L for the steam-water cycle, M for the turbine-generator, and so on), the second letter narrows that to a system within the area, and a third letter (where used) narrows it to a specific sub-system. The digits that follow number the individual instance — e.g. which of several identical pumps.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why does this reference call out HAG specifically as "not used in a natural-circulation boiler"?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">It’s one of the few places the KKS code itself tells you something about the unit’s design: HAG is the boiler’s circulation system. A drum-type (natural or forced circulation) boiler has one; a once-through supercritical boiler, which has no steam drum at all, does not — so whether a real KKS list for a given unit includes an HAG tag is itself a quick, genuine tell for which boiler type you’re looking at.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why does the steam-water cycle (L) have its own water treatment codes (LD) separate from the plant’s general water treatment (G)?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">They serve genuinely different water qualities and purposes. G covers raw, service, and drinking water treatment for the plant as a whole. L’s own LD codes cover condensate polishing and deaeration — treatment of the actual high-purity boiler feedwater circulating inside the steam-water cycle itself, which has far stricter chemistry requirements than general plant water.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Is KKS still the current standard, or has it been replaced?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">KKS remains very widely used, especially on existing plants and across India, China, and the Middle East, but it is gradually being superseded on new projects by RDS-PP (Reference Designation System for Power Plants), an IEC-aligned successor with a broadly similar area-first structure. Most engineers working on brownfield or existing supercritical units will still encounter KKS directly.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Does every plant use exactly these codes?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">The main-group letters and the most common subgroups (economizer, superheater, feedwater pump, and so on) are standardized and consistent project to project, which is the whole point of KKS. Lower-level details — exact numbering, some project-specific subgroup assignments — are agreed per project, so always confirm against your own plant’s actual KKS list for anything safety- or maintenance-critical; treat this as a reference for understanding the system, not a substitute for your plant’s documentation.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What do the numbers after the letters mean in a full tag like 10HAC01AP001?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">They come from two entirely different, separately-agreed number tables, which is easy to miss. 01 (right after HAC) numbers WHICH instance of the economizer system this is — relevant if the unit has more than one. 001 (at the very end) numbers a specific component belonging to the equipment unit AP identifies — e.g. one particular sensor or terminal box on that pump. Neither number is arbitrary, but they answer different questions: "which system instance" versus "which part of this specific device".</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">The explorer shows some systems with no subsystems listed below them — is that a gap in this reference?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">No — for a system like CW (control rooms), the two-letter system code is itself the most specific standardized KKS tag; there’s no further F3 breakdown to show because the real system doesn’t have project-agnostic subsystem codes at that level. The explorer says so directly rather than just showing an empty, unexplained space.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">How is a specific feedback or command signal actually named — e.g. the "on" feedback for a pump?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">That’s what the signal suffix codes (further down this page) are for, a finer layer within the same KKS system: appended directly after a device’s own equipment tag, a code like XB01 identifies one individual feedback bit read back from it. XB01 specifically covers "on/open" feedback — confirmation from the drive that it is actually on, not the command that told it to turn on — and many projects also wire the complementary "confirmed off" feedback 50 numbers later (XB51) alongside it, so a genuine OFF state can be told apart from a stuck contact.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What code is used for a command signal, and how do DI, DO, AI, and AO map to KKS?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Commands use a separate KKS suffix scheme from the X-prefix Signal Code covered above — the Application Code, prefixed Y instead of X, officially listed in the McGraw-Hill KKS appendix alongside its Signal Code counterpart. Mapped to the usual PLC/DCS signal classes: DI is XG (a binary signal wired straight from a field switch); AI is XQ (a continuous incoming analog reading); DO is YB (a binary/discrete command — on/off, open/close — sent out to a drive); AO is YQ (a continuous outgoing analog value, e.g. a 4-20mA setpoint to a valve positioner). All four are covered in the Signal Suffix Codes section below, alongside the confirmed XB01/YB01 command-versus-feedback pair.</div>
+    </div>
+  </div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+      <a href="/converter/" class="pill" data-related-link="converter" style="text-decoration:none;cursor:pointer;">⇌ Unit Converter</a><a href="/formula-library/" class="pill" data-related-link="formula-library" style="text-decoration:none;cursor:pointer;">𝑓 Formula Library</a><a href="/isa-tag-reference/" class="pill" data-related-link="isa-tag-reference" style="text-decoration:none;cursor:pointer;">🔤 ISA-5.1 Tag Reference</a><a href="/history/" class="pill" data-related-link="history" style="text-decoration:none;cursor:pointer;">🕘 Calculation History</a><a href="/support/" class="pill" data-related-link="support" style="text-decoration:none;cursor:pointer;">❤ Support the Project</a><a href="/reviews/" class="pill" data-related-link="reviews" style="text-decoration:none;cursor:pointer;">★ Reviews &amp; Ratings</a>
+    </div>
+  </div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
+
+    <!-- ============================================================
+         Razorpay Payment Button.
+         Placed directly below the footer (which carries the build number
+         and the "revenue goes to..." line, appended by JS in app.js) so
+         the button sits right under that text, not after the ad further
+         down. Outside #content (the router-controlled area), so it
+         persists across every page navigation instead of getting wiped
+         out. Embed code used exactly as provided by Razorpay, wrapped
+         only in centering/spacing — data-payment_button_id is a real ID
+         (pl_TYqV9ui5mTXTad), not a placeholder.
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:8px 16px 16px;text-align:center;">
+      <form>
+        <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_TYqV9ui5mTXTad" async></script>
+      </form>
+    </div>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
+
+    <!-- Moved out of position:fixed (was overlapping diagram content in
+         the Control Loops simulator whenever a node happened to render in
+         the bottom-right of the viewport) and into normal document flow,
+         as the last item on every page instead. -->
+    <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
+  </div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

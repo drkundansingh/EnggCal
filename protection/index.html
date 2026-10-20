@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZZ6H0JNGP6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZZ6H0JNGP6');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
+     ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
+<title>Turbine &amp; Boiler Protection (117 Trips) | EngCalc Hub</title>
+<meta name="description" content="Reference registry of 117 turbine and boiler protection trip parameters — ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.">
+<link rel="canonical" href="https://engineeringhubcalc.com/protection/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Engineering Calculator Hub">
+<meta property="og:title" content="Turbine &amp; Boiler Protection (117 Trips) | EngCalc Hub">
+<meta property="og:description" content="Reference registry of 117 turbine and boiler protection trip parameters — ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.">
+<meta property="og:url" content="https://engineeringhubcalc.com/protection/">
+<meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Turbine &amp; Boiler Protection (117 Trips) | EngCalc Hub">
+<meta name="twitter:description" content="Reference registry of 117 turbine and boiler protection trip parameters — ETS, TSI, MFT, generator and auxiliary drive trips for USC plants.">
+<meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Engineering Calculator Hub",
+  "url": "https://engineeringhubcalc.com/",
+  "description": "Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web-based)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dr. Kundan" }
+}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the actual difference between an alarm, a permissive, an interlock, and a trip?","acceptedAnswer":{"@type":"Answer","text":"An alarm only notifies the operator — it takes no automatic action. A permissive is a condition that must already be true before an action is ALLOWED to proceed (e.g. a pump won’t start unless its discharge valve is open). An interlock actively PREVENTS or FORCES an action based on current conditions. A trip is the most severe: it automatically shuts down equipment (or the whole unit) because a protective limit was exceeded, and normally requires a deliberate reset before restart."}},{"@type":"Question","name":"Why does the ETS exist separately from the plant DCS?","acceptedAnswer":{"@type":"Answer","text":"Overspeed, loss of vacuum, and similar turbine-generator protection functions need to act in milliseconds and must remain reliable even if the main control system has a fault — so ETS logic is traditionally implemented on dedicated, often hardwired or triple-redundant safety-rated hardware, kept deliberately independent of the DCS that handles normal day-to-day control."}},{"@type":"Question","name":"Why does an MFT trip ALL fuel valves, not just reduce firing?","acceptedAnswer":{"@type":"Answer","text":"A furnace that has lost flame but continues receiving fuel builds up an unburned, explosive fuel-air mixture — re-ignition of that accumulated fuel is a genuine explosion hazard. Immediate, complete fuel isolation on any flame-failure or furnace-safety trip condition is a core NFPA 85 combustion-safety principle, not an operational choice."}},{"@type":"Question","name":"Are the setpoints shown here real values from a specific OEM?","acceptedAnswer":{"@type":"Answer","text":"No — values tagged “Public Reference” are commonly-used generic figures for education and planning, explicitly not sourced from any specific manufacturer’s proprietary setpoint documents. Real trip setpoints for an actual unit must come from that unit’s own approved C&E (Cause & Effect) documentation."}}]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":2,"name":"Power Plant","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":3,"name":"Turbine & Boiler Protection (117 Trips)","item":"https://engineeringhubcalc.com/protection/"}]}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body data-theme="dark">
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/logo.png" alt="Engineering Calculator Hub logo">
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
+    </div>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item " href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item " href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item active" href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item " href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item " href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item " href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item " href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item " href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="themeToggle">☾ Dark</button>
+      <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="search-box">
+        <span>⌕</span>
+        <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
+      </div>
+      <div class="topbar-actions">
+        <span class="pill free">FREE PLAN</span>
+      </div>
+    </div>
+    <main class="content" id="content"><div class="page-head">
+    <div class="eyebrow">Power Plant</div>
+    <h1>Turbine &amp; Boiler Trip / Protection System</h1>
+    <p class="lead">ETS, MFT, voting logic, trip simulator, and trip history — universal across plant type and OEM. Reference values below are generic, illustrative industry-typical figures for education, not sourced from a specific manufacturer's proprietary manual; your own entered plant data always takes precedence.</p>
+  <div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;
+    border:1px solid var(--blue);border-radius:20px;font-size:.72rem;color:var(--blue);cursor:help;" title="Gives an order-of-magnitude or typical-value result by design — not a substitute for a full study, OEM documentation, or site-specific data.">
+    <span style="width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block;"></span>
+    Estimation / reference tool
+  </div></div><div class="assumptions-note">ALARM · WARNING · INTERLOCK · PERMISSIVE · RUNBACK · LOAD LIMIT · BOILER TRIP · MFT · TURBINE TRIP · ETS · GENERATOR TRIP · AUXILIARY DRIVE — this simulator is intended for engineering education, analysis, training and configurable plant-model simulation. It is not a replacement for OEM protection logic, approved plant procedures, actual DCS/SIS/FSSS/ETS systems, statutory requirements, or qualified engineering judgment. Never change actual plant protection settings based only on this tool.</div><div class="tabs">
+    <div class="tab active" data-m="ets">ETS Dashboard</div>
+    <div class="tab" data-m="mft">MFT Dashboard</div>
+    <div class="tab" data-m="drives">Major Drives Dashboard</div>
+    <div class="tab" data-m="diagram">Trip Logic Diagram</div>
+    <div class="tab" data-m="usc">BTG Master Specification</div>
+  </div><div class="calc-layout"><div class="card">
+      <div class="panel-title">Plant Setup</div>
+      <p style="color:var(--text-dim);font-size:.78rem;">Affects which parameters apply below — e.g. boiler type filters drum-only vs once-through-only entries, and steam-condition setpoints (pressure/temperature) scale by plant type.</p>
+      <div class="field"><label>Plant type</label>
+        <select id="cfgPlantType"><option value="subcritical" selected="">subcritical</option><option value="supercritical">supercritical</option><option value="ultra-supercritical">ultra-supercritical</option></select>
+      </div>
+      <div class="field"><label>Boiler type</label>
+        <select id="cfgBoilerType"><option value="drum" selected="">drum</option><option value="once-through">once-through</option></select>
+        
+      </div>
+      <div class="field"><label>Fuel type</label>
+        <select id="cfgFuelType"><option value="coal" selected="">coal</option><option value="gas">gas</option><option value="oil">oil</option><option value="biomass">biomass</option><option value="other">other</option></select>
+      </div>
+      <div class="field"><label>Unit rating (MW)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="cfgUnitMW" value="210" step="1" style="flex:1;">
+          <button class="btn secondary" id="cfgUnitMWApply" style="padding:8px 14px;flex-shrink:0;">Submit</button>
+        </div>
+        <div class="hint">Type a value and click Submit (or press Enter) to apply it.</div>
+      </div>
+    </div><div class="card"><div>
+      <div class="panel-title">Turbine Trip Dashboard (ETS) — subcritical, drum boiler, 210 MW</div>
+      <p style="color:var(--text-dim);font-size:.78rem;">Enter a current value AND how long it has been held there, then click its <b>Submit</b> button (or press Enter) — a real protection system doesn't trip on a single instantaneous reading, it requires the value to persist past its trip setpoint for at least the time delay shown (editable per row) before the trip actually latches. Each row evaluates independently.</p>
+      <div style="overflow-x:auto;">
+        <table><thead><tr><th>Parameter</th><th>Category</th><th>Value</th><th>Held for (s)</th><th>Time delay (s)</th><th></th><th>Alarm</th><th>Trip</th><th>Status</th><th>Data type</th></tr></thead><tbody>
+          <tr data-id="ets-overspeed">
+            <td>Turbine Speed (Overspeed)</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-overspeed" value="97.5" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">% rated speed</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-overspeed" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-overspeed" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-overspeed" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">103</td>
+            <td class="num">110</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-vibration">
+            <td>Shaft Vibration</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-vibration" value="50" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">µm (pk-pk)</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-vibration" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-vibration" value="2" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 2 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-vibration" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">180</td>
+            <td class="num">250</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-axial-displacement">
+            <td>Axial (Thrust) Displacement</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-axial-displacement" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">mm</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-axial-displacement" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-axial-displacement" value="1" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 1 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-axial-displacement" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">0.6</td>
+            <td class="num">0.9</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-bearing-temp">
+            <td>Bearing Metal Temperature</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-bearing-temp" value="65" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">°C</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-bearing-temp" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-bearing-temp" value="3" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 3 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-bearing-temp" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">105</td>
+            <td class="num">115</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-exhaust-hood-temp">
+            <td>Exhaust Hood Temperature</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-exhaust-hood-temp" value="50" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">°C</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-exhaust-hood-temp" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-exhaust-hood-temp" value="5" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 5 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-exhaust-hood-temp" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">90</td>
+            <td class="num">120</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-diff-expansion">
+            <td>Rotor/Casing Differential Expansion</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-diff-expansion" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">mm</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-diff-expansion" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-diff-expansion" value="2" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 2 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-diff-expansion" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">4</td>
+            <td class="num">6</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-lube-oil-pressure">
+            <td>Lube Oil Pressure</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-lube-oil-pressure" value="1.6" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">bar</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-lube-oil-pressure" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-lube-oil-pressure" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-lube-oil-pressure" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">0.9</td>
+            <td class="num">0.6</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-ehc-oil-pressure">
+            <td>EHC / Control Oil Pressure</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-ehc-oil-pressure" value="120" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">bar</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-ehc-oil-pressure" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-ehc-oil-pressure" value="1" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 1 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-ehc-oil-pressure" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">90</td>
+            <td class="num">70</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-water-induction">
+            <td>Water Induction Protection</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-water-induction" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-water-induction" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-water-induction" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-water-induction" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-manual-trip">
+            <td>Manual Emergency Trip Pushbutton</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-manual-trip" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-manual-trip" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-manual-trip" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-manual-trip" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-condenser-vacuum">
+            <td>Condenser Pressure (Vacuum Loss)</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Steam Conditions</td>
+            <td><input type="number" class="pv-input" data-id="ets-condenser-vacuum" value="8" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">kPa</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-condenser-vacuum" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-condenser-vacuum" value="3" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 3 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-condenser-vacuum" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">20</td>
+            <td class="num">30</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-main-steam-temp-high">
+            <td>Main Steam Temperature HIGH</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Steam Conditions</td>
+            <td><input type="number" class="pv-input" data-id="ets-main-steam-temp-high" value="522.5" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">°C</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-main-steam-temp-high" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-main-steam-temp-high" value="5" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 5 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-main-steam-temp-high" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">555</td>
+            <td class="num">565</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-msv-position">
+            <td>Main Stop Valve Position Disagreement</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Valve Protection</td>
+            <td><input type="number" class="pv-input" data-id="ets-msv-position" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-msv-position" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-msv-position" value="2" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 2 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-msv-position" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-gen-differential">
+            <td>Generator Differential Protection</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Generator/Electrical</td>
+            <td><input type="number" class="pv-input" data-id="ets-gen-differential" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-gen-differential" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-gen-differential" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-gen-differential" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-reverse-power">
+            <td>Reverse Power</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Generator/Electrical</td>
+            <td><input type="number" class="pv-input" data-id="ets-reverse-power" value="50" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">% rated MW</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-reverse-power" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-reverse-power" value="30" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 30 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-reverse-power" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">-0.5</td>
+            <td class="num">-2</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-loss-of-sync">
+            <td>Loss of Synchronism</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Generator/Electrical</td>
+            <td><input type="number" class="pv-input" data-id="ets-loss-of-sync" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-loss-of-sync" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-loss-of-sync" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-loss-of-sync" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-loss-of-excitation">
+            <td>Loss of Excitation (40)</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Generator/Electrical</td>
+            <td><input type="number" class="pv-input" data-id="ets-loss-of-excitation" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-loss-of-excitation" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-loss-of-excitation" value="1" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 1 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-loss-of-excitation" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-negative-sequence-hh">
+            <td>Negative Sequence / Unbalanced Current (46)</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Generator/Electrical</td>
+            <td><input type="number" class="pv-input" data-id="ets-negative-sequence-hh" value="3" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">% I2/IN</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-negative-sequence-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-negative-sequence-hh" value="20" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 20 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-negative-sequence-hh" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">8</td>
+            <td class="num">10</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-instrument-power-loss">
+            <td>Loss of Critical Instrument Power</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Other</td>
+            <td><input type="number" class="pv-input" data-id="ets-instrument-power-loss" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-instrument-power-loss" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-instrument-power-loss" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-instrument-power-loss" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-trip-oil-pressure-ll">
+            <td>Trip Oil Pressure LOW</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-trip-oil-pressure-ll" value="10" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">bar</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-trip-oil-pressure-ll" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-trip-oil-pressure-ll" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-trip-oil-pressure-ll" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">6</td>
+            <td class="num">4.5</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-seal-steam-pressure-ll">
+            <td>Gland/Seal Steam Pressure LOW</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-seal-steam-pressure-ll" value="0.2" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">bar</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-seal-steam-pressure-ll" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-seal-steam-pressure-ll" value="5" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 5 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-seal-steam-pressure-ll" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">0.05</td>
+            <td class="num">0.02</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-casing-temp-differential-hh">
+            <td>HP/IP Casing Top-Bottom Temperature Differential HIGH</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-casing-temp-differential-hh" value="7.5" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">°C</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-casing-temp-differential-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-casing-temp-differential-hh" value="10" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 10 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-casing-temp-differential-hh" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">25</td>
+            <td class="num">40</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-control-system-failure">
+            <td>Turbine Control System (DEH/ETS Processor) Failure</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Other</td>
+            <td><input type="number" class="pv-input" data-id="ets-control-system-failure" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-control-system-failure" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-control-system-failure" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-control-system-failure" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-generator-bearing-vibration-hh">
+            <td>Generator Bearing Vibration HIGH-HIGH</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-generator-bearing-vibration-hh" value="40" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">µm</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-generator-bearing-vibration-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-generator-bearing-vibration-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-generator-bearing-vibration-hh" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">125</td>
+            <td class="num">200</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-extraction-nrv-fail">
+            <td>Extraction/Bleed Steam Non-Return Valve Fail-to-Close</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-extraction-nrv-fail" value="0" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">boolean</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-extraction-nrv-fail" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-extraction-nrv-fail" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-extraction-nrv-fail" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">1</td>
+            <td class="num">1</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-tsi-casing-vibration-hh">
+            <td>TSI: Casing/Frame Vibration HIGH-HIGH (seismic)</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-tsi-casing-vibration-hh" value="2.25" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">mm/s RMS</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-tsi-casing-vibration-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-tsi-casing-vibration-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-tsi-casing-vibration-hh" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">7.1</td>
+            <td class="num">11.2</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr><tr data-id="ets-tsi-eccentricity-hh">
+            <td>TSI: Shaft Eccentricity HIGH</td>
+            
+            <td style="font-size:.76rem;color:var(--text-dim);">Turbine Mechanical</td>
+            <td><input type="number" class="pv-input" data-id="ets-tsi-eccentricity-hh" value="10" step="any" style="width:100px;padding:5px 8px;"> <span style="color:var(--text-faint);font-size:.72rem;">µm pk-pk</span></td>
+            <td><input type="number" class="pv-elapsed" data-id="ets-tsi-eccentricity-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;"></td>
+            <td><input type="number" class="pv-delay" data-id="ets-tsi-eccentricity-hh" value="0" min="0" step="any" style="width:70px;padding:5px 8px;" title="Configured value: 0 s — editable here to try a different delay"></td>
+            <td><button class="btn secondary eval-row-btn" data-id="ets-tsi-eccentricity-hh" style="padding:5px 12px;font-size:.76rem;">Submit</button></td>
+            <td class="num">40</td>
+            <td class="num">65</td>
+            <td class="status-cell"><span class="badge normal">NORMAL</span></td>
+            <td style="font-size:.7rem;color:var(--text-faint);">Public Reference</td>
+          </tr>
+        </tbody></table>
+      </div>
+      <div class="btn-row" style="margin-top:14px;"><button class="btn secondary" id="evalAllBtn">Evaluate all statuses</button></div>
+      <p style="color:var(--text-dim);font-size:.78rem;margin-top:10px;">Enter a current value per parameter and click Evaluate — this simulates live status against the configured setpoints. A value past its trip setpoint shows <b>TRIP PENDING</b> until the held-for duration reaches the time delay, then <b>TRIP</b>.</p>
+    </div></div></div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">About This Calculation</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">A real turbine-boiler-generator (BTG) unit is protected by dozens of overlapping systems, not one: the Emergency Trip System (ETS) protects the turbine-generator itself (overspeed, low vacuum, high vibration, thrust bearing failure), the Master Fuel Trip (MFT) protects the boiler (flame failure, low drum level, furnace pressure excursion), and dozens of individual auxiliary-drive interlocks and permissives sit underneath both. This registry models that structure directly — organized by ETS/MFT/auxiliary-drive category, each parameter tagged by data source (a defensible public-reference value, your own entered plant data, or a live simulated value) so it is always clear whether a number shown is a generic illustration or something you configured yourself.</p>
+    <h2 class="panel-title" style="margin-top:20px;">Frequently Asked Questions</h2>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What is the actual difference between an alarm, a permissive, an interlock, and a trip?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">An alarm only notifies the operator — it takes no automatic action. A permissive is a condition that must already be true before an action is ALLOWED to proceed (e.g. a pump won’t start unless its discharge valve is open). An interlock actively PREVENTS or FORCES an action based on current conditions. A trip is the most severe: it automatically shuts down equipment (or the whole unit) because a protective limit was exceeded, and normally requires a deliberate reset before restart.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why does the ETS exist separately from the plant DCS?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Overspeed, loss of vacuum, and similar turbine-generator protection functions need to act in milliseconds and must remain reliable even if the main control system has a fault — so ETS logic is traditionally implemented on dedicated, often hardwired or triple-redundant safety-rated hardware, kept deliberately independent of the DCS that handles normal day-to-day control.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why does an MFT trip ALL fuel valves, not just reduce firing?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">A furnace that has lost flame but continues receiving fuel builds up an unburned, explosive fuel-air mixture — re-ignition of that accumulated fuel is a genuine explosion hazard. Immediate, complete fuel isolation on any flame-failure or furnace-safety trip condition is a core NFPA 85 combustion-safety principle, not an operational choice.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Are the setpoints shown here real values from a specific OEM?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">No — values tagged “Public Reference” are commonly-used generic figures for education and planning, explicitly not sourced from any specific manufacturer’s proprietary setpoint documents. Real trip setpoints for an actual unit must come from that unit’s own approved C&amp;E (Cause &amp; Effect) documentation.</div>
+    </div>
+  </div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+      <a href="/thermal-plant/" class="pill" data-related-link="thermal-plant" style="text-decoration:none;cursor:pointer;">⚡ Thermal Plant Estimator</a><a href="/control-loops/" class="pill" data-related-link="control-loops" style="text-decoration:none;cursor:pointer;">↻ Control Loops</a><a href="/plant-performance/" class="pill" data-related-link="plant-performance" style="text-decoration:none;cursor:pointer;">📊 Plant Performance Indicators</a><a href="/boiler-blowdown/" class="pill" data-related-link="boiler-blowdown" style="text-decoration:none;cursor:pointer;">≣ Boiler Blowdown Rate</a><a href="/cooling-tower/" class="pill" data-related-link="cooling-tower" style="text-decoration:none;cursor:pointer;">❄ Cooling Tower Performance</a><a href="/feedwater-heater/" class="pill" data-related-link="feedwater-heater" style="text-decoration:none;cursor:pointer;">♨ Feedwater Heater (TTD &amp; DCA)</a>
+    </div>
+  </div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
+
+    <!-- ============================================================
+         Razorpay Payment Button.
+         Placed directly below the footer (which carries the build number
+         and the "revenue goes to..." line, appended by JS in app.js) so
+         the button sits right under that text, not after the ad further
+         down. Outside #content (the router-controlled area), so it
+         persists across every page navigation instead of getting wiped
+         out. Embed code used exactly as provided by Razorpay, wrapped
+         only in centering/spacing — data-payment_button_id is a real ID
+         (pl_TYqV9ui5mTXTad), not a placeholder.
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:8px 16px 16px;text-align:center;">
+      <form>
+        <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_TYqV9ui5mTXTad" async></script>
+      </form>
+    </div>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
+
+    <!-- Moved out of position:fixed (was overlapping diagram content in
+         the Control Loops simulator whenever a node happened to render in
+         the bottom-right of the viewport) and into normal document flow,
+         as the last item on every page instead. -->
+    <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
+  </div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

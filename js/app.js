@@ -11,6 +11,7 @@ import * as tp from './calculators/thermalPlant.js';
 import * as tpa from './calculators/thermalPlantAdvanced.js';
 import * as trip from './calculators/tripProtection.js';
 import * as flow from './calculators/flowEngine.js';
+import * as dcor from './calculators/densityCorrection.js';
 import * as store from './storage.js';
 import * as lu from './calculators/loopUncertainty.js';
 import * as fsafe from './calculators/functionalSafety.js';
@@ -23,6 +24,8 @@ import * as rs from './calculators/relaySettings.js';
 import * as pipe from './calculators/piping.js';
 import * as rot from './calculators/rotatingEquipment.js';
 import * as ppOps from './calculators/powerPlantOps.js';
+import { buildFlowPages } from './flowPages.js';
+import { GUIDES, guideRouteId } from './guides.js';
 import * as hx from './calculators/heatExchanger.js';
 import * as vt from './calculators/vesselsTanks.js';
 import * as pt from './calculators/processThermal.js';
@@ -45,10 +48,50 @@ import * as ed from './calculators/electricalDesign.js';
 import { exportCalculationPDF } from './pdfExport.js';
 
 const app = document.getElementById('content');
+
+// ---------- Real, crawlable URLs ----------
+// Each calculator lives at a real path (https://engineeringhubcalc.com/boiler-blowdown/),
+// backed by a pre-rendered static file (see prerender.js). The legacy ?page=<route>
+// form keeps working and is rewritten to the path form on load. Outside http(s)
+// (file:// bundle, previews) there is no server to resolve paths, so the ?page= form
+// is used there instead.
+const PATH_ROUTING = /^https?:$/.test(location.protocol);
+const APP_BASE = PATH_ROUTING ? new URL('.', document.baseURI).pathname : '';
+// Pages are served from many paths (/, /boiler-blowdown/, ...), but every relative URL in the app
+// (./data/*.json, ./assets/*, ./service-worker.js) must resolve against the site root. Pre-rendered
+// sub-pages carry <base href="/">; for the home page and legacy ?page= entries it is added here,
+// before any of those URLs is requested.
+if (PATH_ROUTING && !document.querySelector('base')) {
+  const baseEl = document.createElement('base');
+  baseEl.href = APP_BASE;
+  document.head.prepend(baseEl);
+}
+function routeUrl(route) {
+  if (!PATH_ROUTING) return route === '' ? location.pathname : `${location.pathname}?page=${encodeURIComponent(route)}`;
+  return route === '' ? APP_BASE : `${APP_BASE}${encodeURIComponent(route)}/`;
+}
 const navRoot = document.getElementById('nav-root');
 let FORMULAS = [];
 
 fetch('./data/formulaLibrary.json').then((r) => r.json()).then((data) => { FORMULAS = data; });
+
+let KKS_CODES = [];
+
+fetch('./data/kksCodes.json').then((r) => r.json()).then((data) => { KKS_CODES = data; });
+
+let KKS_HIERARCHY = [];
+
+fetch('./data/kksHierarchy.json').then((r) => r.json()).then((data) => { KKS_HIERARCHY = data; });
+
+let KKS_SIGNALS = [];
+
+fetch('./data/kksSignals.json').then((r) => r.json()).then((data) => { KKS_SIGNALS = data; });
+
+let ISA_LETTERS = [];
+let ISA_COMBOS = [];
+
+fetch('./data/isaLetters.json').then((r) => r.json()).then((data) => { ISA_LETTERS = data; });
+fetch('./data/isaCombos.json').then((r) => r.json()).then((data) => { ISA_COMBOS = data; });
 
 // ---------- Small DOM helpers ----------
 function h(html) {
@@ -210,8 +253,21 @@ const NAV = [
       { id: 'thermal-plant', label: 'Thermal Plant Estimator', icon: '⚡' },
       { id: 'protection', label: 'Turbine & Boiler Protection', icon: '🛡' },
       { id: 'control-loops', label: 'Control Loops', icon: '↻' },
+      { id: 'plant-performance', label: 'Plant Performance Indicators', icon: '📊' },
       { id: 'boiler-blowdown', label: 'Boiler Blowdown Rate', icon: '≣' },
       { id: 'cooling-tower', label: 'Cooling Tower Performance', icon: '❄' },
+      { id: 'feedwater-heater', label: 'Feedwater Heater (TTD & DCA)', icon: '♨' },
+      { id: 'iso5167-flow', label: 'DP Flow — ISO 5167', icon: '⌀' },
+      { id: 'stodola-flow', label: 'Turbine Stage Flow (Stodola)', icon: '⚙' },
+      { id: 'heater-extraction-flow', label: 'FW Heater Extraction Flow', icon: '♨' },
+      { id: 'desuperheater-spray', label: 'Desuperheater Spray Flow', icon: '☔' },
+      { id: 'condenser-cw-flow', label: 'Condenser Cooling-Water Flow', icon: '≋' },
+      { id: 'tracer-dilution-flow', label: 'Tracer Dilution Flow', icon: '◐' },
+      { id: 'pitot-duct-flow', label: 'Duct Flow — Pitot Traverse', icon: '⇥' },
+      { id: 'ultrasonic-flow', label: 'Ultrasonic Transit-Time Flow', icon: '〰' },
+      { id: 'water-chemistry', label: 'DM Plant Resin Regeneration', icon: '💧' },
+      { id: 'coal-fuel', label: 'Coal & Fuel Handling', icon: '⛏' },
+      { id: 'emissions', label: 'Combustion Emissions (CO₂/SO₂)', icon: '🏭' },
     ]
   },
   {
@@ -310,12 +366,16 @@ const NAV = [
     group: 'Reference', items: [
       { id: 'converter', label: 'Unit Converter', icon: '⇌' },
       { id: 'formula-library', label: 'Formula Library', icon: '𝑓' },
+      { id: 'kks-reference', label: 'KKS Code Reference', icon: '\ud83c\udff7' },
+      { id: 'isa-tag-reference', label: 'ISA-5.1 Tag Reference', icon: '\ud83d\udd24' },
       { id: 'history', label: 'Calculation History', icon: '🕘' },
       { id: 'support', label: 'Support the Project', icon: '❤' },
       { id: 'reviews', label: 'Reviews & Ratings', icon: '★' },
+      { id: 'guides', label: 'Engineering Guides', icon: '\ud83d\udcd6' },
       { id: 'about', label: 'About', icon: 'ℹ' },
       { id: 'contact', label: 'Contact', icon: '✉' },
       { id: 'privacy', label: 'Privacy Policy', icon: '⚿' },
+      { id: 'terms', label: 'Terms of Use', icon: '\u00a7' },
     ]
   },
 ];
@@ -352,7 +412,7 @@ function renderNav(active) {
       // without a real address for the sandbox to notice. On the real,
       // top-level deployed site the full href (and its SEO benefit) is
       // always present.
-      const href = item.id === '' ? location.pathname : `?page=${encodeURIComponent(item.id)}`;
+      const href = routeUrl(item.id);
       const a = h(`<a class="nav-item ${item.id === active ? 'active' : ''}"${isEmbeddedFrame ? ' tabindex="0"' : ` href="${href}"`}>
         <span class="ic">${item.icon}</span>${item.label}${adminMode && hidden ? ' <span class="badge out" style="margin-left:6px;">hidden</span>' : ''}
       </a>`);
@@ -372,7 +432,7 @@ function renderNav(active) {
   }
   if (adminMode) {
     const g = h('<div class="nav-group"><div class="nav-label">Admin</div></div>');
-    const a = h(`<a class="nav-item ${active === 'admin' ? 'active' : ''}"${isEmbeddedFrame ? ' tabindex="0"' : ' href="?page=admin"'}><span class="ic">\u2699</span>Admin Panel</a>`);
+    const a = h(`<a class="nav-item ${active === 'admin' ? 'active' : ''}"${isEmbeddedFrame ? ' tabindex="0"' : ` href="${routeUrl('admin')}"`}><span class="ic">\u2699</span>Admin Panel</a>`);
     a.addEventListener('click', (e) => {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault();
@@ -483,11 +543,15 @@ const SEO_META = {
   'loop-power': { title: '4-20 mA Loop Power Budget Calculator', description: 'Check whether a 4-20mA loop\u2019s supply voltage covers the transmitter\u2019s minimum voltage plus all series wiring and load resistances at 20mA.' },
   'cable-gland': { title: 'Cable & Gland Size Calculator', description: 'Predict instrumentation or power cable overall diameter from core count, size and armouring, and get the matching standard cable gland size.' },
   'formula-library': { title: 'Engineering Formula Library', description: 'Searchable reference library of engineering formulas for instrumentation, process, and electrical calculations.' },
+  'kks-reference': { title: 'KKS Code Reference \u2014 Supercritical Thermal Plant', description: 'Kraftwerk-Kennzeichensystem (KKS) tag-building methodology and a click-down Area \u2192 System \u2192 Subsystem explorer, plus signal suffix codes (XB, XG, XH, XQ...) \u2014 for a supercritical coal-fired unit.' },
+  'isa-tag-reference': { title: 'ISA-5.1 Instrument Tag Reference', description: 'Complete ANSI/ISA-5.1 instrument identification letter table and common tag combinations (PT, FIC, PSHH...), with a direct comparison to KKS \u2014 free searchable reference.' },
   'history': { title: 'Calculation History', description: 'Your saved calculation history for this device.', noindex: true },
-  'support': { title: 'Support the Project \u2014 EngCalc Hub', description: 'Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.' },
-  'about': { title: 'About This Site \u2014 EngCalc Hub', description: 'Who runs Engineering Calculator Hub, what it is for, and the methodology behind its calculators \u2014 standards cited, assumptions disclosed, confidence tiers shown.' },
-  'contact': { title: 'Contact Us \u2014 EngCalc Hub', description: 'Have a question, found an issue with a calculator, or need assistance? Get in touch with Engineering Calculator Hub.' },
-  'privacy': { title: 'Privacy Policy \u2014 EngCalc Hub', description: 'How Engineering Calculator Hub handles data: Google Analytics, Google AdSense, Razorpay payments, and browser-local calculation history storage.' },
+  'support': { title: 'Support the Project', description: 'Support the development of free engineering calculators for power plant, instrumentation and electrical engineers.' },
+  'about': { title: 'About This Site', description: 'Who runs Engineering Calculator Hub, what it is for, and the methodology behind its calculators \u2014 standards cited, assumptions disclosed, confidence tiers shown.' },
+  'contact': { title: 'Contact Us', description: 'Have a question, found an issue with a calculator, or need assistance? Get in touch with Engineering Calculator Hub.' },
+  'guides': { title: 'Engineering Guides \u2014 Power Plant Flow, Steam, Heat Rate & Control', description: 'Plain-language engineering guides for power plant and instrumentation engineers: ISO 5167 flow measurement, IAPWS-IF97 steam tables, feedwater heaters, SAMA diagrams, heat rate and condensers.' },
+  'terms': { title: 'Terms of Use', description: 'Terms of use and disclaimer for Engineering Calculator Hub: informational use only, no warranty, acceptable use and third-party services.' },
+  'privacy': { title: 'Privacy Policy', description: 'How Engineering Calculator Hub handles data: Google Analytics, Google AdSense, Razorpay payments, and browser-local calculation history storage.' },
   'reviews': { title: 'Reviews & Ratings \u2014 Engineering Calculator Hub', description: 'Read reviews and ratings from engineers using Engineering Calculator Hub.', noindex: true },
   'admin': { title: 'Admin', description: 'Site administration.', noindex: true },
   'pipe-pressure-drop': { title: 'Pipe Pressure Drop Calculator (Darcy-Weisbach)', description: 'Calculate pipe friction pressure drop, velocity and flow regime using the Darcy-Weisbach equation with Swamee-Jain friction factor.' },
@@ -497,8 +561,21 @@ const SEO_META = {
   'pump-specific-speed': { title: 'Pump Specific Speed Calculator', description: 'Calculate centrifugal pump specific speed (Ns) and get an impeller type (radial/mixed/axial) selection guide.' },
   'fan-laws': { title: 'Fan / Blower Affinity Laws & Power Calculator', description: 'Apply fan affinity laws for a speed change and calculate fan shaft power from flow, pressure rise and efficiency.' },
   'compressor-power': { title: 'Adiabatic Compressor Power Calculator', description: 'Calculate ideal-gas adiabatic compression work, discharge temperature, and shaft power from suction/discharge pressure and mass flow.' },
+  'plant-performance': { title: 'Plant Performance Indicators (PLF, PAF, APC%)', description: 'Calculate Plant Load Factor, Plant Availability Factor, Auxiliary Power Consumption %, and specific coal/oil consumption from a day’s or shift’s generation and fuel figures.' },
   'boiler-blowdown': { title: 'Boiler Blowdown Rate Calculator', description: 'Calculate boiler blowdown rate and percentage from steam generation rate and feedwater/boiler water TDS limits.' },
-  'cooling-tower': { title: 'Cooling Tower Performance Calculator', description: 'Calculate cooling tower range, approach, and thermal effectiveness against ambient wet-bulb temperature.' },
+  'cooling-tower': { title: 'Cooling Tower Performance Calculator', description: 'Calculate cooling tower range, approach, thermal effectiveness, and makeup water demand (evaporation, drift, blowdown) against ambient wet-bulb temperature.' },
+  'feedwater-heater': { title: 'Feedwater Heater TTD & DCA Calculator', description: 'Calculate Terminal Temperature Difference and Drain Cooler Approach for a feedwater heater from extraction pressure and process temperatures.' },
+  'iso5167-flow': { title: 'DP Flow Calculator — ISO 5167 Orifice, Nozzle & Venturi', description: 'Steam, water and gas flow from differential pressure using full ISO 5167: Reader-Harris/Gallagher discharge coefficient, IF97 steam properties, thermal expansion, limits of use and uncertainty.' },
+  'stodola-flow': { title: 'Turbine Stage-Group Flow — Stodola Ellipse Calculator', description: 'Steam flow through a turbine stage group from inlet and exit pressures with the Stodola ellipse law and exact IAPWS-IF97 specific volume.' },
+  'heater-extraction-flow': { title: 'Feedwater Heater Extraction Steam Flow Calculator', description: 'Extraction steam flow of a closed feedwater heater from an exact IF97 energy balance, with cascaded drain and heat-loss factor; also TTD and DCA.' },
+  'desuperheater-spray': { title: 'Desuperheater Spray Water Flow Calculator', description: 'Spray-water flow to cool superheated steam to a target temperature from an exact IAPWS-IF97 mass and energy balance, with superheat-margin check.' },
+  'condenser-cw-flow': { title: 'Condenser Cooling Water Flow Calculator', description: 'Cooling-water flow for a steam surface condenser from exhaust heat load using IF97 enthalpies, with TTD, LMTD and water-to-steam ratio.' },
+  'tracer-dilution-flow': { title: 'Tracer Dilution Flow Calculator — Constant Rate & Slug', description: 'Primary flow measurement by tracer dilution: constant-rate injection with GUM uncertainty and slug injection by trapezoid integration.' },
+  'pitot-duct-flow': { title: 'Pitot Traverse Duct Flow Calculator (EPA Method 1–3)', description: 'Flue-gas and air flow in ducts from a multi-point pitot traverse: gas density from Orsat and moisture, actual, standard and normal flow.' },
+  'ultrasonic-flow': { title: 'Ultrasonic Transit-Time Flow Calculator', description: 'Flow and speed of sound from upstream and downstream ultrasonic transit times, with an IAPWS-IF97 water sound-speed plausibility check.' },
+  'water-chemistry': { title: 'DM Plant Resin Regeneration Frequency Calculator', description: 'Calculate cation/softener resin bed run length and throughput before regeneration from exchange capacity and raw water hardness.' },
+  'coal-fuel': { title: 'Coal & Fuel Handling Calculator', description: 'GCV to NCV conversion, daily coal requirement, and stock days-of-cover calculators for thermal power plant fuel planning.' },
+  'emissions': { title: 'Combustion Emission Rate Calculator (CO2 & SO2)', description: 'Calculate stoichiometric CO2 and SO2 emission rate from fuel ultimate analysis (carbon and sulfur content) and firing rate.' },
   'bearing-life': { title: 'Bearing L10 Life Calculator (ISO 281)', description: 'Calculate rolling element bearing L10 life in revolutions and hours from dynamic load rating and equivalent load.' },
   'heat-exchanger': { title: 'Heat Exchanger LMTD & Area Calculator', description: 'Calculate log mean temperature difference (LMTD) and required heat transfer area for a heat exchanger from its four terminal temperatures.' },
   'horizontal-tank': { title: 'Horizontal Tank Volume Calculator (Dip Chart)', description: 'Calculate partial and total volume of a horizontal cylindrical tank from diameter, length and liquid fill depth \u2014 exact circular-segment geometry.' },
@@ -529,6 +606,7 @@ const SEO_META = {
   'civil-weir': { title: 'Weir Flow Calculator (Rectangular, Francis)', description: 'Calculate discharge over a rectangular sharp-crested weir using the Francis formula.' },
   'civil-earthwork': { title: 'Land Area & Earthwork Volume Calculator', description: 'Calculate triangle and trapezoid land area, slope grade, and cut/fill earthwork volume by the average end area method.' },
 };
+for (const g of GUIDES) SEO_META[guideRouteId(g)] = { title: g.title, description: g.description };
 
 // ---------- On-page educational content (SEO + genuine user value) ----------
 // A calculator with no surrounding explanation is "thin content" by search
@@ -729,6 +807,30 @@ const PAGE_CONTENT = {
       { q: 'How is a pipe\u2019s cross-sectional area calculated from outer diameter and wall thickness?', a: 'The pipe\u2019s inner diameter is first found by subtracting twice the wall thickness from the outer diameter, then the area is the solid outer circle\u2019s area minus the solid inner circle\u2019s area \u2014 the same annulus (ring) geometry used for any hollow circular section.' },
       { q: 'Can I use this for a square or rectangular hollow section (box tube)?', a: 'Not directly \u2014 this covers round bar, flat plate, and round pipe. A rectangular hollow section would need the outer rectangle\u2019s area minus the inner rectangle\u2019s area, a straightforward extension not currently implemented as a separate shape option.' },
       { q: 'Is the weight this gives the same as what a mill certificate would show?', a: 'It should be very close \u2014 mill certificates use the same density-based calculation, though actual delivered weight can vary slightly from nominal dimensions due to rolling tolerances, which this calculator (using your entered nominal dimensions) doesn\u2019t account for.' },
+    ],
+  },
+  'kks-reference': {
+    about: 'KKS (Kraftwerk-Kennzeichensystem, the Power Plant Identification System) is the standard used across most large coal and gas thermal plants worldwide \u2014 including the great majority of Indian supercritical units \u2014 to give every system, piece of equipment, and signal a unique, unambiguous tag, independent of language or drawing. A code like HAC10 or LBA20 isn\u2019t arbitrary: reading left to right, the letters narrow down from plant area to specific system, and the trailing digits number the individual instance. This reference organizes the codes actually used on a supercritical coal-fired unit by the plant area an engineer would actually search by \u2014 boiler pressure parts, steam-water cycle, turbine-generator, coal handling, cooling water, and the rest \u2014 rather than requiring you to already know which of the roughly two dozen KKS main-group letters a system falls under. It draws on the VGB KKS guidelines and real project-issued KKS lists (including supercritical unit documentation), not a single vendor\u2019s abbreviated cheat sheet.',
+    faq: [
+      { q: 'What do the letters in a KKS code actually mean?', a: 'Reading left to right, each letter narrows the identification further: the first letter is the main plant area (H for the boiler, L for the steam-water cycle, M for the turbine-generator, and so on), the second letter narrows that to a system within the area, and a third letter (where used) narrows it to a specific sub-system. The digits that follow number the individual instance \u2014 e.g. which of several identical pumps.' },
+      { q: 'Why does this reference call out HAG specifically as "not used in a natural-circulation boiler"?', a: 'It\u2019s one of the few places the KKS code itself tells you something about the unit\u2019s design: HAG is the boiler\u2019s circulation system. A drum-type (natural or forced circulation) boiler has one; a once-through supercritical boiler, which has no steam drum at all, does not \u2014 so whether a real KKS list for a given unit includes an HAG tag is itself a quick, genuine tell for which boiler type you\u2019re looking at.' },
+      { q: 'Why does the steam-water cycle (L) have its own water treatment codes (LD) separate from the plant\u2019s general water treatment (G)?', a: 'They serve genuinely different water qualities and purposes. G covers raw, service, and drinking water treatment for the plant as a whole. L\u2019s own LD codes cover condensate polishing and deaeration \u2014 treatment of the actual high-purity boiler feedwater circulating inside the steam-water cycle itself, which has far stricter chemistry requirements than general plant water.' },
+      { q: 'Is KKS still the current standard, or has it been replaced?', a: 'KKS remains very widely used, especially on existing plants and across India, China, and the Middle East, but it is gradually being superseded on new projects by RDS-PP (Reference Designation System for Power Plants), an IEC-aligned successor with a broadly similar area-first structure. Most engineers working on brownfield or existing supercritical units will still encounter KKS directly.' },
+      { q: 'Does every plant use exactly these codes?', a: 'The main-group letters and the most common subgroups (economizer, superheater, feedwater pump, and so on) are standardized and consistent project to project, which is the whole point of KKS. Lower-level details \u2014 exact numbering, some project-specific subgroup assignments \u2014 are agreed per project, so always confirm against your own plant\u2019s actual KKS list for anything safety- or maintenance-critical; treat this as a reference for understanding the system, not a substitute for your plant\u2019s documentation.' },
+      { q: 'What do the numbers after the letters mean in a full tag like 10HAC01AP001?', a: 'They come from two entirely different, separately-agreed number tables, which is easy to miss. 01 (right after HAC) numbers WHICH instance of the economizer system this is \u2014 relevant if the unit has more than one. 001 (at the very end) numbers a specific component belonging to the equipment unit AP identifies \u2014 e.g. one particular sensor or terminal box on that pump. Neither number is arbitrary, but they answer different questions: "which system instance" versus "which part of this specific device".' },
+      { q: 'The explorer shows some systems with no subsystems listed below them \u2014 is that a gap in this reference?', a: 'No \u2014 for a system like CW (control rooms), the two-letter system code is itself the most specific standardized KKS tag; there\u2019s no further F3 breakdown to show because the real system doesn\u2019t have project-agnostic subsystem codes at that level. The explorer says so directly rather than just showing an empty, unexplained space.' },
+      { q: 'How is a specific feedback or command signal actually named \u2014 e.g. the "on" feedback for a pump?', a: 'That\u2019s what the signal suffix codes (further down this page) are for, a finer layer within the same KKS system: appended directly after a device\u2019s own equipment tag, a code like XB01 identifies one individual feedback bit read back from it. XB01 specifically covers "on/open" feedback \u2014 confirmation from the drive that it is actually on, not the command that told it to turn on \u2014 and many projects also wire the complementary "confirmed off" feedback 50 numbers later (XB51) alongside it, so a genuine OFF state can be told apart from a stuck contact.' },
+      { q: 'What code is used for a command signal, and how do DI, DO, AI, and AO map to KKS?', a: 'Commands use a separate KKS suffix scheme from the X-prefix Signal Code covered above \u2014 the Application Code, prefixed Y instead of X, officially listed in the McGraw-Hill KKS appendix alongside its Signal Code counterpart. Mapped to the usual PLC/DCS signal classes: DI is XG (a binary signal wired straight from a field switch); AI is XQ (a continuous incoming analog reading); DO is YB (a binary/discrete command \u2014 on/off, open/close \u2014 sent out to a drive); AO is YQ (a continuous outgoing analog value, e.g. a 4-20mA setpoint to a valve positioner). All four are covered in the Signal Suffix Codes section below, alongside the confirmed XB01/YB01 command-versus-feedback pair.' },
+    ],
+  },
+  'isa-tag-reference': {
+    about: 'ANSI/ISA-5.1 is the standard used across most process, power, and manufacturing industries worldwide \u2014 dominant in North America, and widely used internationally alongside KKS and its own IEC 60617 counterpart \u2014 to identify what an individual field instrument actually measures and does. Where KKS answers "where in the plant does this sit", ISA-5.1 answers "what does this device do": a tag like FT-101 or TIC-205 is built entirely from a first letter (the measured variable), one or more succeeding letters (the function performed), and a loop number. This reference presents the complete official identification letter table from ANSI/ISA-5.1-2009 \u2014 not an abbreviated vendor cheat sheet \u2014 alongside the everyday tag combinations (PT, FIC, PSHH, and dozens more) actually built from it, each with a short note on why the combination reads the way it does.',
+    faq: [
+      { q: 'How do I read a multi-letter tag like PDIT or TRC?', a: 'Left to right: the first letter is the measured variable (or a modifier applied to it, like D for differential), and every letter after that adds a function. PDIT is Pressure Differential Indicating Transmitter \u2014 P (pressure) + D (differential modifier) + I (indicate) + T (transmit). TRC is Temperature Recording Controller: the passive/readout function (R, record \u2014 for a human) comes before the active/output function (C, control \u2014 automated), which is the standard ISA-5.1 letter ordering, not specific to temperature.' },
+      { q: 'Why does the same letter mean different things in different positions?', a: 'ISA-5.1\u2019s table has separate columns for exactly this reason: a letter\u2019s meaning depends on whether it\u2019s the first letter or a succeeding letter. R as a first letter means Radiation; as a succeeding letter it means Record. S as a first letter means Speed; as a succeeding letter it can mean Safety, Switch, or Stop depending on which succeeding-letter column it appears in. Always check the column, not just the letter.' },
+      { q: 'What\u2019s the difference between FE, FT, and FIC on the same flow loop?', a: 'They\u2019re three different devices on one measurement, not three names for the same thing: FE is the Flow Element, the physical primary sensor (e.g. an orifice plate) that actually contacts the process; FT is the Flow Transmitter that converts the element\u2019s signal into a transmittable value; FIC is the Flow Indicating Controller that displays it to an operator and can act on it. A real loop diagram often shows all three tied to the same loop number.' },
+      { q: 'How does a KKS tag and an ISA-5.1 tag relate to the same physical device?', a: 'They can both exist on the same instrument, answering different questions: the KKS tag (e.g. 10LAC01CT001) fixes its location in the plant hierarchy \u2014 which unit, which system, which item number \u2014 while the ISA-5.1 tag (e.g. FT-101) fixes its function \u2014 what it measures and what it does. A project using both typically cross-references the two in its instrument index, rather than picking one over the other.' },
+      { q: 'Are "N" and "O" really left undefined by the standard?', a: 'Yes, deliberately \u2014 ISA-5.1 reserves certain letters (most notably N and, in some editions, parts of the table) as "User\u2019s Choice", handed back to each project to define in its own instrumentation legend sheet. This reference marks those slots as User\u2019s Choice rather than inventing a meaning for them; always check the specific project\u2019s legend for what they\u2019ve been assigned to mean there.' },
     ],
   },
   'relay-settings': {
@@ -1115,6 +1217,119 @@ const PAGE_CONTENT = {
       { q: "Why use wet-bulb temperature specifically, not the more commonly quoted dry-bulb temperature?", a: "Evaporative cooling capacity is fundamentally set by how much additional moisture the air can absorb, which is what wet-bulb temperature measures directly \u2014 dry-bulb (ordinary air temperature) says nothing about humidity, and substituting it for wet-bulb in a cooling tower performance check would meaningfully misstate the tower\u2019s real effectiveness, especially in humid climates." },
     ],
   },
+  'plant-performance': {
+    about: "PLF, PAF, and APC% are the three numbers every thermal station's daily MIS return is actually built around, and each is a direct ratio of metered quantities — no assumed coefficient anywhere. PLF (Plant Load Factor) measures how hard the unit ran relative to its installed capacity; PAF (Plant Availability Factor) measures how much of the period the unit was even available to run, independent of how hard it was actually loaded; APC% (Auxiliary Power Consumption) measures how much of the unit's own gross output its auxiliaries (fans, pumps, mills, coal handling) consume before any of it reaches the grid.",
+    faq: [
+      { q: "Why can PLF be low even when PAF is 100%?", a: "PLF and PAF measure genuinely different things — a unit can be fully available (PAF 100%) all period yet still be backed down or two-shifted for grid demand reasons, giving a low PLF despite perfect availability. Conversely a unit can be highly loaded whenever it runs (high PLF-when-running) but have poor PAF due to forced outages, which is why utilities track both, not just one." },
+      { q: "Does PLF use gross or net generation?", a: "This calculator follows the CEA (Central Electricity Authority, India) convention of gross generation against installed capacity, which is the most common basis — but it isn't universal; some utilities and some contractual PPAs define PLF on a net basis instead, so check which convention applies before comparing this figure against a target or benchmark from another source." },
+      { q: "Why does APC% matter commercially, not just technically?", a: "APC% directly determines how much of the plant's gross output is actually available to sell — a plant with high APC% needs proportionally MORE gross generation (and more fuel) to deliver the same net energy to the grid, which is exactly why APC% appears in tariff and incentive/penalty structures in many regulatory frameworks, not just as an internal efficiency metric." },
+    ],
+  },
+  'feedwater-heater': {
+    about: "A feedwater heater is designed with a small, deliberate temperature gap between the extraction steam's saturation temperature and the feedwater it heats (TTD), and another small gap between the drained condensate and the incoming feedwater (DCA) — both gaps exist by design, not by accident, and both are genuinely diagnostic when they change. A stable TTD/DCA at a given load is normal; a RISING TTD or DCA at unchanged load and extraction pressure is what actually signals degrading heater performance.",
+    faq: [
+      { q: "Why does TTD normally have a small POSITIVE value rather than zero?", a: "A finite temperature difference is what actually drives heat transfer across the tube bundle — an infinitely large heat transfer surface would be needed to reach TTD=0, so real heaters are designed with a small, economically-sized TTD (commonly a few °C) as a deliberate design trade-off between heater size/cost and thermodynamic performance, not a flaw to be eliminated." },
+      { q: "What does a RISING TTD over time actually indicate?", a: "At unchanged load and extraction pressure, a rising TTD points to reduced heat transfer across the tube bundle — most commonly tube-side fouling/scaling, or the shell side flooding above its design water level (which reduces the effective heat transfer area exposed to condensing steam), both of which genuinely degrade the heater's ability to close that temperature gap." },
+      { q: "Why is DCA a separate check from TTD, not just the same information twice?", a: "TTD checks the condensing (steam) zone's performance; DCA checks a physically DIFFERENT zone — the drain cooler section, where already-condensed drain water is subcooled against incoming feedwater before leaving the heater. A heater can have a healthy TTD while its drain cooler zone is uncovered or bypassed, which DCA specifically catches and TTD alone would miss." },
+    ],
+  },
+  'iso5167-flow': {
+    about: 'ISO 5167 is the international standard for measuring flow with orifice plates, nozzles and Venturi tubes. Flow follows from the differential pressure across the element, but accuracy depends on getting the discharge coefficient C (which varies with Reynolds number and diameter ratio β), the expansibility ε of the fluid, the fluid density at the upstream tap, and the true bore and pipe diameters at operating temperature right. This calculator solves the full ISO equations with exact IAPWS-IF97 steam and water properties and reports an uncertainty budget.',
+    faq: [
+      { q: 'Why does the discharge coefficient need iteration?', a: 'C depends on the pipe Reynolds number, which itself depends on the flow being calculated, so the solver repeats until flow and C agree.' },
+      { q: 'Why does bore thermal expansion matter for steam?', a: 'At 540 °C an austenitic bore grows about 1–2 %, which changes the flow by a similar amount. The expansion coefficients are therefore inputs you should take from your material data.' },
+      { q: 'What total uncertainty should I expect from an orifice meter?', a: 'ISO 5167-2 puts the discharge-coefficient uncertainty at about 0.5 % for diameter ratios between 0.2 and 0.6, rising outside that range. Added to the uncertainty of the Δp transmitter, the density (from pressure and temperature) and the measured diameters, a well-installed steam orifice typically lands around 1–2 %. The calculator shows each contribution so you can see which instrument dominates.' },
+      { q: 'Which tap arrangement should I select?', a: 'The one the plate was manufactured and installed for. Corner, flange and D and D/2 taps give different discharge coefficients, so choosing the wrong one produces a systematic error of the order of a percent or more.' },
+      { q: 'Why does the calculator warn when p2/p1 is below 0.75?', a: 'The expansibility equations in ISO 5167 were derived for pressure ratios of 0.75 or higher. At lower ratios the correlation is outside its tested range and the result should be treated with caution; use a smaller bore or a wider-range Δp measurement.' },
+    ],
+  },
+  'stodola-flow': {
+    about: 'The Stodola ellipse law relates the flow through a turbine stage group to the pressures before and after it: flow is proportional to the square root of (p1² − p2²) divided by (p1·v1). It is scaled from one known reference point and is used to infer extraction and throttle flows between heat-balance conditions.',
+    faq: [
+      { q: 'When does the Stodola law not apply?', a: 'When the group is close to choked flow, when geometry changes (e.g. governing-stage nozzle groups opening), or in wet steam.' },
+      { q: 'Where should the reference point come from?', a: 'A heat balance or acceptance test at a known load — the result is only as accurate as that reference.' },
+      { q: 'What is the Stodola constant?', a: 'It is the flow divided by √[(p₁² − p₂²)/(p₁·v₁)] at your reference point. Once fixed, the same constant predicts flow at other pressures for the same stage group, so it captures the group’s effective flow area.' },
+      { q: 'Why is specific volume taken at the inlet?', a: 'The law was derived for compressible flow through a series of stages, where the inlet density sets how much steam a given pressure ratio can pass. Using the actual inlet temperature through the IAPWS-IF97 specific volume keeps the scaling correct when temperature changes along with pressure.' },
+    ],
+  },
+  'heater-extraction-flow': {
+    about: 'The extraction steam flow of a closed feedwater heater follows from an energy balance: heat released by the condensing and sub-cooling extraction steam (plus any cascaded drain) equals heat absorbed by the feedwater. Using exact IF97 enthalpies avoids the errors of a constant specific heat at 200 bar and 200 °C.',
+    faq: [
+      { q: 'Why use compressed-liquid enthalpy at feedwater pressure?', a: 'Liquid enthalpy at 200 bar differs by several kJ/kg from saturated-liquid values at the same temperature, which changes the duty by a visible fraction of a percent.' },
+      { q: 'What if the drain is cascaded?', a: 'Enter the cascade flow and state from the higher-pressure heater; it supplies part of the duty and is subtracted from the required extraction.' },
+      { q: 'Why does the drain temperature matter for the extraction flow?', a: 'The condensed steam leaves at the drain temperature, so the enthalpy it carries away sets how much energy is released to the feedwater. A drain cooler that sub-cools the condensate releases more energy per kilogram, so less extraction steam is needed for the same duty.' },
+      { q: 'What heat-transfer effectiveness should I use?', a: 'Closed heaters are well insulated, and 99–100 % is typical. Use the lower end if the casing is known to lose heat. The value has only a small effect on the result compared with the feedwater flow and temperature measurements.' },
+    ],
+  },
+  'desuperheater-spray': {
+    about: 'A desuperheater cools superheated steam by injecting feedwater. The spray flow follows from mass and energy balance across the mixing section, so a precise answer needs real steam and compressed-water enthalpies rather than a constant specific heat. The result also shows the remaining superheat margin above saturation.',
+    faq: [
+      { q: 'Why must outlet superheat stay above saturation?', a: 'If spray does not fully evaporate, water droplets can erode and thermally shock downstream piping and valves; practice is to keep roughly 10–15 °C margin, but follow the manufacturer.' },
+      { q: 'Does spray pressure matter?', a: 'Slightly: spray enthalpy is that of compressed liquid at its own pressure and temperature, and it must also exceed the steam pressure to inject.' },
+      { q: 'Why must the spray water pressure exceed the steam pressure?', a: 'Water can only be injected if its pressure is above that of the steam. Feedwater taken from the boiler feed pump discharge is normally at a much higher pressure, which is why the spray pressure input is separate from the steam pressure.' },
+      { q: 'Does the calculation include pressure drop across the desuperheater?', a: 'It uses the outlet pressure you give, or the inlet pressure if you leave it blank. For a typical spray-type desuperheater the pressure drop is small and has little effect on the enthalpy balance.' },
+    ],
+  },
+  'condenser-cw-flow': {
+    about: 'Cooling-water flow for a surface condenser is set by the heat that must be removed from the exhaust steam and the allowable water temperature rise. Exact IF97 enthalpies are used for wet steam, condensate and cooling water, and TTD, LMTD and water-to-steam ratio are reported for performance checks.',
+    faq: [
+      { q: 'What is a typical water-to-steam ratio?', a: 'Roughly 50–70 kg of cooling water per kg of exhaust steam for a once-through condenser; compare your result with design.' },
+      { q: 'Why does a smaller TTD need more water?', a: 'For a fixed duty a smaller approach requires a larger heat-transfer area or a lower water temperature rise, i.e. more flow.' },
+      { q: 'Why is the exhaust dryness around 0.9?', a: 'As steam expands through the last turbine stages it partly condenses, so exhaust steam is a wet mixture. A dryness fraction of roughly 0.88 to 0.94 is typical; the exact value comes from the turbine heat balance.' },
+      { q: 'Does the flow include seawater or brackish cooling water?', a: 'The enthalpy values are for pure water. Seawater has a slightly lower specific heat, so the flow needed for the same temperature rise is a few percent higher; scale the result by the specific-heat ratio for your water.' },
+    ],
+  },
+  'tracer-dilution-flow': {
+    about: 'Tracer dilution is a primary flow method that does not depend on pipe geometry: a known amount or rate of a conservative tracer is injected and its dilution is measured downstream. It is used to calibrate large cooling-water and penstock meters.',
+    faq: [
+      { q: 'How far downstream should the sample be taken?', a: 'Far enough for complete cross-section mixing; poor mixing is the dominant error and must be verified by multi-point sampling.' },
+      { q: 'Why subtract the background?', a: 'Natural background of the tracer species would otherwise bias C2 and so the computed flow.' },
+      { q: 'When should I use constant-rate injection instead of slug injection?', a: 'Constant-rate injection suits steady flow and lets you average a plateau, which is more tolerant of mixing problems. Slug injection needs less tracer and is convenient for large flows, but the full response curve must be recorded until the concentration returns to background.' },
+      { q: 'What limits the accuracy of a tracer test?', a: 'Mixing and analysis. If the tracer has not mixed across the section at the sampling point, the sample is not representative; and an inaccurate calibration of the concentration analyser biases the result directly.' },
+    ],
+  },
+  'pitot-duct-flow': {
+    about: 'Flow in large ducts is measured by traversing a pitot tube across equal-area points (EPA Method 1), computing each point velocity from the velocity head and gas density, and averaging the velocities. Gas density comes from absolute pressure, temperature, dry molecular weight (Orsat) and moisture (EPA Methods 2 and 3).',
+    faq: [
+      { q: 'Why average velocities and not velocity heads?', a: 'Velocity goes as the square root of velocity head, so the mean of square roots is smaller than the root of the mean; averaging heads would overstate flow.' },
+      { q: 'What pitot coefficient should I use?', a: 'Use the calibration certificate; typical values are 0.84 for an S-type and about 0.99 for a standard Prandtl pitot.' },
+      { q: 'How many traverse points are needed?', a: 'EPA Method 1 specifies the number from the duct diameter and the distance to the nearest flow disturbance; typically 12 to 24 points for a circular duct. More points reduce the error from an uneven velocity profile.' },
+      { q: 'Why is molecular weight needed?', a: 'Gas density sets the velocity for a given velocity head. Flue gas is heavier than air because of CO₂ and water vapour; the Orsat analysis and moisture content give the molecular weight and so the density.' },
+    ],
+  },
+  'ultrasonic-flow': {
+    about: 'A transit-time ultrasonic meter sends pulses upstream and downstream along an angled path. The flowing fluid shortens the downstream and lengthens the upstream time; their difference gives the path velocity and their mean gives the speed of sound, which is a useful sanity check of the measurement.',
+    faq: [
+      { q: 'Why is the measured speed of sound useful?', a: 'It should match the known value for the fluid at its temperature; a deviation points to a wrong path length, temperature or timing offset.' },
+      { q: 'What is the profile factor k?', a: 'The ratio between area-mean velocity and the velocity along the acoustic path; it depends on Reynolds number and path layout and is normally supplied by the meter maker.' },
+      { q: 'What is the difference between clamp-on and spool-piece meters?', a: 'A spool-piece meter has transducers built into the pipe and a known path, giving lower uncertainty. A clamp-on meter attaches outside the pipe, so its accuracy also depends on how well the pipe wall thickness, material and diameter are known.' },
+      { q: 'Why does the meter need both upstream and downstream transit times?', a: 'The difference between them gives the flow velocity, while their average gives the speed of sound. Using both cancels the effect of temperature on the sound speed, so the velocity measurement does not depend on knowing the fluid temperature.' },
+    ],
+  },
+  'water-chemistry': {
+    about: "A cation/softener resin bed removes dissolved hardness (calcium and magnesium, expressed as an equivalent CaCO₃ concentration) from raw water until its exchange sites are used up, at which point it must be regenerated with acid or brine before it can continue. Run length before that point is a straightforward mass balance: how much hardness the resin can hold in total, divided by how fast raw water is delivering hardness to it — the same number real DM plant operators use to schedule regeneration shifts.",
+    faq: [
+      { q: "Why is hardness expressed \"as CaCO₃\" rather than as calcium and magnesium separately?", a: "Expressing all hardness-causing ions on a common CaCO₃-equivalent basis (using each ion's own equivalent weight) lets calcium, magnesium, and the resin's own exchange capacity all be added and compared on one consistent scale — this is standard water treatment practice specifically so a single hardness number and a single resin capacity number can be used together in one mass balance." },
+      { q: "Why does real practice regenerate before the resin is fully exhausted?", a: "Hardness leakage (a small amount of hardness passing through untreated) rises progressively as the bed approaches full exhaustion, rather than staying at zero right up to a hard cutoff — real DM plants set a conservative throughput or a hardness leakage alarm well before theoretical exhaustion specifically to avoid feeding hardness downstream into the boiler, where it directly drives the scaling this whole treatment train exists to prevent." },
+      { q: "Does a higher raw water hardness always mean proportionally more frequent regeneration?", a: "Yes — run length is inversely proportional to raw water hardness at a fixed flow rate, so a seasonal or source change that doubles raw water hardness will, all else equal, roughly halve the resin bed's run length between regenerations, which is exactly why raw water quality monitoring feeds directly into regeneration scheduling, not just a fixed calendar interval." },
+    ],
+  },
+  'coal-fuel': {
+    about: "GCV (Gross Calorific Value, from bomb calorimetry) overstates the heat a real boiler actually recovers, because it assumes the water formed by combustion fully condenses and gives up its latent heat — in a real boiler, that water leaves as vapor in the flue gas, carrying its latent heat away unused. NCV (Net Calorific Value) corrects for exactly that loss, and is the figure that actually belongs in a boiler efficiency or fuel consumption calculation. Alongside it, daily coal requirement and stock days-of-cover are the two numbers a plant's fuel/commercial desk checks every single day.",
+    faq: [
+      { q: "Why does hydrogen content matter for the GCV→NCV correction, not just moisture?", a: "Every kilogram of hydrogen in the fuel combines with oxygen to form 9 kg of water during combustion (from the molecular weight ratio of water to hydrogen, 18/2) — that combustion-formed water carries away latent heat exactly the same way the fuel's own inherent moisture does, so a fuel with negligible inherent moisture but meaningful hydrogen content (like most liquid and gaseous fuels) still needs a real GCV→NCV correction." },
+      { q: "Which calorific value should be used for heat rate and fuel consumption calculations?", a: "NCV — it represents the heat actually recoverable in a real boiler, which is what a heat rate or specific fuel consumption figure is meant to reflect. Using GCV instead would systematically understate specific fuel consumption (make the plant look more efficient than it actually is), since it credits heat that never actually reaches the working fluid." },
+      { q: "Why does days-of-cover assume constant SCC and generation rather than giving a fixed answer?", a: "Both genuinely vary — SCC drifts with coal quality, mill/combustion condition, and ambient conditions, while generation follows grid dispatch — so days-of-cover is only ever a projection under the assumption that recent conditions continue, which is exactly why it should be re-checked with updated figures rather than treated as a one-time calculation." },
+    ],
+  },
+  'emissions': {
+    about: "CO₂ and SO₂ emission rate follow directly and exactly from the fuel's own carbon and sulfur content via basic combustion stoichiometry (C + O₂ → CO₂, S + O₂ → SO₂) — the molecular weight ratios involved (44/12 for carbon→CO₂, 64/32 for sulfur→SO₂) are fixed chemistry, not plant-specific assumptions. NOx and particulate (SPM) emissions are deliberately NOT included here, because unlike CO₂/SO₂ they are not determined by fuel composition alone — they depend on combustion technology, flame temperature, staging, and whichever pollution control equipment (ESP, FGD, SCR/SNCR) is fitted, which is exactly why real plants measure them with a CEMS rather than calculating them from a fuel analysis report.",
+    faq: [
+      { q: "Why is CO₂ basically un-reducible by combustion control, while SO₂ is not?", a: "CO₂ emission is fixed entirely by how much carbon is burned — there is no combustion technique that reduces it for a given fuel and generation output, short of switching fuel or adding carbon capture (not yet standard on coal/gas thermal units). SO₂, by contrast, CAN be reduced after combustion by a Flue Gas Desulfurization (FGD) system, which is exactly why this calculator's SO₂ figure is explicitly the pre-control rate — actual stack SO₂ is lower wherever FGD is fitted and operating." },
+      { q: "Why can't NOx be calculated the same simple way as CO2/SO2 from fuel analysis?", a: "CO₂ and SO₂ come directly from oxidizing carbon and sulfur already present in the fuel — straightforward stoichiometry. NOx forms two genuinely different ways: from nitrogen already in the fuel (fuel NOx) AND from atmospheric nitrogen and oxygen reacting at high flame temperature (thermal NOx) — the second pathway depends on combustion temperature, staging, and residence time, none of which a fuel analysis report captures, which is why NOx requires either detailed combustion modeling or direct stack measurement, not a simple mass balance." },
+      { q: "Is the calculated CO2/SO2 figure the actual measured stack value?", a: "Not necessarily — this is the theoretical maximum from complete combustion of the fuel's carbon and sulfur content. Actual CO2 is essentially this figure (since combustion of carbon to CO2 is normally close to complete), but actual stack SO2 will read lower than this wherever an FGD system is capturing sulfur before the flue gas reaches the stack." },
+    ],
+  },
   'bearing-life': {
     about: "A rolling-element bearing's rated (L10) life is the number of revolutions (or operating hours) at which 90% of a large population of identical bearings, operating under identical conditions, are still expected to be running \u2014 not a guarantee for any single bearing, but a statistically defined design life per ISO 281. Because bearing fatigue life scales with the CUBE (ball bearings) or higher power (roller bearings) of the ratio between dynamic load rating and actual applied load, even a modest overload shortens expected life dramatically, which is exactly why correct load calculation matters far more than it might first appear.",
     faq: [
@@ -1242,13 +1457,29 @@ const PAGE_CONTENT = {
   },
 };
 
+// FAQ content for hand-written pages (About, Contact, Privacy, Support)
+// that build their own HTML directly rather than going through the
+// generic PAGE_CONTENT + renderLearnMore() pipeline -- that pipeline's
+// heading is hardcoded to "About This Calculation", which doesn't fit a
+// non-calculator page, so those pages render their own FAQ markup
+// instead. This lets faqJsonLd() still pick the content up for
+// structured data without forcing that mismatched heading on them.
+const CUSTOM_PAGE_FAQ = {
+  support: [
+    { q: 'Do I have to donate to use the calculators?', a: 'No \u2014 every calculator on this site is fully free to use, with no sign-up, no paywall, and no feature gated behind a donation. Support is entirely optional and never required.' },
+    { q: 'Is my payment secure?', a: 'Yes \u2014 payments are processed by Razorpay, a licensed payment gateway used by a large number of Indian businesses; this site never sees or stores your card, UPI, or bank details directly.' },
+    { q: 'Is this a one-time payment or a recurring subscription?', a: 'A one-time contribution of whatever amount you choose \u2014 there is no subscription, and nothing is charged again automatically.' },
+    { q: 'Where exactly does my contribution go?', a: 'Toward the ongoing cost of running this site (hosting, testing, and the time spent adding and verifying new calculators against real published standards) and toward building a library in Bihar for children from very poor backgrounds \u2014 the same mission stated in the site footer.' },
+    { q: 'Can I support the project without donating money?', a: 'Yes \u2014 leaving a rating on the Reviews page, reporting a bug or a calculator you\u2019d like to see added, or simply telling a colleague about the site all genuinely help, at no cost to you.' },
+  ],
+};
 function faqJsonLd(route) {
-  const content = PAGE_CONTENT[route];
-  if (!content || !content.faq || !content.faq.length) return null;
+  const faq = (PAGE_CONTENT[route] && PAGE_CONTENT[route].faq) || CUSTOM_PAGE_FAQ[route];
+  if (!faq || !faq.length) return null;
   return {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
-    mainEntity: content.faq.map((f) => ({
+    mainEntity: faq.map((f) => ({
       '@type': 'Question',
       name: f.q,
       acceptedAnswer: { '@type': 'Answer', text: f.a },
@@ -1270,7 +1501,7 @@ function breadcrumbJsonLd(route) {
   if (!group) return null;
   const item = group.items.find((it) => it.id === route);
   const meta = SEO_META[route];
-  const url = `${SITE_URL}/?page=${encodeURIComponent(route)}`;
+  const url = `${SITE_URL}/${encodeURIComponent(route)}/`;
   const items = [
     { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE_URL}/` },
     { '@type': 'ListItem', position: 2, name: group.group, item: `${SITE_URL}/` },
@@ -1324,10 +1555,14 @@ const CONFIDENCE_TIERS = {
   },
 };
 const ROUTE_TIER = {
+  'iso5167-flow': 'verified', 'heater-extraction-flow': 'verified', 'desuperheater-spray': 'verified', 'condenser-cw-flow': 'verified',
+  'tracer-dilution-flow': 'verified', 'pitot-duct-flow': 'verified', 'stodola-flow': 'scoped', 'ultrasonic-flow': 'scoped',
   'short-circuit': 'verified', 'idmt': 'verified', 'relay-settings': 'verified',
   'grounding-grid': 'verified', 'steam-props': 'verified', 'dp-flow-cal': 'verified',
   'control-loops': 'verified', 'relief-valve': 'verified', 'gauge-range': 'verified', 'loop-power': 'verified', 'interface-level': 'verified',
   'compressor-power': 'verified', 'boiler-blowdown': 'verified', 'cooling-tower': 'verified',
+  'plant-performance': 'verified', 'feedwater-heater': 'verified', 'water-chemistry': 'verified',
+  'coal-fuel': 'verified', 'emissions': 'verified',
 
   'orifice': 'scoped', 'heat-exchanger': 'scoped', 'cable-sizing': 'scoped',
   'cable-withstand': 'scoped', 'pump-npsh': 'scoped', 'fan-laws': 'scoped', 'pump-specific-speed': 'scoped',
@@ -1380,6 +1615,10 @@ let adSenseScriptLoaded = false;
 function ensureAdSenseScriptLoaded() {
   if (adSenseScriptLoaded) return;
   adSenseScriptLoaded = true;
+  // The loader now ships in the static <head> of every page (index.html /
+  // prerender.js output); only inject it here if that copy is somehow missing,
+  // so adsbygoogle.js is never loaded twice.
+  if (document.querySelector('script[src*="adsbygoogle.js"]')) return;
   const script = document.createElement('script');
   script.async = true;
   script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509';
@@ -1390,7 +1629,7 @@ function applySeo(route) {
   const meta = SEO_META[route] || SEO_META[''];
   const fullTitle = route === '' ? meta.title : `${meta.title} | ${SITE_NAME}`;
   document.title = fullTitle;
-  const url = route === '' ? `${SITE_URL}/` : `${SITE_URL}/?page=${encodeURIComponent(route)}`;
+  const url = route === '' ? `${SITE_URL}/` : `${SITE_URL}/${encodeURIComponent(route)}/`;
 
   const setMeta = (selector, attr, value) => {
     const el = document.querySelector(selector);
@@ -1463,7 +1702,36 @@ function applySeo(route) {
   }
 }
 
+const FLOW_PAGES = buildFlowPages({ app, h, fmt, resultRow, saveAndToast, exportCalculationPDF });
+const pageIso5167Flow = FLOW_PAGES['iso5167-flow'];
+const pageStodolaFlow = FLOW_PAGES['stodola-flow'];
+const pageHeaterExtractionFlow = FLOW_PAGES['heater-extraction-flow'];
+const pageDesuperheaterSpray = FLOW_PAGES['desuperheater-spray'];
+const pageCondenserCwFlow = FLOW_PAGES['condenser-cw-flow'];
+const pageTracerDilutionFlow = FLOW_PAGES['tracer-dilution-flow'];
+const pagePitotDuctFlow = FLOW_PAGES['pitot-duct-flow'];
+const pageUltrasonicFlow = FLOW_PAGES['ultrasonic-flow'];
+const pageGuideArticle0 = makeGuidePage(GUIDES[0]);
+const pageGuideArticle1 = makeGuidePage(GUIDES[1]);
+const pageGuideArticle2 = makeGuidePage(GUIDES[2]);
+const pageGuideArticle3 = makeGuidePage(GUIDES[3]);
+const pageGuideArticle4 = makeGuidePage(GUIDES[4]);
+const pageGuideArticle5 = makeGuidePage(GUIDES[5]);
 const ROUTES = {
+  'guide-orifice-venturi-flow-measurement': pageGuideArticle0,
+  'guide-steam-tables-iapws-if97': pageGuideArticle1,
+  'guide-feedwater-heaters-ttd-dca': pageGuideArticle2,
+  'guide-sama-diagrams-explained': pageGuideArticle3,
+  'guide-heat-rate-and-efficiency': pageGuideArticle4,
+  'guide-condenser-performance-cooling-water': pageGuideArticle5,
+  'iso5167-flow': pageIso5167Flow,
+  'stodola-flow': pageStodolaFlow,
+  'heater-extraction-flow': pageHeaterExtractionFlow,
+  'desuperheater-spray': pageDesuperheaterSpray,
+  'condenser-cw-flow': pageCondenserCwFlow,
+  'tracer-dilution-flow': pageTracerDilutionFlow,
+  'pitot-duct-flow': pagePitotDuctFlow,
+  'ultrasonic-flow': pageUltrasonicFlow,
   '': pageDashboard,
   'thermal-plant': pageThermalPlant,
   'protection': pageProtection,
@@ -1507,11 +1775,15 @@ const ROUTES = {
   'loop-power': pageLoopPower,
   'cable-gland': pageCableGland,
   'formula-library': pageFormulaLibrary,
+  'kks-reference': pageKksReference,
+  'isa-tag-reference': pageIsaTagReference,
   'history': pageHistory,
   'support': pageSupport,
   'about': pageAbout,
   'contact': pageContact,
   'privacy': pagePrivacy,
+  'terms': pageTerms,
+  'guides': pageGuides,
   'reviews': pageReviews,
   'admin': pageAdmin,
   'pipe-pressure-drop': pagePipePressureDrop,
@@ -1521,8 +1793,13 @@ const ROUTES = {
   'pump-specific-speed': pagePumpSpecificSpeed,
   'fan-laws': pageFanLaws,
   'compressor-power': pageCompressorPower,
+  'plant-performance': pagePlantPerformance,
   'boiler-blowdown': pageBoilerBlowdown,
   'cooling-tower': pageCoolingTower,
+  'feedwater-heater': pageFeedwaterHeater,
+  'water-chemistry': pageWaterChemistry,
+  'coal-fuel': pageCoalFuel,
+  'emissions': pageEmissions,
   'bearing-life': pageBearingLife,
   'heat-exchanger': pageHeatExchanger,
   'horizontal-tank': pageHorizontalTank,
@@ -1571,7 +1848,7 @@ function navigate(route, opts = {}) {
     // Still guarded: some sandboxed preview contexts restrict the History
     // API entirely, and a throw here must never break in-app navigation.
     try {
-      const url = currentRoute === '' ? location.pathname : `${location.pathname}?page=${encodeURIComponent(currentRoute)}`;
+      const url = routeUrl(currentRoute);
       history.pushState({ route: currentRoute }, '', url);
     } catch (e) { /* history API unavailable in this context -- navigation still works */ }
   }
@@ -1592,7 +1869,7 @@ function renderRelatedCalculators(route) {
   const block = h(`<div class="card" style="margin-top:16px;">
     <h2 class="panel-title" style="margin-top:0;">Related Calculators</h2>
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
-      ${picks.map((item) => `<a${isEmbeddedFrame ? ' tabindex="0"' : ` href="?page=${encodeURIComponent(item.id)}"`} class="pill" data-related-link="${item.id}" style="text-decoration:none;cursor:pointer;">${item.icon} ${item.label}</a>`).join('')}
+      ${picks.map((item) => `<a${isEmbeddedFrame ? ' tabindex="0"' : ` href="${routeUrl(item.id)}"`} class="pill" data-related-link="${item.id}" style="text-decoration:none;cursor:pointer;">${item.icon} ${item.label}</a>`).join('')}
     </div>
   </div>`);
   block.querySelectorAll('[data-related-link]').forEach((a) => {
@@ -1623,8 +1900,19 @@ function render() {
 // back/forward. Both are wrapped defensively for the same reason as above.
 try {
   const initialParams = new URLSearchParams(location.search);
-  const initialPage = initialParams.get('page');
-  if (initialPage && ROUTES[initialPage]) currentRoute = initialPage;
+  let initialPage = initialParams.get('page');
+  if (!initialPage && PATH_ROUTING) {
+    // Path form: /boiler-blowdown/ (also tolerate /boiler-blowdown and .../index.html)
+    const seg = location.pathname.slice(APP_BASE.length).replace(/index\.html$/, '').replace(/\/+$/, '');
+    if (seg && ROUTES[seg]) initialPage = seg;
+  }
+  if (initialPage && ROUTES[initialPage]) {
+    currentRoute = initialPage;
+    // Rewrite a legacy ?page= address to the canonical path address without reloading.
+    if (PATH_ROUTING && initialParams.get('page')) {
+      try { history.replaceState({ route: currentRoute }, '', routeUrl(currentRoute)); } catch (e) { /* ignore */ }
+    }
+  }
   window.addEventListener('popstate', (e) => {
     const route = (e.state && e.state.route) || '';
     navigate(ROUTES[route] ? route : '', { skipHistory: true });
@@ -2139,7 +2427,8 @@ function pageThermalPlant() {
           </div>
         </div>
         <div class="input-row">
-          <div class="field" style="flex:1"><label>DP (kPa)</label><input type="number" id="fe_dp" value="5"></div>
+          <div class="field" style="flex:1"><label>DP</label><input type="number" id="fe_dp" value="5" step="any"></div>
+          <div class="field" style="flex:1"><label>DP unit</label><select id="fe_dpu">${['Pa', 'mmWC', 'mbar', 'kPa', 'inWC', 'bar'].map((u) => `<option ${u === 'kPa' ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
           <div class="field" style="flex:1"><label>Upstream pressure (kPa abs)</label><input type="number" id="fe_p" value="101.325"></div>
           <div class="field" style="flex:1"><label>Temperature (°C)</label><input type="number" id="fe_t" value="20"></div>
         </div>
@@ -2172,7 +2461,7 @@ function pageThermalPlant() {
       }
       fluidSel.addEventListener('change', syncFluidUI);
       subContent.querySelector('#fe_type').addEventListener('change', (e) => {
-        const isPitot = e.target.value === 'pitot';
+        const isPitot = flow.FULL_AREA_ELEMENTS.includes(e.target.value);
         boreField.style.display = isPitot ? 'none' : '';
         boreLabel.textContent = e.target.value === 'orifice' ? 'Orifice bore (mm)' : 'Throat diameter (mm)';
         if (e.target.value === 'custom') {
@@ -2192,11 +2481,11 @@ function pageThermalPlant() {
       subContent.querySelector('#fe_calc').addEventListener('click', () => {
         const elementType = subContent.querySelector('#fe_type').value;
         const fluidClass = fluidSel.value;
-        const dpPa = (+subContent.querySelector('#fe_dp').value) * 1000;
+        const dpPa = (+subContent.querySelector('#fe_dp').value) * ({ Pa: 1, mmWC: 9.80665, mbar: 100, kPa: 1000, inWC: 249.0889, bar: 1e5 })[subContent.querySelector('#fe_dpu').value];
         const upstreamPressurePa = (+subContent.querySelector('#fe_p').value) * 1000;
         const tempC = +subContent.querySelector('#fe_t').value;
         const pipeIdM = (+subContent.querySelector('#fe_pipe').value) / 1000;
-        const boreM = elementType === 'pitot' ? 0 : (+subContent.querySelector('#fe_bore').value) / 1000;
+        const boreM = flow.FULL_AREA_ELEMENTS.includes(elementType) ? 0 : (+subContent.querySelector('#fe_bore').value) / 1000;
         const cdRaw = subContent.querySelector('#fe_cd').value;
         const rhoRaw = rhoInput.value;
         try {
@@ -2212,7 +2501,8 @@ function pageThermalPlant() {
             <div class="result-grid">
               ${resultRow('Beta ratio', r.beta !== null ? fmt(r.beta,3) : '— (full bore)')}
               ${resultRow('Discharge coefficient', fmt(r.cd,3))}
-              ${resultRow('Density used', fmt(r.density,3) + ' kg/m³')}
+              ${resultRow('Density used', fmt(r.density,4) + ' kg/m³')}
+              ${resultRow('Density basis', r.densityMethod + (r.densityStandard ? ' (' + r.densityStandard + ')' : ''))}
               ${resultRow('Data quality', dq.score + '%' + (dq.failed.length ? ' — ' + dq.failed[0] : ' — all checks passed'))}
             </div>
             <div style="margin:12px 0;">
@@ -2480,7 +2770,11 @@ function pageThermalPlant() {
           <div class="field" style="flex:1"><label>Actual temp (°C)</label><input type="number" id="rf_t" value="150"></div>
           <div class="field" style="flex:1"><label>Actual pressure (kPa abs)</label><input type="number" id="rf_p" value="120"></div>
         </div>
-        <div class="field" style="max-width:220px;"><label>Standard reference temp (°C)</label><input type="number" id="rf_stdT" value="15"></div>
+        <div class="input-row">
+          <div class="field" style="flex:1"><label>Standard reference temp (°C)</label><input type="number" id="rf_stdT" value="15"></div>
+          <div class="field" style="flex:1"><label>Z at actual conditions</label><input type="number" id="rf_za" step="any" value="1"></div>
+          <div class="field" style="flex:1"><label>Z at reference conditions</label><input type="number" id="rf_zr" step="any" value="1"></div>
+        </div>
         <div class="btn-row"><button class="btn" id="rf_calc">Calculate</button></div>
         <div id="rf_result" style="margin-top:16px;"></div>
       `;
@@ -2490,8 +2784,9 @@ function pageThermalPlant() {
         const pressureKPa = +subContent.querySelector('#rf_p').value;
         const stdTempC = +subContent.querySelector('#rf_stdT').value;
         try {
-          const normal = flow.actualToReferenceFlow(actualM3h, tempC, pressureKPa, 0);
-          const standard = flow.actualToReferenceFlow(actualM3h, tempC, pressureKPa, stdTempC);
+          const za = +subContent.querySelector('#rf_za').value || 1, zr = +subContent.querySelector('#rf_zr').value || 1;
+          const normal = flow.actualToReferenceFlow(actualM3h, tempC, pressureKPa, 0, 101.325, za, zr);
+          const standard = flow.actualToReferenceFlow(actualM3h, tempC, pressureKPa, stdTempC, 101.325, za, zr);
           subContent.querySelector('#rf_result').innerHTML = `
             <div class="result-grid">
               ${resultRow('Actual', fmt(actualM3h,2) + ' m³/h (at ' + fmt(tempC,1) + '°C, ' + fmt(pressureKPa,1) + ' kPa)')}
@@ -4179,12 +4474,14 @@ function pageDPFlowCalibrated() {
       <div class="input-row">
         <div class="field"><label>Design pressure (bar a)</label><input type="number" id="pDAir" step="any" value="1.05"></div>
         <div class="field"><label>Design temp (\u00b0C)</label><input type="number" id="tDAir" step="any" value="25"></div>
+        <div class="field"><label>Design RH (%)</label><input type="number" id="rhDAir" step="any" value="0"></div>
       </div>
       <div class="input-row">
         <div class="field"><label>Actual pressure (bar a)</label><input type="number" id="pAAir" step="any" value="1.02"></div>
         <div class="field"><label>Actual temp (\u00b0C)</label><input type="number" id="tAAir" step="any" value="35"></div>
+        <div class="field"><label>Actual RH (%)</label><input type="number" id="rhAAir" step="any" value="0"></div>
       </div>
-      <div class="hint">Ideal-gas density (\u03c1 = P/RT) \u2014 a well-justified approximation for combustion/instrument air and most dry gases at ordinary duct pressures, unlike the same approximation applied to steam.</div>
+      <div class="hint">Air density uses the CIPM-2007 moist-air equation (compressibility and humidity included). Water and steam use IAPWS-IF97 in the other modes.</div>
     </div>
     <div id="manualInputs" style="display:none;">
       <div class="input-row">
@@ -4240,15 +4537,16 @@ function pageDPFlowCalibrated() {
       } else if (mode === 'air') {
         const pD = +left.querySelector('#pDAir').value, tD = +left.querySelector('#tDAir').value;
         const pA = +left.querySelector('#pAAir').value, tA = +left.querySelector('#tAAir').value;
-        rhoD = flow.airDensity(pD * 1e5, tD);
-        rhoA = flow.airDensity(pA * 1e5, tA);
+        const rhD = (+left.querySelector('#rhDAir').value || 0) / 100, rhA = (+left.querySelector('#rhAAir').value || 0) / 100;
+        rhoD = dcor.moistAirDensity(pD * 1e5, tD, rhD).density;
+        rhoA = dcor.moistAirDensity(pA * 1e5, tA, rhA).density;
         steamHtml = `
-          <div class="panel-title" style="margin-top:16px;">Air Density (Ideal Gas)</div>
+          <div class="panel-title" style="margin-top:16px;">Air Density (CIPM-2007, real-gas Z, humidity)</div>
           <div class="result-grid">
             ${resultRow('Design density', fmt(rhoD, 4) + ' kg/m\u00b3')}
             ${resultRow('Actual density', fmt(rhoA, 4) + ' kg/m\u00b3')}
           </div>
-          <div class="assumptions-note" style="margin-top:10px;">\u03c1 = P/(R\u00b7T), R = 287.05 J/(kg\u00b7K) for dry air. A good approximation at ordinary duct pressures; not corrected for humidity or real-gas deviation at high pressure.</div>`;
+          <div class="assumptions-note" style="margin-top:10px;">Moist-air density per CIPM-2007 (includes compressibility Z and water-vapour content); relative humidity 0 gives dry air. The flow is scaled by \u221a(\u03c1<sub>actual</sub>/\u03c1<sub>design</sub>).</div>`;
       } else if (mode === 'manual') {
         rhoD = +left.querySelector('#rhoD').value;
         rhoA = +left.querySelector('#rhoA').value;
@@ -4395,6 +4693,7 @@ function pageDPFlowWizard() {
     dpKPa: null, pressureKPa: null, tempC: null, pipeIdMm: null, boreMm: null, viscosityPaS: null,
     dpAtMaxFlowKPa: null, maxCalibratedFlowTh: null, designPressureKPa: null, designTempC: null,
     density: null, designDensity: null, flowResult: null, dcsFlowTh: null,
+    shape: 'circular', widthMm: null, heightMm: null, cdOverride: null,
   };
 
   function progressHTML() {
@@ -4447,7 +4746,7 @@ function pageDPFlowWizard() {
   }
 
   function renderStep2(body) {
-    const elements = [['Orifice', 'orifice'], ['Venturi', 'venturi'], ['Nozzle', 'nozzle'], ['Annubar', 'pitot'], ['Calibrated Range (no geometry)', 'calibrated']];
+    const elements = [['Orifice', 'orifice'], ['Venturi', 'venturi'], ['Nozzle', 'nozzle'], ['Annubar', 'pitot'], ['Airfoil (averaging, duct)', 'airfoil'], ['Calibrated Range (no geometry)', 'calibrated']];
     body.innerHTML = `
       <p style="color:var(--text-dim);">Which primary flow element is installed? If you don't know (or don't have) the bore/pipe dimensions, choose Calibrated Range \u2014 it works from the transmitter's own calibrated span instead.</p>
       <div class="wizard-choice-grid">
@@ -4463,17 +4762,22 @@ function pageDPFlowWizard() {
     wireBack(body, 1);
   }
 
+  const DPU = [['Pa', 1], ['mmWC', 9.80665], ['mbar', 100], ['kPa', 1000], ['inWC', 249.0889], ['bar', 1e5]]; // → Pa
   function renderStep3(body) {
     body.innerHTML = `
       <p style="color:var(--text-dim);">Enter the measured differential pressure across the ${wizard.elementLabel ?? 'element'}.</p>
-      <div class="field"><label>DP (kPa)</label><input type="number" id="wizDp" value="${wizard.dpKPa ?? 5}" step="any"></div>
+      <div class="input-row">
+        <div class="field" style="flex:2"><label>Differential pressure</label><input type="number" id="wizDp" value="${wizard.dpShown ?? (wizard.dpKPa ?? 5)}" step="any"></div>
+        <div class="field" style="flex:1"><label>Unit</label><select id="wizDpUnit">${DPU.map(([u]) => `<option value="${u}" ${(wizard.dpUnit || 'kPa') === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
+      </div>
       <div class="btn-row"><button class="btn" id="wizNext">Next →</button></div>
       ${backBtn(2)}
     `;
     body.querySelector('#wizNext').addEventListener('click', () => {
       const v = +body.querySelector('#wizDp').value;
       if (!(v >= 0)) { toast('Enter a valid, non-negative DP'); return; }
-      wizard.dpKPa = v; goTo(4);
+      const unit = body.querySelector('#wizDpUnit').value;
+      wizard.dpUnit = unit; wizard.dpShown = v; wizard.dpKPa = v * Object.fromEntries(DPU)[unit] / 1000; goTo(4);
     });
     wireBack(body, 2);
   }
@@ -4528,22 +4832,70 @@ function pageDPFlowWizard() {
       wireBack(body, 4);
       return;
     }
+    const isAirfoil = wizard.elementType === 'airfoil';
+    const fullArea = isPitot || isAirfoil;
+    const boreWord = wizard.elementType === 'orifice' ? 'Orifice bore' : 'Throat';
     body.innerHTML = `
-      <div class="field"><label>Pipe internal diameter (mm)</label><input type="number" id="wizPipe" value="${wizard.pipeIdMm ?? 200}" step="any"></div>
-      ${isPitot ? '<p style="color:var(--text-faint);font-size:.8rem;">Annubar/averaging pitot uses the full pipe bore — no separate throat diameter needed.</p>' :
-        `<div class="field"><label>${wizard.elementType === 'orifice' ? 'Orifice bore' : 'Throat'} diameter (mm)</label><input type="number" id="wizBore" value="${wizard.boreMm ?? 100}" step="any"></div>`}
-      <div class="field"><label>Dynamic viscosity (Pa\u00b7s, optional — for Reynolds number)</label><input type="number" id="wizVisc" value="${wizard.viscosityPaS ?? ''}" placeholder="optional" step="any"></div>
+      <div class="field"><label>Cross-section of the pipe / duct</label>
+        <select id="wizShape">
+          <option value="circular"${wizard.shape === 'circular' ? ' selected' : ''}>Circular pipe</option>
+          <option value="rectangular"${wizard.shape === 'rectangular' ? ' selected' : ''}>Rectangular / square duct</option>
+        </select></div>
+      <div id="wizCircBox"><div class="field"><label>Pipe internal diameter (mm)</label><input type="number" id="wizPipe" value="${wizard.pipeIdMm ?? 200}" step="any"></div></div>
+      <div id="wizRectBox" class="input-row">
+        <div class="field"><label>Duct width (mm)</label><input type="number" id="wizW" value="${wizard.widthMm ?? 1000}" step="any"></div>
+        <div class="field"><label>Duct height (mm)</label><input type="number" id="wizH" value="${wizard.heightMm ?? 1000}" step="any"></div>
+      </div>
+      <div id="wizAreaInfo" class="hint" style="margin-bottom:10px;"></div>
+      ${fullArea
+        ? `<p style="color:var(--text-faint);font-size:.8rem;">${isAirfoil ? 'An airfoil element' : 'An Annubar / averaging pitot'} reads the mean velocity across the whole cross-section, so no separate throat diameter is needed — the flow is K × (duct area) × √(2·DP/ρ).</p>`
+        : `<div class="field"><label>${boreWord} diameter (mm)</label><input type="number" id="wizBore" value="${wizard.boreMm ?? 100}" step="any"></div>
+           <div id="wizRectNote" class="assumptions-note" style="margin-bottom:10px;">ISO 5167 covers circular pipes only. For a circular bore in a rectangular duct this wizard applies the same continuity and energy equations with the true duct area; the default coefficient is not validated for that arrangement, so enter the element maker’s coefficient below if you have it.</div>`}
+      <div class="field"><label>${isAirfoil ? 'Flow coefficient K from the datasheet (required)' : 'Discharge / flow coefficient override (optional)'}</label>
+        <input type="number" id="wizCd" value="${wizard.cdOverride ?? ''}" placeholder="${isAirfoil ? 'e.g. from calibration certificate' : 'leave blank for the typical default'}" step="any"></div>
+      ${isAirfoil ? '<div class="hint">Airfoil elements are proprietary and individually calibrated, so there is no generic K. K is defined here as Q = K·A·√(2·DP/ρ). If you only know the maker’s calibrated flow and DP at full range, use the <b>Calibrated Range</b> option instead.</div>' : ''}
+      <div class="field"><label>Dynamic viscosity (Pa·s, optional — for Reynolds number)</label><input type="number" id="wizVisc" value="${wizard.viscosityPaS ?? ''}" placeholder="optional" step="any"></div>
       <div class="btn-row"><button class="btn" id="wizNext">Next →</button></div>
       ${backBtn(4)}
     `;
+    const shapeSel = body.querySelector('#wizShape');
+    const circBox = body.querySelector('#wizCircBox'), rectBox = body.querySelector('#wizRectBox');
+    const rectNote = body.querySelector('#wizRectNote');
+    const areaInfo = body.querySelector('#wizAreaInfo');
+    const refreshGeometry = () => {
+      const rect = shapeSel.value === 'rectangular';
+      circBox.style.display = rect ? 'none' : '';
+      rectBox.style.display = rect ? '' : 'none';
+      if (rectNote) rectNote.style.display = rect ? '' : 'none';
+      try {
+        const g = flow.ductGeometry(rect
+          ? { pipeShape: 'rectangular', ductWidthM: +body.querySelector('#wizW').value / 1000, ductHeightM: +body.querySelector('#wizH').value / 1000 }
+          : { pipeShape: 'circular', pipeIdM: +body.querySelector('#wizPipe').value / 1000 });
+        areaInfo.innerHTML = `Flow area <b>${fmt(g.areaM2, 4)} m²</b> · hydraulic diameter <b>${fmt(g.hydraulicDiameterM * 1000, 1)} mm</b>${rect ? ` (D<sub>h</sub> = 2WH/(W+H), used for the Reynolds number) · equivalent round diameter ${fmt(g.equivalentCircularDiameterM * 1000, 1)} mm` : ''}`;
+      } catch (e) { areaInfo.textContent = ''; }
+    };
+    shapeSel.addEventListener('change', refreshGeometry);
+    ['#wizPipe', '#wizW', '#wizH'].forEach((sel) => body.querySelector(sel).addEventListener('input', refreshGeometry));
+    refreshGeometry();
     body.querySelector('#wizNext').addEventListener('click', () => {
+      const rect = shapeSel.value === 'rectangular';
       const pipe = +body.querySelector('#wizPipe').value;
+      const w = +body.querySelector('#wizW').value, ht = +body.querySelector('#wizH').value;
+      let geo;
+      try {
+        geo = flow.ductGeometry(rect ? { pipeShape: 'rectangular', ductWidthM: w / 1000, ductHeightM: ht / 1000 } : { pipeShape: 'circular', pipeIdM: pipe / 1000 });
+      } catch (e) { toast(rect ? 'Enter a valid duct width and height > 0' : 'Enter a valid pipe diameter > 0'); return; }
       const boreEl = body.querySelector('#wizBore');
-      const bore = isPitot ? 0 : +boreEl.value;
-      if (!(pipe > 0)) { toast('Enter a valid pipe diameter > 0'); return; }
-      if (!isPitot && !(bore > 0 && bore < pipe)) { toast('Bore/throat diameter must be > 0 and less than the pipe diameter'); return; }
+      const bore = fullArea ? 0 : +boreEl.value;
+      if (!fullArea) {
+        if (!(bore > 0)) { toast('Enter a valid bore / throat diameter > 0'); return; }
+        if (!(((Math.PI / 4) * (bore / 1000) ** 2) < geo.areaM2)) { toast(rect ? 'The bore area must be smaller than the duct area' : 'Bore/throat diameter must be > 0 and less than the pipe diameter'); return; }
+      }
+      const cdRaw = body.querySelector('#wizCd').value;
+      if (isAirfoil && !(+cdRaw > 0)) { toast('Enter the airfoil flow coefficient K from its datasheet (or use Calibrated Range)'); return; }
+      if (cdRaw !== '' && !(+cdRaw > 0 && +cdRaw <= 2)) { toast('Flow coefficient must be a positive number (typically 0.5 to 1.2)'); return; }
       const viscRaw = body.querySelector('#wizVisc').value;
-      wizard.pipeIdMm = pipe; wizard.boreMm = bore; wizard.viscosityPaS = viscRaw === '' ? null : +viscRaw;
+      Object.assign(wizard, { shape: rect ? 'rectangular' : 'circular', pipeIdMm: rect ? wizard.pipeIdMm : pipe, widthMm: rect ? w : wizard.widthMm, heightMm: rect ? ht : wizard.heightMm, boreMm: bore, cdOverride: cdRaw === '' ? null : +cdRaw, viscosityPaS: viscRaw === '' ? null : +viscRaw });
       goTo(6);
     });
     wireBack(body, 5 - 1);
@@ -4555,6 +4907,13 @@ function pageDPFlowWizard() {
       <p style="color:var(--text-dim);">${isCalibrated
         ? 'Calculating fluid density at both the actual (current) condition and the design (calibration) condition — the ratio between them is what corrects the calibrated-range reading.'
         : 'Calculating fluid density from your fluid choice, pressure, and temperature.'}</p>
+      ${(wizard.fluidChoice === 'Air' || wizard.fluidChoice === 'Gas') ? `
+      <div class="input-row">
+        <div class="field"><label>Gas</label><select id="wizGas">${Object.entries(dcor.GASES).map(([k, g]) => `<option value="${k}" ${(wizard.gasKey || (wizard.fluidChoice === 'Air' ? 'air' : 'air')) === k ? 'selected' : ''}>${g.label}</option>`).join('')}</select></div>
+        <div class="field"><label>Relative humidity (air, %)</label><input type="number" id="wizRH" step="any" value="${wizard.rhPct ?? 0}"></div>
+        <div class="field"><label>Z override (blank = calculated)</label><input type="number" id="wizZ" step="any" value="${wizard.zOverride ?? ''}"></div>
+      </div>
+      <div class="hint">Density is the real flowing density at the upstream tap (ISO 5167-1): moist air per CIPM-2007, other gases ρ = pM/(ZRT). Set RH to 0 for dry gas.</div>` : ''}
       <div class="btn-row"><button class="btn" id="wizCalcProps">Calculate fluid properties</button></div>
       <div id="wizPropsResult" style="margin-top:16px;"></div>
       ${backBtn(5)}
@@ -4566,11 +4925,17 @@ function pageDPFlowWizard() {
             const state = steam.steamState(pKPa / 100, tC); // kPa -> bar a
             return { density: state.densityKgM3, note: `IAPWS-IF97 real steam table — phase: ${state.phase}. ${state.note}` };
           }
-          const density = flow.airDensity(pKPa * 1000, tC);
-          return { density, note: wizard.fluidChoice === 'Gas' ? 'Generic gas approximated with air\'s properties (ideal gas law) — override if your gas differs significantly (e.g. natural gas, CO2).' : 'Ideal gas law — accurate for combustion air at typical duct conditions.' };
+          const gasSel = body.querySelector('#wizGas'), rhEl = body.querySelector('#wizRH'), zEl = body.querySelector('#wizZ');
+          wizard.gasKey = gasSel ? gasSel.value : 'air';
+          wizard.rhPct = rhEl ? +rhEl.value || 0 : 0;
+          wizard.zOverride = zEl && zEl.value !== '' ? +zEl.value : undefined;
+          if (!(wizard.rhPct >= 0 && wizard.rhPct <= 100)) throw new Error('Relative humidity must be 0\u2013100 %');
+          const fd = dcor.flowingDensity({ kind: wizard.gasKey === 'air' ? 'air' : 'gas', gas: wizard.gasKey, pPa: pKPa * 1000, tC, rh: wizard.rhPct / 100, z: wizard.zOverride });
+          return { density: fd.density, Z: fd.Z, note: `${fd.method} \u2014 ${fd.standard}.${fd.note ? ' ' + fd.note : ''}` };
         }
         const actual = densityAt(wizard.pressureKPa, wizard.tempC);
         wizard.density = actual.density;
+        wizard.densityZ = actual.Z ?? null;
         let extraHTML = '';
         if (isCalibrated) {
           const design = densityAt(wizard.designPressureKPa, wizard.designTempC);
@@ -4636,12 +5001,16 @@ function pageDPFlowWizard() {
           r = flow.calculateDPFlow({
             elementType: wizard.elementType, fluidClass,
             dpPa: wizard.dpKPa * 1000, upstreamPressurePa: wizard.pressureKPa * 1000, tempC: wizard.tempC,
-            pipeIdM: wizard.pipeIdMm / 1000, boreM: wizard.boreMm / 1000,
+            pipeShape: wizard.shape, pipeIdM: wizard.pipeIdMm ? wizard.pipeIdMm / 1000 : undefined,
+            ductWidthM: wizard.widthMm ? wizard.widthMm / 1000 : undefined, ductHeightM: wizard.heightMm ? wizard.heightMm / 1000 : undefined,
+            boreM: wizard.boreMm / 1000, cd: wizard.cdOverride ?? undefined,
             densityKgM3: wizard.density, viscosityPaS: wizard.viscosityPaS || undefined,
           });
           extraResultHTML = `
-            ${resultRow('Beta ratio', r.beta !== null ? fmt(r.beta,4) : '— (Annubar: full bore)')}
-            ${resultRow('Discharge coefficient', fmt(r.cd,4))}
+            ${resultRow(r.pipeShape === 'rectangular' ? 'Duct area (W × H)' : 'Pipe area', fmt(r.pipeAreaM2, 4) + ' m\u00b2')}
+            ${r.pipeShape === 'rectangular' ? resultRow('Hydraulic diameter', fmt(r.hydraulicDiameterM * 1000, 1) + ' mm') : ''}
+            ${resultRow(r.beta !== null && r.pipeShape === 'rectangular' ? 'Area-ratio beta (\u221a(A_throat/A_duct))' : 'Beta ratio', r.beta !== null ? fmt(r.beta,4) : '— (reads full cross-section)')}
+            ${resultRow(r.beta === null ? 'Flow coefficient K' : 'Discharge coefficient', fmt(r.cd,4))}
             ${resultRow('Expansion factor', fmt(r.expansionFactor,4))}
             ${resultRow('Velocity', fmt(r.velocityMs,3) + ' m/s')}
             ${resultRow('Reynolds number', r.reynolds !== null ? fmt(r.reynolds,0) : '— (no viscosity entered)')}`;
@@ -4661,8 +5030,12 @@ function pageDPFlowWizard() {
   function renderStep8(body) {
     const r = wizard.flowResult;
     const refTempC = 15.56, refPressureKPa = 101.325; // standard conditions convention for SCFM (60°F/14.696psia)
-    const normalM3h = flow.actualToReferenceFlow(r.volumetricFlowM3h, wizard.tempC, wizard.pressureKPa, 0);
-    const scfmEquivM3h = flow.actualToReferenceFlow(r.volumetricFlowM3h, wizard.tempC, wizard.pressureKPa, refTempC, refPressureKPa);
+    // Gas volumes referred to base conditions include the compressibility ratio Z/Zref (ISO 5167 / AGA practice).
+    const isGasWiz = wizard.fluidChoice === 'Air' || wizard.fluidChoice === 'Gas';
+    const zAct = isGasWiz && wizard.densityZ ? wizard.densityZ : 1;
+    const zAt = (tC) => { try { return isGasWiz ? (dcor.flowingDensity({ kind: wizard.gasKey === 'air' ? 'air' : 'gas', gas: wizard.gasKey || 'air', pPa: 101325, tC, rh: (wizard.rhPct || 0) / 100, z: wizard.zOverride }).Z ?? 1) : 1; } catch (e) { return 1; } };
+    const normalM3h = flow.actualToReferenceFlow(r.volumetricFlowM3h, wizard.tempC, wizard.pressureKPa, 0, 101.325, zAct, zAt(0));
+    const scfmEquivM3h = flow.actualToReferenceFlow(r.volumetricFlowM3h, wizard.tempC, wizard.pressureKPa, refTempC, refPressureKPa, zAct, zAt(refTempC));
     const scfm = flow.convertVolFlow(scfmEquivM3h, 'm3/h', 'ft3/min');
     body.innerHTML = `
       <p style="color:var(--text-dim);">Flow expressed in every practical engineering unit:</p>
@@ -4728,11 +5101,11 @@ function pageDPFlowWizard() {
     body.querySelector('#wizSave').addEventListener('click', () => saveAndToast(
       'flow-dp-wizard',
       `DP Wizard — ${wizard.fluidChoice}/${wizard.elementLabel} — ${fmt(r.massFlowTh,2)} t/h`,
-      { fluid: wizard.fluidChoice, element: wizard.elementLabel, dpKPa: wizard.dpKPa, pressureKPa: wizard.pressureKPa, tempC: wizard.tempC, pipeIdMm: wizard.pipeIdMm, boreMm: wizard.boreMm, dcsFlowTh: wizard.dcsFlowTh },
+      { fluid: wizard.fluidChoice, element: wizard.elementLabel, dpKPa: wizard.dpKPa, pressureKPa: wizard.pressureKPa, tempC: wizard.tempC, shape: wizard.shape, pipeIdMm: wizard.pipeIdMm, widthMm: wizard.widthMm, heightMm: wizard.heightMm, boreMm: wizard.boreMm, cd: wizard.cdOverride, dcsFlowTh: wizard.dcsFlowTh },
       { massFlowTh: r.massFlowTh, volumetricFlowM3h: r.volumetricFlowM3h, dataQualityScore: dq.score }
     ));
     body.querySelector('#wizRestart').addEventListener('click', () => {
-      Object.assign(wizard, { step: 1, fluidChoice: null, elementType: null, elementLabel: null, dpKPa: null, pressureKPa: null, tempC: null, pipeIdMm: null, boreMm: null, viscosityPaS: null, dpAtMaxFlowKPa: null, maxCalibratedFlowTh: null, designPressureKPa: null, designTempC: null, density: null, designDensity: null, flowResult: null, dcsFlowTh: null });
+      Object.assign(wizard, { step: 1, dpUnit: null, dpShown: null, shape: 'circular', widthMm: null, heightMm: null, cdOverride: null, fluidChoice: null, elementType: null, elementLabel: null, dpKPa: null, pressureKPa: null, tempC: null, pipeIdMm: null, boreMm: null, viscosityPaS: null, dpAtMaxFlowKPa: null, maxCalibratedFlowTh: null, designPressureKPa: null, designTempC: null, density: null, designDensity: null, flowResult: null, dcsFlowTh: null });
       render();
     });
     wireBack(body, 9);
@@ -4780,6 +5153,26 @@ function pageSupport() {
       <div style="margin-top:18px;color:var(--amber);font-weight:600;">💝 Donate Now</div>
       <button class="btn-donate" id="openDonateBtn" type="button">DONATE ❤️</button>
     </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2 class="panel-title" style="margin-top:0;">Other Ways to Help</h2>
+      <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;">Money isn\u2019t the only way to support a free project like this one \u2014 each of these genuinely helps, at no cost to you:</p>
+      <ul style="color:var(--text-dim);font-size:.9rem;line-height:1.75;margin-top:6px;padding-left:20px;">
+        <li>Leave a rating on the <a href="#" id="supportReviewsLink" style="color:var(--cyan);">Reviews &amp; Ratings</a> page \u2014 it helps other engineers decide whether a calculator is trustworthy before they use it.</li>
+        <li>Tell a colleague, classmate, or your team about the site \u2014 word of mouth is how most people find it.</li>
+        <li>Report a bug or suggest a calculator you wish existed \u2014 write to ${isEmbeddedFrame ? 'admin@engineeringhubcalc.com' : '<a href="mailto:admin@engineeringhubcalc.com" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>'}; a real, specific request from someone who\u2019d actually use it is exactly what shapes what gets built next.</li>
+      </ul>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2 class="panel-title" style="margin-top:0;">Frequently Asked Questions</h2>
+      ${CUSTOM_PAGE_FAQ.support.map((f) => `
+      <div style="margin-top:14px;">
+        <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">${f.q}</h3>
+        <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;">${f.a}</div>
+      </div>`).join('')}
+    </div>
+
     <div class="support-footer-sig">
       <div class="name">Built &amp; Maintained by Dr. Kundan</div>
       <div>Engineering • Automation • Instrumentation • Power Plant Technology</div>
@@ -4811,6 +5204,8 @@ function pageSupport() {
     document.body.style.overflow = 'hidden';
   }
   document.getElementById('openDonateBtn').addEventListener('click', openModal);
+  const reviewsLink = document.getElementById('supportReviewsLink');
+  if (reviewsLink) reviewsLink.addEventListener('click', (e) => { e.preventDefault(); navigate('reviews'); });
   document.getElementById('donateModalClose').addEventListener('click', closeModal);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && backdrop.classList.contains('open')) closeModal(); });
@@ -4969,6 +5364,15 @@ function pageAbout() {
     </ul>
     <p style="color:var(--text-dim);line-height:1.7;">Where a calculator uses generic reference figures rather than a specific manufacturer's proprietary data, that is stated directly in the page, not left implicit. None of these tools are a substitute for calibrated instruments, an approved design document, or qualified engineering review \u2014 see the disclaimer in the site footer.</p>
 
+    <h2 class="panel-title">How accuracy is checked</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">The calculation engine is covered by an automated test suite of several hundred checks that is run before every release. Tests compare results with published worked examples and, for the steam properties and ISO 5167 flow equations, with independent open-source implementations (python-iapws and python-fluids) to many significant figures. Where a calculator is outside the range of its equations \u2014 for example, steam in the near-critical region \u2014 it says so instead of returning a number.</p>
+
+    <h2 class="panel-title">Editorial policy and corrections</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">Guides and calculator notes are written to explain the engineering, state their assumptions and cite the standard or method used. If you find an error, send the calculator name, your inputs and the result you expected; confirmed corrections are made in the next release. Standards such as ISO 5167 and IAPWS-IF97 are referenced, not reproduced; for contractual or safety-critical work, consult the licensed standard.</p>
+
+    <h2 class="panel-title">How the site is funded</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">The calculators are free to use. The site is supported by advertising (Google AdSense) and optional voluntary donations. Advertising never affects a calculation result, and no result is hidden behind a paywall.</p>
+
     <h2 class="panel-title">Have a question or feedback?</h2>
     <p style="color:var(--text-dim);line-height:1.7;">We\u2019d love to hear from you. If you have any suggestions, find an issue with one of the calculators, or need assistance, feel free to contact us${isEmbeddedFrame ? ' at admin@engineeringhubcalc.com' : ': <a href="mailto:admin@engineeringhubcalc.com" id="aboutContactLink" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>'}.</p>
   </div>`));
@@ -4994,6 +5398,12 @@ function pageContact() {
     <p style="color:var(--text-dim);line-height:1.7;">If you have any suggestions, find an issue with one of the calculators, or need assistance, feel free to contact us${isEmbeddedFrame ? ' at admin@engineeringhubcalc.com' : ': <a href="mailto:admin@engineeringhubcalc.com" id="contactPageEmailLink" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>'}.</p>
     <p style="color:var(--text-dim);line-height:1.7;">We read every message and try to respond as soon as we can. For bugs, it helps to mention which calculator you were using and what you expected versus what happened.</p>
 
+    <h2 class="panel-title">Reporting a calculator problem</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">The most useful report includes the calculator\u2019s name, the exact values you entered (with units), the result you saw and the result you expected, plus the standard or reference you compared against. Confirmed errors are corrected in the next release.</p>
+
+    <h2 class="panel-title">Other enquiries</h2>
+    <p style="color:var(--text-dim);line-height:1.7;">Questions about privacy, advertising or how your data is handled are answered on the Privacy Policy page; terms of use are on the Terms page. For suggestions of new calculators or guides, use the same address \u2014 requests from working power-plant, instrumentation and electrical engineers are especially welcome. We aim to reply within a few working days.</p>
+
     <h2 class="panel-title">Who you're contacting</h2>
     <p style="color:var(--text-dim);line-height:1.7;">Engineering Calculator Hub is built and maintained by Dr. Kundan \u2014 see the <a id="contactAboutLink" style="color:var(--cyan);cursor:pointer;">About page</a> for more on the site and its methodology.</p>
   </div>`));
@@ -5008,6 +5418,95 @@ function pageContact() {
     const p = [...app.querySelectorAll('p')].find((el) => el.textContent.includes('admin@engineeringhubcalc.com'));
     if (p) p.addEventListener('click', (e) => { e.preventDefault(); copyEmailWithFallback('admin@engineeringhubcalc.com'); });
   }
+}
+
+// ---------- Guides ----------
+function renderGuideText(str) {
+  return str.replace(/\{\{([\w-]+)\|([^}]+)\}\}/g, (m, id, label) => `<a href="${routeUrl(id)}" data-route-link="${id}" style="color:var(--cyan);">${label}</a>`);
+}
+function wireRouteLinks(root) {
+  root.querySelectorAll('a[data-route-link]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      navigate(a.dataset.routeLink);
+    });
+  });
+}
+function pageGuides() {
+  app.appendChild(h(`<div class="page-head">
+    <div class="eyebrow">Reference</div>
+    <h1>Engineering Guides</h1>
+    <p class="lead">Plain-language explanations of the engineering behind the calculators — what the equations mean, where the numbers come from and where real plants lose accuracy.</p>
+  </div>`));
+  const wrap = h(`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;max-width:1000px;">
+    ${GUIDES.map((g) => `<div class="card" style="margin:0;">
+      <div class="eyebrow">${g.readMinutes} min read</div>
+      <h2 class="panel-title" style="margin-top:4px;"><a href="${routeUrl(guideRouteId(g))}" data-route-link="${guideRouteId(g)}" style="color:inherit;text-decoration:none;">${g.title}</a></h2>
+      <p style="color:var(--text-dim);line-height:1.65;">${g.description}</p>
+      <a href="${routeUrl(guideRouteId(g))}" data-route-link="${guideRouteId(g)}" style="color:var(--cyan);">Read the guide →</a>
+    </div>`).join('')}
+  </div>`);
+  app.appendChild(wrap);
+  wireRouteLinks(wrap);
+}
+function makeGuidePage(g) {
+  return function pageGuide() {
+    const others = GUIDES.filter((x) => x.id !== g.id);
+    const body = h(`<div>
+      <div class="page-head">
+        <div class="eyebrow">Engineering Guide · ${g.readMinutes} min read</div>
+        <h1>${g.title}</h1>
+        <p class="lead">${renderGuideText(g.intro)}</p>
+      </div>
+      <div class="card" style="max-width:820px;">
+        ${g.sections.map((sec) => `<h2 class="panel-title" style="margin-top:18px;">${sec.h}</h2>${sec.p.map((t) => (t.startsWith('<ul') ? `<div style="color:var(--text-dim);line-height:1.8;">${renderGuideText(t)}</div>` : `<p style="color:var(--text-dim);line-height:1.75;">${renderGuideText(t)}</p>`)).join('')}`).join('')}
+        <div class="assumptions-note" style="margin-top:18px;">This guide is general engineering information for education and estimation. Numerical examples come from this site’s calculators; always confirm design values against the applicable standard, the equipment manufacturer’s data and a qualified engineer’s review.</div>
+      </div>
+      <div class="card" style="max-width:820px;margin-top:16px;">
+        <h2 class="panel-title" style="margin-top:0;">Related calculators</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+          ${g.related.map((r) => `<a href="${routeUrl(r.id)}" data-route-link="${r.id}" class="pill" style="text-decoration:none;">${r.label}</a>`).join('')}
+        </div>
+        <h2 class="panel-title">More guides</h2>
+        <ul style="color:var(--text-dim);line-height:1.9;padding-left:20px;">
+          ${others.map((o) => `<li><a href="${routeUrl(guideRouteId(o))}" data-route-link="${guideRouteId(o)}" style="color:var(--cyan);">${o.title}</a></li>`).join('')}
+          <li><a href="${routeUrl('guides')}" data-route-link="guides" style="color:var(--cyan);">All guides</a></li>
+        </ul>
+      </div>
+    </div>`);
+    app.appendChild(body);
+    wireRouteLinks(body);
+  };
+}
+
+// ---------- Terms of Use ----------
+function pageTerms() {
+  const P = (t) => `<p style="color:var(--text-dim);line-height:1.7;">${t}</p>`;
+  app.appendChild(h(`<div class="page-head">
+    <div class="eyebrow">Reference</div>
+    <h1>Terms of Use</h1>
+    <p class="lead">Last updated: October 2026. By using Engineering Calculator Hub you agree to the terms below.</p>
+  </div>
+  <div class="card" style="max-width:800px;">
+    <h2 class="panel-title" style="margin-top:0;">Purpose of the site</h2>
+    ${P('Engineering Calculator Hub provides free calculators, reference tables and educational guides for engineering work. It is intended for education, preliminary calculations, estimation and reference.')}
+    <h2 class="panel-title">No professional advice and no warranty</h2>
+    ${P('Results are produced from published equations and standard property data, and the site is tested against reference values, but it is provided “as is” without warranty of any kind. Calculations are not a substitute for calibrated instruments, approved design documentation, applicable codes and standards, equipment manufacturers’ data, or review by a qualified engineer. You are responsible for checking every result before relying on it for design, safety, commissioning, billing or regulatory purposes.')}
+    <h2 class="panel-title">Limitation of liability</h2>
+    ${P('To the fullest extent permitted by law, the owner of this site is not liable for any loss or damage arising from the use of, or inability to use, the calculators, results or guides, including loss of profit, equipment damage or injury.')}
+    <h2 class="panel-title">Acceptable use</h2>
+    ${P('You may use the calculators for personal, educational and professional work. Please do not attempt to disrupt the site, scrape it at a rate that affects other users, or republish its content as your own.')}
+    <h2 class="panel-title">Content and intellectual property</h2>
+    ${P('The site’s text, design and code are the work of its owner. Standards, equations and property formulations referenced on the site (for example ISO 5167 and IAPWS-IF97) belong to their respective organisations; the site implements published equations and does not reproduce the standards themselves.')}
+    <h2 class="panel-title">Third-party services</h2>
+    ${P(`The site uses Google Analytics and Google AdSense, and offers optional voluntary support through Razorpay. These services have their own terms and privacy policies; see our <a href="${routeUrl('privacy')}" data-route-link="privacy" style="color:var(--cyan);">Privacy Policy</a> for details. Advertisements do not influence calculation results.`)}
+    <h2 class="panel-title">Your data</h2>
+    ${P('Calculation inputs and history are processed and stored in your own browser. The site does not require an account.')}
+    <h2 class="panel-title">Changes and contact</h2>
+    ${P('These terms may be updated from time to time; the date above shows the latest revision. Questions can be sent to <a href="mailto:admin@engineeringhubcalc.com" style="color:var(--cyan);">admin@engineeringhubcalc.com</a>.')}
+  </div>`));
+  wireRouteLinks(app);
 }
 
 // ---------- Privacy Policy ----------
@@ -5026,6 +5525,7 @@ function pagePrivacy() {
 
     <h2 class="panel-title">Google AdSense</h2>
     <p style="color:var(--text-dim);line-height:1.7;">This site displays advertisements served by Google AdSense. Google and its advertising partners may use cookies and similar technologies to serve ads based on your prior visits to this and other websites, in order to show ads that may be more relevant to you. You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener" style="color:var(--cyan);">Google's Ads Settings</a>, or opt out of some third-party vendors' use of cookies for personalized advertising by visiting <a href="https://www.aboutads.info/choices/" target="_blank" rel="noopener" style="color:var(--cyan);">www.aboutads.info</a>. Full detail on how Google uses data from sites that use its services, including AdSense, is available at <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener" style="color:var(--cyan);">policies.google.com/technologies/partner-sites</a>.</p>
+    <p style="color:var(--text-dim);line-height:1.7;">Visitors in the European Economic Area, the United Kingdom and Switzerland are shown a consent message by a Google-certified consent management platform before cookies are used for personalised advertising or measurement, as required by Google\u2019s EU user consent policy. You can change your choice at any time using the privacy settings control the message provides.</p>
 
     <h2 class="panel-title">Razorpay (voluntary support/donations)</h2>
     <p style="color:var(--text-dim);line-height:1.7;">The optional "Support the Project" page uses Razorpay to process voluntary donations. If you choose to donate, your payment details are entered directly on Razorpay's own secure checkout page \u2014 this site never receives, sees, or stores your card, UPI, or other payment details. See <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" style="color:var(--cyan);">Razorpay's Privacy Policy</a> for how they handle that data.</p>
@@ -6433,6 +6933,353 @@ function pageCoolingTower() {
       }));
     } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
   });
+
+  // ---- Water balance / makeup water demand ----
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:28px;">Water Balance \u2014 Makeup Water Demand</h2>'));
+  const layout2 = h('<div class="calc-layout"></div>');
+  const left2 = h(`<div class="card">
+    <div class="panel-title">Circulating Water &amp; Cycles of Concentration</div>
+    <div class="field"><label>Circulating water flow (m\u00b3/h)</label><input type="number" id="cwFlow" step="any" value="1000"></div>
+    <div class="field"><label>Range (\u00b0C) \u2014 from above, or enter directly</label><input type="number" id="mwRange" step="any" value="8"></div>
+    <div class="field"><label>Cycles of concentration</label><input type="number" id="mwCoc" step="any" value="4"></div>
+    <div class="input-row">
+      <div class="field"><label>Drift loss (% of circ. flow)</label><input type="number" id="mwDrift" step="any" value="0.01"></div>
+      <div class="field"><label>Latent heat of vaporization (kcal/kg)</label><input type="number" id="mwLatent" step="any" value="580"></div>
+    </div>
+    <div class="hint">Evaporation loss is derived from a genuine heat balance (heat rejected \u00f7 latent heat), not an empirical correlation. Drift loss and latent heat are typical values for a modern tower with drift eliminators in the ~25\u201345\u00b0C range \u2014 both are adjustable; a tower without drift eliminators can drift 10\u201320\u00d7 higher.</div>
+    <div class="btn-row"><button class="btn" id="calcMakeup">Calculate</button></div>
+  </div>`);
+  const right2 = h('<div class="card"><div class="empty-state">Enter circulating flow, range, and cycles of concentration to calculate.</div></div>');
+  layout2.append(left2, right2);
+  app.appendChild(layout2);
+
+  left2.querySelector('#calcMakeup').addEventListener('click', () => {
+    const circulatingWaterFlowM3H = +left2.querySelector('#cwFlow').value;
+    const rangeC = +left2.querySelector('#mwRange').value;
+    const cyclesOfConcentration = +left2.querySelector('#mwCoc').value;
+    const driftLossPct = +left2.querySelector('#mwDrift').value;
+    const latentHeatKcalKg = +left2.querySelector('#mwLatent').value;
+    try {
+      const r = ppOps.coolingTowerMakeupWater({ circulatingWaterFlowM3H, rangeC, cyclesOfConcentration, driftLossPct, latentHeatKcalKg });
+      right2.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.makeupM3H, 2)} m\u00b3/h</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">total makeup water demand</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Evaporation loss', fmt(r.evaporationLossM3H, 3) + ' m\u00b3/h')}
+          ${resultRow('Drift loss', fmt(r.driftLossM3H, 3) + ' m\u00b3/h')}
+          ${resultRow('Blowdown', fmt(r.blowdownM3H, 3) + ' m\u00b3/h')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Evaporation = (Circ. flow \u00d7 Range) / Latent heat &nbsp;(heat balance)<br>Blowdown = Evaporation / (COC \u2212 1) \u2212 Drift &nbsp;(dissolved-solids mass balance, same principle as Boiler Blowdown)<br>Makeup = Evaporation + Drift + Blowdown</div>
+        <div class="assumptions-note" style="margin-top:12px;">Evaporation loss scales directly with heat rejected \u2014 it cannot be reduced without reducing the process heat load or the range. Blowdown, by contrast, is a genuine control lever: raising cycles of concentration (by allowing a higher circulating water TDS) directly reduces both blowdown AND total makeup water, right up to whatever TDS limit the tower's own scaling/corrosion allowance and the water treatment program permit.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn2">Save to history</button><button class="btn secondary" id="pdfBtn2">Export PDF</button></div>`;
+      right2.querySelector('#saveBtn2').addEventListener('click', () => saveAndToast('cooling-tower', `Cooling tower makeup \u2014 ${fmt(r.makeupM3H, 1)} m\u00b3/h`, { circulatingWaterFlowM3H, rangeC, cyclesOfConcentration, driftLossPct, latentHeatKcalKg }, { makeupM3H: r.makeupM3H }));
+      right2.querySelector('#pdfBtn2').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Cooling Tower Water Balance (Makeup Water)',
+        inputs: { 'Circulating water flow': `${circulatingWaterFlowM3H} m\u00b3/h`, Range: `${rangeC} \u00b0C`, 'Cycles of concentration': cyclesOfConcentration, 'Drift loss': `${driftLossPct}%`, 'Latent heat': `${latentHeatKcalKg} kcal/kg` },
+        result: { Evaporation: fmt(r.evaporationLossM3H, 3) + ' m\u00b3/h', Drift: fmt(r.driftLossM3H, 3) + ' m\u00b3/h', Blowdown: fmt(r.blowdownM3H, 3) + ' m\u00b3/h', Makeup: fmt(r.makeupM3H, 3) + ' m\u00b3/h' },
+        assumptions: { note: 'Evaporation from a heat balance (adjustable latent heat); blowdown from a dissolved-solids mass balance at the stated cycles of concentration.' },
+      }));
+    } catch (e) { right2.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Plant Performance Indicators (MIS Dashboard) ----------
+function pagePlantPerformance() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Plant Performance Indicators</h1>
+    <p class="lead">The standard set of numbers every thermal station reports in its shift log and daily MIS return — Plant Load Factor, Plant Availability Factor, Auxiliary Power Consumption %, and (where fuel consumption is entered) Specific Coal/Oil Consumption — from one day's or one shift's metered totals.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Generation, Availability &amp; Fuel</div>
+    <div class="input-row">
+      <div class="field"><label>Installed capacity (MW)</label><input type="number" id="cap" step="any" value="500"></div>
+      <div class="field"><label>Period (hours)</label><input type="number" id="period" step="any" value="24"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Gross generation (MWh)</label><input type="number" id="gross" step="any" value="9600"></div>
+      <div class="field"><label>Net generation (MWh)</label><input type="number" id="net" step="any" value="8800"></div>
+    </div>
+    <div class="field"><label>Hours available for generation</label><input type="number" id="hrsAvail" step="any" value="22"></div>
+    <div class="input-row">
+      <div class="field"><label>Coal consumed (t) — optional</label><input type="number" id="coalC" step="any" placeholder="e.g. 4400"></div>
+      <div class="field"><label>Oil consumed (kL) — optional</label><input type="number" id="oilC" step="any" placeholder="e.g. 2"></div>
+    </div>
+    <div class="hint">PLF here follows the CEA (Central Electricity Authority, India) convention of gross generation against installed capacity; some utilities track it on a net basis instead — enter net generation in both fields if that is your plant's convention.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter generation, availability, and (optionally) fuel figures to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const installedCapacityMW = +left.querySelector('#cap').value;
+    const periodHours = +left.querySelector('#period').value;
+    const grossGenerationMWh = +left.querySelector('#gross').value;
+    const netGenerationMWh = +left.querySelector('#net').value;
+    const hoursAvailable = +left.querySelector('#hrsAvail').value;
+    const coalRaw = left.querySelector('#coalC').value;
+    const oilRaw = left.querySelector('#oilC').value;
+    const coalConsumedT = coalRaw === '' ? undefined : +coalRaw;
+    const oilConsumedKL = oilRaw === '' ? undefined : +oilRaw;
+    try {
+      const r = ppOps.plantPerformanceIndicators({ installedCapacityMW, periodHours, grossGenerationMWh, netGenerationMWh, hoursAvailable, coalConsumedT, oilConsumedKL });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.plfPct, 2)} %</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">Plant Load Factor (PLF)</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Plant Availability Factor (PAF)', fmt(r.pafPct, 2) + ' %')}
+          ${resultRow('Auxiliary Power Consumption (APC%)', fmt(r.apcPct, 2) + ' %')}
+          ${resultRow('Auxiliary energy', fmt(r.auxEnergyMWh, 2) + ' MWh')}
+          ${r.sccKgKwh !== null ? resultRow('Specific Coal Consumption (SCC)', fmt(r.sccKgKwh, 4) + ' kg/kWh') : ''}
+          ${r.socMlKwh !== null ? resultRow('Specific Oil Consumption (SOC)', fmt(r.socMlKwh, 4) + ' mL/kWh') : ''}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">PLF = Gross generation / (Installed capacity × Period) × 100<br>PAF = Hours available / Period × 100<br>APC% = (Gross − Net) / Gross × 100<br>SCC = Coal consumed / Net generation &nbsp;(kg/kWh)</div>
+        <div class="assumptions-note" style="margin-top:12px;">Every figure here is a direct ratio of the metered quantities entered — there is no assumed coefficient anywhere, so accuracy depends only on the accuracy of the meter readings. PAF as computed here is the simple hours-available basis; a plant tracking PARTIAL derating (available at reduced capacity, not fully down) uses a capacity-hours-weighted PAF instead, which this quick form does not distinguish.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('plant-performance', `Plant performance — PLF ${fmt(r.plfPct, 1)}%`, { installedCapacityMW, periodHours, grossGenerationMWh, netGenerationMWh, hoursAvailable, coalConsumedT, oilConsumedKL }, { plfPct: r.plfPct, pafPct: r.pafPct, apcPct: r.apcPct }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Plant Performance Indicators (MIS Dashboard)',
+        inputs: { 'Installed capacity': `${installedCapacityMW} MW`, Period: `${periodHours} h`, 'Gross generation': `${grossGenerationMWh} MWh`, 'Net generation': `${netGenerationMWh} MWh`, 'Hours available': hoursAvailable },
+        result: { PLF: fmt(r.plfPct, 2) + '%', PAF: fmt(r.pafPct, 2) + '%', 'APC%': fmt(r.apcPct, 2) + '%', SCC: r.sccKgKwh !== null ? fmt(r.sccKgKwh, 4) + ' kg/kWh' : '—', SOC: r.socMlKwh !== null ? fmt(r.socMlKwh, 4) + ' mL/kWh' : '—' },
+        assumptions: { note: 'Direct ratios of metered quantities — PLF on the gross-generation (CEA) convention.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Feedwater Heater Performance (TTD & DCA) ----------
+function pageFeedwaterHeater() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Feedwater Heater Performance (TTD &amp; DCA)</h1>
+    <p class="lead">Terminal Temperature Difference and Drain Cooler Approach are the two numbers a feedwater heater's performance is actually monitored against — a rising TTD points to tube-side fouling or a flooded heater; a rising DCA points to a degraded drain-cooling zone.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Extraction Steam &amp; Feedwater Temperatures</div>
+    <div class="field"><label>Extraction steam pressure (bar a)</label><input type="number" id="pExt" step="any" value="10"></div>
+    <div class="input-row">
+      <div class="field"><label>Feedwater outlet temp (°C)</label><input type="number" id="fwOut" step="any" value="175"></div>
+      <div class="field"><label>Feedwater inlet temp (°C)</label><input type="number" id="fwIn" step="any" value="140"></div>
+    </div>
+    <div class="field"><label>Drain (condensate) outlet temp (°C)</label><input type="number" id="drainOut" step="any" value="145"></div>
+    <div class="hint">Saturation temperature is computed from extraction pressure using the same IAPWS-IF97 routine as the Steam Properties calculator elsewhere in this app.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter extraction pressure and the three temperatures to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const extractionSteamPressureBar = +left.querySelector('#pExt').value;
+    const feedwaterOutletTempC = +left.querySelector('#fwOut').value;
+    const feedwaterInletTempC = +left.querySelector('#fwIn').value;
+    const drainOutletTempC = +left.querySelector('#drainOut').value;
+    try {
+      const r = ppOps.feedwaterHeaterPerformance({ extractionSteamPressureBar, feedwaterOutletTempC, feedwaterInletTempC, drainOutletTempC });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.ttdC, 2)} °C</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">Terminal Temperature Difference (TTD)</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Drain Cooler Approach (DCA)', fmt(r.dcaC, 2) + ' °C')}
+          ${resultRow('Saturation temp at extraction pressure', fmt(r.satTempC, 2) + ' °C')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">TTD = T_sat(extraction pressure) − T_feedwater,out<br>DCA = T_drain,out − T_feedwater,in</div>
+        <div class="assumptions-note" style="margin-top:12px;">Trend both numbers over time at similar load, not just their instantaneous value — a small, stable TTD/DCA is normal by design, but a RISING trend at unchanged load and extraction pressure is what actually indicates degrading heater performance (tube fouling, level control issues, or a flooded/uncovered drain cooler zone).</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('feedwater-heater', `Feedwater heater — TTD ${fmt(r.ttdC, 1)}°C`, { extractionSteamPressureBar, feedwaterOutletTempC, feedwaterInletTempC, drainOutletTempC }, { ttdC: r.ttdC, dcaC: r.dcaC }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Feedwater Heater Performance (TTD & DCA)',
+        inputs: { 'Extraction pressure': `${extractionSteamPressureBar} bar a`, 'FW outlet': `${feedwaterOutletTempC} °C`, 'FW inlet': `${feedwaterInletTempC} °C`, 'Drain outlet': `${drainOutletTempC} °C` },
+        result: { TTD: fmt(r.ttdC, 2) + ' °C', DCA: fmt(r.dcaC, 2) + ' °C', 'Saturation temp': fmt(r.satTempC, 2) + ' °C' },
+        assumptions: { note: 'Saturation temperature from IAPWS-IF97; trend TTD/DCA over time at similar load rather than reading one snapshot in isolation.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Water Treatment — DM Plant Resin Regeneration Frequency ----------
+function pageWaterChemistry() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>DM Plant — Resin Bed Regeneration Frequency</h1>
+    <p class="lead">How much throughput a cation/softener resin bed can treat before its exchange capacity is exhausted and regeneration is required — a straight hardness-load mass balance, the same run-length figure DM plant operators schedule regeneration shifts around.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Resin Bed &amp; Raw Water</div>
+    <div class="input-row">
+      <div class="field"><label>Resin bed volume (m³)</label><input type="number" id="resinVol" step="any" value="2"></div>
+      <div class="field"><label>Exchange capacity (kg/m³ as CaCO₃)</label><input type="number" id="exCap" step="any" value="50"></div>
+    </div>
+    <div class="input-row">
+      <div class="field"><label>Raw water flow (m³/h)</label><input type="number" id="rwFlow" step="any" value="20"></div>
+      <div class="field"><label>Raw water hardness (ppm as CaCO₃)</label><input type="number" id="rwHard" step="any" value="250"></div>
+    </div>
+    <div class="hint">Exchange capacity is the resin manufacturer's rated figure for the specific resin and regenerant dose in use — it varies by resin type/age and regenerant level, so use the vendor datasheet or your own titration result rather than a generic assumed value.</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter resin bed and raw water data to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const resinVolumeM3 = +left.querySelector('#resinVol').value;
+    const exchangeCapacityKgM3AsCaCO3 = +left.querySelector('#exCap').value;
+    const rawWaterFlowM3H = +left.querySelector('#rwFlow').value;
+    const rawWaterHardnessPpm = +left.querySelector('#rwHard').value;
+    try {
+      const r = ppOps.resinBedRegenerationFrequency({ resinVolumeM3, exchangeCapacityKgM3AsCaCO3, rawWaterFlowM3H, rawWaterHardnessPpm });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.runHours, 1)} h</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">run length before regeneration</div>
+        </div>
+        <div class="result-grid">
+          ${resultRow('Throughput before regeneration', fmt(r.throughputM3, 1) + ' m³')}
+          ${resultRow('Total exchange capacity', fmt(r.totalCapacityG / 1000, 2) + ' kg (as CaCO₃)')}
+          ${resultRow('Hardness load rate', fmt(r.hardnessLoadGH, 1) + ' g/h (as CaCO₃)')}
+        </div>
+        <div class="formula-box" style="margin-top:12px;">Run length = Total exchange capacity / Hardness load rate<br>Hardness load rate = Raw water flow × Raw water hardness</div>
+        <div class="assumptions-note" style="margin-top:12px;">This is the theoretical run length on a pure hardness-load mass balance — real practice typically stops the run somewhat earlier (via a hardness leakage alarm or a fixed conservative throughput setpoint) rather than running fully to exhaustion, since hardness leakage rises as the bed nears its capacity limit, before total exhaustion is reached.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('water-chemistry', `Resin regeneration — ${fmt(r.runHours, 1)} h run`, { resinVolumeM3, exchangeCapacityKgM3AsCaCO3, rawWaterFlowM3H, rawWaterHardnessPpm }, { runHours: r.runHours, throughputM3: r.throughputM3 }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'DM Plant Resin Bed Regeneration Frequency',
+        inputs: { 'Resin volume': `${resinVolumeM3} m³`, 'Exchange capacity': `${exchangeCapacityKgM3AsCaCO3} kg/m³ as CaCO3`, 'Raw water flow': `${rawWaterFlowM3H} m³/h`, 'Raw water hardness': `${rawWaterHardnessPpm} ppm as CaCO3` },
+        result: { 'Run length': fmt(r.runHours, 1) + ' h', Throughput: fmt(r.throughputM3, 1) + ' m³' },
+        assumptions: { note: 'Theoretical run length to full exhaustion; real practice typically regenerates somewhat earlier.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Coal & Fuel Handling ----------
+function pageCoalFuel() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Coal &amp; Fuel Handling</h1>
+    <p class="lead">GCV→NCV conversion for fuel analysis reports, and daily coal requirement / stock days-of-cover for fuel planning — the two calculations a plant's coal/commercial desk runs every day.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">GCV → NCV Conversion</div>
+    <div class="field"><label>Gross Calorific Value, GCV (kcal/kg)</label><input type="number" id="gcv" step="any" value="4500"></div>
+    <div class="input-row">
+      <div class="field"><label>Hydrogen content, H (% by mass)</label><input type="number" id="hPct" step="any" value="3"></div>
+      <div class="field"><label>Total moisture, M (% by mass)</label><input type="number" id="mPct" step="any" value="8"></div>
+    </div>
+    <div class="field"><label>Latent heat of water vapor (kcal/kg)</label><input type="number" id="latHeat" step="any" value="584.9"></div>
+    <div class="hint">NCV = GCV less the latent heat carried away as unrecovered water vapor — both the fuel's own inherent moisture and the water formed by burning its hydrogen (each kg of H₂ forms 9 kg of H₂O). Latent heat is a stated, adjustable reference-condition value, not a universal constant.</div>
+    <div class="btn-row"><button class="btn" id="calcNcv">Calculate NCV</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter GCV, hydrogen %, and moisture % to calculate NCV.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calcNcv').addEventListener('click', () => {
+    const gcvKcalKg = +left.querySelector('#gcv').value;
+    const hydrogenPct = +left.querySelector('#hPct').value;
+    const moisturePct = +left.querySelector('#mPct').value;
+    const latentHeatKcalKg = +left.querySelector('#latHeat').value;
+    try {
+      const r = ppOps.gcvToNcv({ gcvKcalKg, hydrogenPct, moisturePct, latentHeatKcalKg });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.ncvKcalKg, 1)} kcal/kg</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">Net Calorific Value (NCV)</div>
+        </div>
+        <div class="result-grid">${resultRow('Total unrecovered water, % of fuel mass', fmt(r.totalWaterFractionPct, 2) + ' %')}</div>
+        <div class="formula-box" style="margin-top:12px;">NCV = GCV − Latent heat × (M% + 9×H%) / 100</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn1">Save to history</button></div>`;
+      right.querySelector('#saveBtn1').addEventListener('click', () => saveAndToast('coal-fuel', `GCV→NCV — ${fmt(r.ncvKcalKg, 0)} kcal/kg`, { gcvKcalKg, hydrogenPct, moisturePct, latentHeatKcalKg }, { ncvKcalKg: r.ncvKcalKg }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:28px;">Daily Coal Requirement &amp; Stock Days of Cover</h2>'));
+  const layout2 = h('<div class="calc-layout"></div>');
+  const left2 = h(`<div class="card">
+    <div class="panel-title">Specific Consumption, Generation &amp; Stock</div>
+    <div class="field"><label>Specific coal consumption, SCC (kg/kWh)</label><input type="number" id="scc" step="any" value="0.5"></div>
+    <div class="field"><label>Net generation for the period (MWh)</label><input type="number" id="netGen" step="any" value="8800"></div>
+    <div class="field"><label>Current coal stock (t)</label><input type="number" id="stock" step="any" value="50000"></div>
+    <div class="hint">SCC can come straight from the Plant Performance Indicators calculator above for a completed period, applied here to plan the next one.</div>
+    <div class="btn-row"><button class="btn" id="calcCoal">Calculate</button></div>
+  </div>`);
+  const right2 = h('<div class="card"><div class="empty-state">Enter SCC, generation, and current stock to calculate.</div></div>');
+  layout2.append(left2, right2);
+  app.appendChild(layout2);
+
+  left2.querySelector('#calcCoal').addEventListener('click', () => {
+    const sccKgKwh = +left2.querySelector('#scc').value;
+    const netGenerationMWh = +left2.querySelector('#netGen').value;
+    const currentStockT = +left2.querySelector('#stock').value;
+    try {
+      const r = ppOps.coalRequirementAndStock({ sccKgKwh, netGenerationMWh, currentStockT });
+      right2.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.daysOfCover, 1)} days</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">stock cover at this consumption rate</div>
+        </div>
+        <div class="result-grid">${resultRow('Coal required for the period', fmt(r.coalRequiredT, 1) + ' t')}</div>
+        <div class="formula-box" style="margin-top:12px;">Coal required = SCC × Net generation<br>Days of cover = Current stock / Coal required per day</div>
+        <div class="assumptions-note" style="margin-top:12px;">Assumes the SAME specific coal consumption and generation rate continues for the period the stock is being checked against — re-run with an updated SCC or planned generation if either is expected to change materially.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn2">Save to history</button><button class="btn secondary" id="pdfBtn2">Export PDF</button></div>`;
+      right2.querySelector('#saveBtn2').addEventListener('click', () => saveAndToast('coal-fuel', `Coal stock — ${fmt(r.daysOfCover, 1)} days cover`, { sccKgKwh, netGenerationMWh, currentStockT }, { coalRequiredT: r.coalRequiredT, daysOfCover: r.daysOfCover }));
+      right2.querySelector('#pdfBtn2').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Daily Coal Requirement & Stock Days of Cover',
+        inputs: { SCC: `${sccKgKwh} kg/kWh`, 'Net generation': `${netGenerationMWh} MWh`, 'Current stock': `${currentStockT} t` },
+        result: { 'Coal required': fmt(r.coalRequiredT, 1) + ' t', 'Days of cover': fmt(r.daysOfCover, 1) + ' days' },
+        assumptions: { note: 'Assumes the entered SCC and generation rate hold for the period being checked.' },
+      }));
+    } catch (e) { right2.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
+}
+
+// ---------- Combustion Emission Rate (CO2 & SO2) ----------
+function pageEmissions() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Power Plant</div><h1>Combustion Emission Rate (CO₂ &amp; SO₂)</h1>
+    <p class="lead">CO₂ and SO₂ emission rate from fuel ultimate analysis and firing rate — exact stoichiometric mass ratios (complete combustion), the same combustion mass balance already used internally by the Boiler Efficiency (Indirect Method) calculator, surfaced here as a standalone figure.</p></div>`));
+
+  const layout = h('<div class="calc-layout"></div>');
+  const left = h(`<div class="card">
+    <div class="panel-title">Fuel Firing Rate &amp; Ultimate Analysis</div>
+    <div class="field"><label>Fuel flow (t/h)</label><input type="number" id="fuelFlow" step="any" value="100"></div>
+    <div class="input-row">
+      <div class="field"><label>Carbon content (% by mass)</label><input type="number" id="cPct" step="any" value="60"></div>
+      <div class="field"><label>Sulfur content (% by mass)</label><input type="number" id="sPct" step="any" value="0.5"></div>
+    </div>
+    <div class="hint">From the fuel's own ultimate/proximate analysis report (coal, oil, or gas). This calculates CO₂ and SO₂ only — NOx and particulate (SPM) emissions depend on combustion technology, flame temperature, and pollution-control equipment (ESP/FGD/SCR), not fuel composition alone, so they cannot honestly be derived from fuel analysis; real plants measure them directly with a CEMS (Continuous Emission Monitoring System).</div>
+    <div class="btn-row"><button class="btn" id="calc">Calculate</button></div>
+  </div>`);
+  const right = h('<div class="card"><div class="empty-state">Enter fuel flow, carbon %, and sulfur % to calculate.</div></div>');
+  layout.append(left, right);
+  app.appendChild(layout);
+
+  left.querySelector('#calc').addEventListener('click', () => {
+    const fuelFlowTh = +left.querySelector('#fuelFlow').value;
+    const carbonPct = +left.querySelector('#cPct').value;
+    const sulfurPct = +left.querySelector('#sPct').value;
+    try {
+      const r = ppOps.combustionEmissionRate({ fuelFlowTh, carbonPct, sulfurPct });
+      right.innerHTML = `
+        <div style="text-align:center;padding:16px 0;">
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cyan);">${fmt(r.co2EmissionTh, 2)} t/h</div>
+          <div style="color:var(--text-dim);font-size:.85rem;margin-top:4px;">CO₂ emission rate</div>
+        </div>
+        <div class="result-grid">${resultRow('SO₂ emission rate', fmt(r.so2EmissionTh, 3) + ' t/h')}</div>
+        <div class="formula-box" style="margin-top:12px;">CO₂ = Fuel flow × Carbon% × (44/12) &nbsp;(C + O₂ → CO₂)<br>SO₂ = Fuel flow × Sulfur% × (64/32) &nbsp;(S + O₂ → SO₂)</div>
+        <div class="assumptions-note" style="margin-top:12px;">Assumes complete combustion of the fuel's carbon and sulfur — the theoretical maximum rate before any capture (FGD for SO₂) or incomplete combustion (unburnt carbon in ash/CO) is accounted for. Actual stack SO₂ is lower wherever FGD is fitted; actual CO₂ is essentially this figure, since carbon capture is not yet standard on coal/gas thermal units.</div>
+        <div class="btn-row" style="margin-top:12px;"><button class="btn secondary" id="saveBtn">Save to history</button><button class="btn secondary" id="pdfBtn">Export PDF</button></div>`;
+      right.querySelector('#saveBtn').addEventListener('click', () => saveAndToast('emissions', `Emissions — CO2 ${fmt(r.co2EmissionTh, 1)} t/h`, { fuelFlowTh, carbonPct, sulfurPct }, { co2EmissionTh: r.co2EmissionTh, so2EmissionTh: r.so2EmissionTh }));
+      right.querySelector('#pdfBtn').addEventListener('click', () => exportCalculationPDF({
+        calculatorName: 'Combustion Emission Rate (CO2 & SO2)',
+        inputs: { 'Fuel flow': `${fuelFlowTh} t/h`, Carbon: `${carbonPct}%`, Sulfur: `${sulfurPct}%` },
+        result: { CO2: fmt(r.co2EmissionTh, 2) + ' t/h', SO2: fmt(r.so2EmissionTh, 3) + ' t/h' },
+        assumptions: { note: 'Complete combustion, no capture/control equipment applied; NOx/SPM require a CEMS, not fuel-composition calculation.' },
+      }));
+    } catch (e) { right.innerHTML = `<div class="empty-state">${e.message}</div>`; }
+  });
 }
 
 // ---------- Bearing L10 Life (ISO 281) ----------
@@ -7155,6 +8002,17 @@ let samaCurrentPageIdx = 0;
 let samaTagLibrary = [];
 const samaGlobalTagValues = {}; // tag -> last value computed for it, by whichever page last ran it
 
+// Scenario presets: a named snapshot of every operator-settable field input
+// (DI state, AI value, Manual Value) on the CURRENT page at the moment it
+// was saved -- the point is testing several operating conditions ("Full
+// Load", "Startup", "Sensor Fault Test") on the same diagram quickly,
+// without re-entering every input by hand each time. Shared across pages
+// the same way the tag library is (a preset is just data, not tied to
+// being viewed on one particular page), and carried in the diagram's own
+// Export/Import JSON so presets survive a save/reload like everything
+// else about the diagram.
+let samaScenarios = []; // { name, inputs: [{ blockId, params }] }
+
 // Alarm management, same "global across every page" reasoning as the tag
 // database above -- a real DCS alarm summary shows every active alarm
 // across the whole unit, not just whichever graphic the operator happens
@@ -7305,18 +8163,40 @@ function pageSamaLogic() {
   const SIM_DT = 0.15;
   let simSpeed = 1; // simulated seconds advanced per real second while running
 
+  // ---- Final control element animation state ----
+  // A real actuator doesn't teleport between positions -- a valve stem
+  // takes real time to travel, a solenoid snaps with a small mechanical
+  // bounce, a lamp filament flickers up rather than switching on like an
+  // LED. This tracks each finalControl block's last-seen state so the
+  // live-tick refresh (below) can trigger a one-shot "just switched"
+  // animation class only on the actual transition, not on every scan.
+  const fcAnimState = new Map(); // blockId -> boolean (last on/energized/lit state)
+
   // ---- Live trend recording ----
   const trendHistory = new Map();      // blockId -> [{t, v}, ...], trimmed to the visible window
   const trendedIds = [];               // ordered, so each series keeps a stable color
   const TREND_COLORS = ['#4ade80', '#f59e0b', '#38bdf8', '#f472b6', '#a78bfa'];
   const TREND_WINDOW_SEC = 60;
   const TREND_MAX_SERIES = 5;
-  const BW = 168, BH = 66;
+  // Square footprint (equal width/height) for every block enclosure --
+  // circle, diamond, trapezoid and rectangle alike -- matching how SAMA
+  // diagrams are actually drawn (compact, roughly square symbol boxes,
+  // not wide rectangles), rather than the elongated 138x54 box used
+  // before.
+  const BW = 88, BH = 88;
+  // A selected block is drawn larger (growing toward roughly the old
+  // default footprint) so the block being worked on is easy to pick out
+  // and its symbol/ports easy to hit, while every other block stays at
+  // the smaller default size for a denser, more realistic-scale diagram.
+  const SELECTED_GROW = 1.25;
   /** A block's actual on-canvas size, from its own scale factor (default
-   * 1). Every place that used to read the flat BW/BH constants now calls
-   * this per-block, so each block can be resized independently. */
+   * 1) and, on top of that, a size boost while it's the selected block.
+   * Every place that used to read the flat BW/BH constants now calls
+   * this per-block, so each block can be resized independently, and
+   * portPositions()/wire endpoints (which derive from this) pick up the
+   * selection-grow automatically. */
   function blockSize(block) {
-    const s = block.scale ?? 1;
+    const s = (block.scale ?? 1) * (block.id === selectedId ? SELECTED_GROW : 1);
     return { bw: BW * s, bh: BH * s };
   }
 
@@ -7327,6 +8207,7 @@ function pageSamaLogic() {
     <button class="btn secondary" id="undoBtn" title="Undo (Ctrl+Z)">\u21b6 Undo</button>
     <button class="btn secondary" id="redoBtn" title="Redo (Ctrl+Y)">\u21b7 Redo</button>
     <button class="btn secondary" id="manageTagsBtn" title="Define instrument tags (FT-101, PIC-201...) to select when configuring a block">Tags</button>
+    <button class="btn secondary" id="manageScenariosBtn" title="Save/load named snapshots of every field input's value, to quickly switch between operating conditions">Scenarios</button>
     <button class="btn secondary" id="exportBtn" title="Save this diagram as a file you can reopen or share">Export</button>
     <button class="btn secondary" id="importBtn" title="Load a diagram you saved earlier">Import</button>
     <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
@@ -7406,6 +8287,88 @@ function pageSamaLogic() {
     tagModalBackdrop.querySelector('#newTagDesc').value = '';
     renderTagList();
     render(); // the properties panel's tag dropdown, if open on a block, should offer the new tag immediately
+  });
+
+  // ---- Scenario presets modal ----
+  // A "field input" here means any block a real operator could actually
+  // reach in and change: DI, AI, and Manual Value all have zero inputs of
+  // their own (they originate a value rather than compute one from
+  // upstream blocks) -- that's the same test the properties panel already
+  // uses to mean "this is a source", so a preset captures exactly those,
+  // and nothing else, on the CURRENT page.
+  function fieldInputBlocks() {
+    return blocks.filter((b) => {
+      const def = sama.SAMA_BLOCK_TYPES[b.type];
+      return def && def.inputs.min === 0 && def.inputs.max === 0 && b.type !== 'tagRef';
+    });
+  }
+  const scenarioModalBackdrop = h(`<div class="donate-modal-backdrop" id="scenarioModalBackdrop">
+    <div class="donate-modal" role="dialog" aria-modal="true" aria-labelledby="scenarioModalTitle" style="max-width:560px;">
+      <button class="donate-modal-close" id="scenarioModalClose" type="button" aria-label="Close">✕</button>
+      <h3 id="scenarioModalTitle">Scenario Presets</h3>
+      <p style="color:var(--text-dim);font-size:.85rem;margin:-8px 0 14px;">Save the current value of every field input on THIS page (every DI, AI, and Manual Value block) under a name, then load it back any time to jump straight to that operating condition — "Full Load", "Startup", "Sensor Fault Test" — instead of re-entering each value by hand.</p>
+      <div class="input-row">
+        <div class="field" style="flex:2;"><label>Preset name</label><input type="text" id="newScenarioName" placeholder="e.g. Full Load"></div>
+      </div>
+      <div class="btn-row"><button class="btn" id="saveScenarioBtn">Save current inputs as preset</button></div>
+      <div id="scenarioListBody" style="margin-top:16px;max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div>`);
+  app.appendChild(scenarioModalBackdrop);
+
+  function renderScenarioList() {
+    const body = scenarioModalBackdrop.querySelector('#scenarioListBody');
+    if (samaScenarios.length === 0) { body.innerHTML = '<div class="empty-state" style="padding:20px 0;">No presets saved yet.</div>'; return; }
+    body.innerHTML = samaScenarios.map((s, i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);">
+        <span style="font-weight:600;flex:1;">${s.name}</span>
+        <span style="color:var(--text-faint);font-size:.76rem;">${s.inputs.length} input${s.inputs.length === 1 ? '' : 's'}</span>
+        <button class="btn secondary" data-load-scenario="${i}" style="padding:4px 10px;font-size:.78rem;">Load</button>
+        <button class="btn secondary" data-remove-scenario="${i}" style="padding:4px 10px;font-size:.78rem;">Remove</button>
+      </div>`).join('');
+    body.querySelectorAll('[data-load-scenario]').forEach((btn) => btn.addEventListener('click', () => {
+      const scenario = samaScenarios[+btn.dataset.loadScenario];
+      snapshotForUndo();
+      let applied = 0, skipped = 0;
+      scenario.inputs.forEach((saved) => {
+        const block = blocks.find((b) => b.id === saved.blockId);
+        if (!block) { skipped++; return; } // the block that used to hold this input is gone from this page
+        Object.assign(block.params, saved.params);
+        applied++;
+      });
+      // Deliberately NOT structureChanged() -- a scenario only changes
+      // input VALUES, never the diagram's structure, so a running
+      // simulation should keep running and react to the new inputs on
+      // its next tick (exactly like dragging a slider or typing into a
+      // param field already does; see the plain param-edit handler's own
+      // comment on why it doesn't rebuild the simulation either). Only
+      // the canvas markup (DI toggle position, AI slider position, any
+      // open properties panel) needs a refresh to show the loaded values.
+      render();
+      toast(`Loaded "${scenario.name}" — ${applied} input${applied === 1 ? '' : 's'} applied${skipped ? `, ${skipped} skipped (block no longer on this page)` : ''}.`);
+    }));
+    body.querySelectorAll('[data-remove-scenario]').forEach((btn) => btn.addEventListener('click', () => {
+      samaScenarios.splice(+btn.dataset.removeScenario, 1);
+      renderScenarioList();
+    }));
+  }
+  function openScenarioModal() { renderScenarioList(); scenarioModalBackdrop.classList.add('open'); document.body.style.overflow = 'hidden'; }
+  function closeScenarioModal() { scenarioModalBackdrop.classList.remove('open'); document.body.style.overflow = ''; }
+  toolbar.querySelector('#manageScenariosBtn').addEventListener('click', openScenarioModal);
+  scenarioModalBackdrop.querySelector('#scenarioModalClose').addEventListener('click', closeScenarioModal);
+  scenarioModalBackdrop.addEventListener('click', (e) => { if (e.target === scenarioModalBackdrop) closeScenarioModal(); });
+  scenarioModalBackdrop.querySelector('#saveScenarioBtn').addEventListener('click', () => {
+    const nameInput = scenarioModalBackdrop.querySelector('#newScenarioName');
+    const name = nameInput.value.trim();
+    if (!name) { toast('Enter a preset name first.'); return; }
+    const inputs = fieldInputBlocks().map((b) => ({ blockId: b.id, params: { ...b.params } }));
+    if (inputs.length === 0) { toast('No DI, AI, or Manual Value blocks on this page to capture.'); return; }
+    const existingIdx = samaScenarios.findIndex((s) => s.name === name);
+    if (existingIdx >= 0) samaScenarios[existingIdx] = { name, inputs };
+    else samaScenarios.push({ name, inputs });
+    nameInput.value = '';
+    renderScenarioList();
+    toast(`Saved preset "${name}" (${inputs.length} input${inputs.length === 1 ? '' : 's'}).`);
   });
 
   // ---- Palette (overlay popup, not pushed into the layout -- opening
@@ -7678,6 +8641,7 @@ function pageSamaLogic() {
       <select id="trendBlockSelect" style="width:auto;min-width:200px;"><option value="">Add a signal to watch\u2026</option></select>
       <button class="btn secondary" id="trendAddBtn">+ Add to Trend</button>
       <button class="btn secondary" id="trendClearBtn">Clear Trend</button>
+      <button class="btn secondary" id="trendExportBtn" title="Download the trended signals' recorded points (the same 60s scrolling window shown above) as a CSV file">Export CSV</button>
       <span style="color:var(--text-faint);font-size:.76rem;margin-left:auto;">Last 60 s, scrolling</span>
     </div>
     <div style="overflow-x:auto;"><svg id="trendSvg" width="100%" height="240" viewBox="0 0 1000 240" preserveAspectRatio="none" style="background:var(--bg-panel);border:1px solid var(--line);border-radius:6px;min-width:600px;"></svg></div>
@@ -7687,6 +8651,16 @@ function pageSamaLogic() {
 
   const svg = canvasCard.querySelector('#samaSvg');
   const canvasWrap = canvasCard.querySelector('#samaCanvasWrap');
+
+  // Clicking empty canvas background (not a block, port, or wire) clears
+  // the current selection, so its X button hides again -- added once,
+  // here, rather than inside wireInteractions() (which re-runs on every
+  // render and re-attaches listeners to freshly-drawn CHILD elements;
+  // svg itself is never replaced, so binding this there would
+  // accumulate a duplicate listener on every render instead).
+  svg.addEventListener('click', (e) => {
+    if (e.target === svg && selectedId !== null) { selectedId = null; render(); }
+  });
 
   // ==================================================================
   // Simulation plumbing (unchanged logic, reused verbatim from the
@@ -7885,16 +8859,18 @@ function pageSamaLogic() {
         if (valEl) { valEl.textContent = r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 3)); valEl.setAttribute('fill', r.error ? 'var(--red)' : 'var(--text)'); }
         // Motor/valve/SOV/lamp symbols carry their own color, fill, and
         // OPEN/CLOSED-style text that a generic value update can't
-        // touch -- regenerate the whole symbol from the same function
-        // the initial render uses, so live edits (a slider, a const
-        // value, a running simulation tick) never leave them stale.
-        if (['motor', 'controlValve', 'sov', 'bulb'].includes(block.type)) {
+        // touch. Patch the existing symbol's attributes in place (not a
+        // full rebuild) so a real actuator's motion -- a valve stem
+        // travelling, a lamp flickering up, a solenoid's mechanical
+        // snap -- actually animates instead of snapping to a new state
+        // every scan; see updateFinalControlSymbol().
+        if (['motor', 'controlValve', 'controlValveDynamic', 'motorOperatedValve', 'sov', 'bulb'].includes(block.type)) {
           const fcEl = g.querySelector(`[data-fc-symbol="${block.id}"]`);
           if (fcEl) {
             const scale = block.scale ?? 1;
             const { bw } = blockSize(block);
             const cx = block.x + bw / 2;
-            fcEl.innerHTML = finalControlSymbolSVG(block, r, cx, scale);
+            updateFinalControlSymbol(fcEl, block, r, cx, scale);
           }
         }
         // A real 4-20mA field signal's loop current is exactly as live
@@ -8023,30 +8999,47 @@ function pageSamaLogic() {
   // Canvas rendering: blocks (with input/output ports) + wires
   // ==================================================================
   function finalControlSymbolSVG(block, r, cx, scale) {
-    // Shared by the initial render AND the live-refresh path -- the
-    // whole point of extracting this is that a motor/valve/SOV/lamp's
-    // visual state (color, fill, OPEN/CLOSED text) must update on every
-    // live value change, not just on a full re-render, exactly like
-    // wires needed the same treatment for the same reason.
+    // Builds the FULL symbol markup -- used for the initial render (and
+    // any full re-render, e.g. after a drag or a resize). Every mutable
+    // bit carries a stable data-fc-part attribute and a sama-fc-* CSS
+    // transition class (see styles.css) so updateFinalControlSymbol()
+    // below can move/recolor it in place on live ticks -- like a real
+    // actuator travelling to a new position -- instead of the whole
+    // symbol being torn down and rebuilt from scratch every scan, which
+    // is what made it snap instead of move.
     if (block.type === 'motor') {
       const on = !r.error && r.value >= 0.5;
       const ry = 18 * scale, ycenter = block.y + 40 * scale;
-      return `<circle cx="${cx}" cy="${ycenter}" r="${ry}" fill="${on ? 'var(--green)' : 'var(--bg-dark, #0d1117)'}" fill-opacity="${on ? 0.25 : 1}" stroke="${on ? 'var(--green)' : 'var(--text-faint)'}" stroke-width="2"/>
-        <text x="${cx}" y="${ycenter + 6 * scale}" text-anchor="middle" font-size="${(16 * scale).toFixed(1)}" font-weight="700" fill="${on ? 'var(--green)' : 'var(--text-faint)'}" style="pointer-events:none;">M</text>
-        <text x="${cx}" y="${ycenter + ry + 13 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${on ? 'var(--green)' : 'var(--text-faint)'}" font-weight="700" style="pointer-events:none;">${on ? 'RUNNING' : 'STOPPED'}</text>`;
+      const color = on ? 'var(--green)' : 'var(--text-faint)';
+      return `<circle data-fc-part="glow" cx="${cx}" cy="${ycenter}" r="${(ry + 5 * scale).toFixed(1)}" fill="var(--green)" fill-opacity="${on ? 0.18 : 0}" class="sama-fc-glow" style="pointer-events:none;"/>
+        <circle data-fc-part="body" cx="${cx}" cy="${ycenter}" r="${ry}" fill="${on ? 'var(--green)' : 'var(--bg-dark, #0d1117)'}" fill-opacity="${on ? 0.25 : 1}" stroke="${color}" stroke-width="2" class="sama-fc-fill"/>
+        <circle data-fc-part="rotor" cx="${cx}" cy="${ycenter}" r="${(ry * 0.62).toFixed(1)}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="${(ry * 0.5).toFixed(1)},${(ry * 0.42).toFixed(1)}" class="sama-fc-fill sama-fc-rotor${on ? ' running' : ''}" style="pointer-events:none;"/>
+        <text data-fc-part="letter" x="${cx}" y="${ycenter + 6 * scale}" text-anchor="middle" font-size="${(16 * scale).toFixed(1)}" font-weight="700" fill="${color}" class="sama-fc-fill" style="pointer-events:none;">M</text>
+        <text data-fc-part="state" x="${cx}" y="${ycenter + ry + 13 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${color}" font-weight="700" class="sama-fc-fill" style="pointer-events:none;">${on ? 'RUNNING' : 'STOPPED'}</text>`;
     }
-    if (block.type === 'controlValve') {
+    if (block.type === 'controlValve' || block.type === 'controlValveDynamic' || block.type === 'motorOperatedValve') {
       const pct = r.error ? 0 : Math.max(0, Math.min(100, r.value ?? 0));
       const bodyY = block.y + 38 * scale, bodyH = 16 * scale, bodyHalfW = 15 * scale;
       const stemTopY = bodyY - 14 * scale;
       const actY = stemTopY - 10 * scale;
       const fillColor = r.error ? 'var(--red)' : pct > 0 ? 'var(--cyan)' : 'var(--text-faint)';
       const fillOpacity = 0.15 + 0.55 * (pct / 100);
-      return `<rect x="${cx - 9 * scale}" y="${actY}" width="${18 * scale}" height="${10 * scale}" rx="2" fill="var(--bg-panel)" stroke="${fillColor}" stroke-width="1.5"/>
-        <line x1="${cx}" y1="${actY + 10 * scale}" x2="${cx}" y2="${stemTopY}" stroke="${fillColor}" stroke-width="2"/>
-        <polygon points="${cx - bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx - bodyHalfW},${bodyY + bodyH}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${fillColor}" stroke-width="1.5"/>
-        <polygon points="${cx + bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx + bodyHalfW},${bodyY + bodyH}" fill="${fillColor}" fill-opacity="${fillOpacity}" stroke="${fillColor}" stroke-width="1.5"/>
-        <text x="${cx}" y="${bodyY + bodyH + 15 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${fillColor}" font-weight="700" style="pointer-events:none;">${r.error ? 'ERR' : fmt(pct, 1) + '% OPEN'}</text>`;
+      // A real sliding-stem valve's plug actually retracts off its seat
+      // as it opens -- travel = 0 at closed, up to ~8*scale px lifted at
+      // fully open -- rather than the plug just sitting still while only
+      // its fill color hints at position.
+      const travel = -(pct / 100) * 8 * scale;
+      const flowOn = pct > 1 && !r.error;
+      const flowDur = (1.7 - (pct / 100) * 1.2).toFixed(2);
+      return `<rect data-fc-part="actuator" x="${(cx - 9 * scale).toFixed(1)}" y="${actY.toFixed(1)}" width="${(18 * scale).toFixed(1)}" height="${(10 * scale).toFixed(1)}" rx="2" fill="var(--bg-panel)" stroke="${fillColor}" stroke-width="1.5" class="sama-fc-fill"/>
+        <line data-fc-part="stemFixed" x1="${cx}" y1="${(actY + 10 * scale).toFixed(1)}" x2="${cx}" y2="${(stemTopY - 4 * scale).toFixed(1)}" stroke="${fillColor}" stroke-width="2" class="sama-fc-fill"/>
+        <g data-fc-part="stemGroup" class="sama-fc-stem" style="transform:translateY(${travel.toFixed(2)}px);">
+          <line data-fc-part="stem" x1="${cx}" y1="${(stemTopY - 4 * scale).toFixed(1)}" x2="${cx}" y2="${stemTopY.toFixed(1)}" stroke="${fillColor}" stroke-width="2" class="sama-fc-fill"/>
+          <polygon data-fc-part="plugL" points="${(cx - bodyHalfW).toFixed(1)},${bodyY.toFixed(1)} ${cx},${(bodyY + bodyH / 2).toFixed(1)} ${(cx - bodyHalfW).toFixed(1)},${(bodyY + bodyH).toFixed(1)}" fill="${fillColor}" fill-opacity="${fillOpacity.toFixed(2)}" stroke="${fillColor}" stroke-width="1.5" class="sama-fc-plug"/>
+          <polygon data-fc-part="plugR" points="${(cx + bodyHalfW).toFixed(1)},${bodyY.toFixed(1)} ${cx},${(bodyY + bodyH / 2).toFixed(1)} ${(cx + bodyHalfW).toFixed(1)},${(bodyY + bodyH).toFixed(1)}" fill="${fillColor}" fill-opacity="${fillOpacity.toFixed(2)}" stroke="${fillColor}" stroke-width="1.5" class="sama-fc-plug"/>
+        </g>
+        <line data-fc-part="flow" x1="${(cx - bodyHalfW + 4 * scale).toFixed(1)}" y1="${(bodyY + bodyH / 2).toFixed(1)}" x2="${(cx + bodyHalfW - 4 * scale).toFixed(1)}" y2="${(bodyY + bodyH / 2).toFixed(1)}" stroke="${fillColor}" stroke-width="2" class="sama-fc-flow${flowOn ? ' running' : ''}" style="opacity:${flowOn ? Math.min(1, 0.35 + (pct / 100) * 0.65).toFixed(2) : 0};animation-duration:${flowDur}s;pointer-events:none;"/>
+        <text data-fc-part="pct" x="${cx}" y="${(bodyY + bodyH + 15 * scale).toFixed(1)}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${fillColor}" font-weight="700" class="sama-fc-fill" style="pointer-events:none;">${r.error ? 'ERR' : fmt(pct, 1) + '% OPEN'}</text>`;
     }
     if (block.type === 'sov') {
       const on = !r.error && r.value >= 0.5;
@@ -8054,22 +9047,138 @@ function pageSamaLogic() {
       const bodyY = block.y + 38 * scale, bodyH = 16 * scale, bodyHalfW = 15 * scale;
       const stemTopY = bodyY - 14 * scale;
       const coilY = stemTopY - 12 * scale;
-      return `<path d="M ${cx - 10 * scale} ${coilY + 6 * scale} l 4 -6 l 4 12 l 4 -12 l 4 12 l 4 -6" fill="none" stroke="${color}" stroke-width="1.5"/>
-        <line x1="${cx}" y1="${coilY + 6 * scale}" x2="${cx}" y2="${stemTopY}" stroke="${color}" stroke-width="2"/>
-        <polygon points="${cx - bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx - bodyHalfW},${bodyY + bodyH}" fill="${on ? color : 'var(--bg-panel)'}" fill-opacity="${on ? 0.35 : 1}" stroke="${color}" stroke-width="1.5"/>
-        <polygon points="${cx + bodyHalfW},${bodyY} ${cx},${bodyY + bodyH / 2} ${cx + bodyHalfW},${bodyY + bodyH}" fill="${on ? color : 'var(--bg-panel)'}" fill-opacity="${on ? 0.35 : 1}" stroke="${color}" stroke-width="1.5"/>
-        <text x="${cx}" y="${bodyY + bodyH + 15 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${color}" font-weight="700" style="pointer-events:none;">${on ? 'OPEN' : 'CLOSED'}</text>`;
+      return `<path data-fc-part="coil" d="M ${(cx - 10 * scale).toFixed(1)} ${(coilY + 6 * scale).toFixed(1)} l 4 -6 l 4 12 l 4 -12 l 4 12 l 4 -6" fill="none" stroke="${color}" stroke-width="1.5" class="sama-fc-coil"/>
+        <line data-fc-part="stem" x1="${cx}" y1="${(coilY + 6 * scale).toFixed(1)}" x2="${cx}" y2="${stemTopY.toFixed(1)}" stroke="${color}" stroke-width="2" class="sama-fc-fill"/>
+        <g data-fc-part="plugGroup">
+          <polygon data-fc-part="plugL" points="${(cx - bodyHalfW).toFixed(1)},${bodyY.toFixed(1)} ${cx},${(bodyY + bodyH / 2).toFixed(1)} ${(cx - bodyHalfW).toFixed(1)},${(bodyY + bodyH).toFixed(1)}" fill="${on ? color : 'var(--bg-panel)'}" fill-opacity="${on ? 0.35 : 1}" stroke="${color}" stroke-width="1.5" class="sama-fc-plug"/>
+          <polygon data-fc-part="plugR" points="${(cx + bodyHalfW).toFixed(1)},${bodyY.toFixed(1)} ${cx},${(bodyY + bodyH / 2).toFixed(1)} ${(cx + bodyHalfW).toFixed(1)},${(bodyY + bodyH).toFixed(1)}" fill="${on ? color : 'var(--bg-panel)'}" fill-opacity="${on ? 0.35 : 1}" stroke="${color}" stroke-width="1.5" class="sama-fc-plug"/>
+        </g>
+        <text data-fc-part="state" x="${cx}" y="${(bodyY + bodyH + 15 * scale).toFixed(1)}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${color}" font-weight="700" class="sama-fc-fill" style="pointer-events:none;">${on ? 'OPEN' : 'CLOSED'}</text>`;
     }
     if (block.type === 'bulb') {
       const on = !r.error && r.value >= 0.5;
       const ycenter = block.y + 40 * scale, r1 = 15 * scale;
       const color = r.error ? 'var(--red)' : on ? '#fbbf24' : 'var(--text-faint)';
-      return `${on ? `<circle cx="${cx}" cy="${ycenter}" r="${r1 + 6 * scale}" fill="${color}" fill-opacity="0.25" style="pointer-events:none;"/>` : ''}
-        <circle cx="${cx}" cy="${ycenter}" r="${r1}" fill="${on ? color : 'var(--bg-dark, #0d1117)'}" fill-opacity="${on ? 0.3 : 1}" stroke="${color}" stroke-width="2"/>
-        <path d="M ${cx - 6 * scale} ${ycenter - 6 * scale} L ${cx + 6 * scale} ${ycenter + 6 * scale} M ${cx - 6 * scale} ${ycenter + 6 * scale} L ${cx + 6 * scale} ${ycenter - 6 * scale}" stroke="${color}" stroke-width="1.5"/>
-        <text x="${cx}" y="${ycenter + r1 + 13 * scale}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${color}" font-weight="700" style="pointer-events:none;">${r.error ? 'ERR' : on ? 'LIT' : 'DARK'}</text>`;
+      return `<circle data-fc-part="glow" cx="${cx}" cy="${ycenter}" r="${(r1 + 6 * scale).toFixed(1)}" fill="${color}" fill-opacity="${on ? 0.25 : 0}" class="sama-fc-glow" style="pointer-events:none;"/>
+        <circle data-fc-part="body" cx="${cx}" cy="${ycenter}" r="${r1}" fill="${on ? color : 'var(--bg-dark, #0d1117)'}" fill-opacity="${on ? 0.3 : 1}" stroke="${color}" stroke-width="2" class="sama-fc-fill"/>
+        <path data-fc-part="cross" d="M ${(cx - 6 * scale).toFixed(1)} ${(ycenter - 6 * scale).toFixed(1)} L ${(cx + 6 * scale).toFixed(1)} ${(ycenter + 6 * scale).toFixed(1)} M ${(cx - 6 * scale).toFixed(1)} ${(ycenter + 6 * scale).toFixed(1)} L ${(cx + 6 * scale).toFixed(1)} ${(ycenter - 6 * scale).toFixed(1)}" stroke="${color}" stroke-width="1.5" class="sama-fc-fill"/>
+        <text data-fc-part="state" x="${cx}" y="${(ycenter + r1 + 13 * scale).toFixed(1)}" text-anchor="middle" font-size="${(9.5 * scale).toFixed(1)}" fill="${color}" font-weight="700" class="sama-fc-fill" style="pointer-events:none;">${r.error ? 'ERR' : on ? 'LIT' : 'DARK'}</text>`;
     }
     return '';
+  }
+
+  /** Patches an already-built final-control symbol's live-changing bits
+   * (color, fill, position, flow) IN PLACE on the same persistent DOM
+   * nodes, instead of tearing the whole symbol down with innerHTML and
+   * rebuilding it every tick. That distinction is the whole point: CSS
+   * transitions only animate when a property changes on a node that was
+   * already there a moment ago -- replace the node and there is nothing
+   * for the browser to interpolate from, so the valve stem (or motor
+   * color, or lamp glow) used to visibly teleport between values every
+   * scan instead of travelling smoothly like a real actuator. Falls back
+   * to a full rebuild if the expected child structure isn't present
+   * (e.g. right after a full re-render used a different code path, or
+   * the block's type changed underneath it). */
+  function updateFinalControlSymbol(fcEl, block, r, cx, scale) {
+    const prevOn = fcAnimState.get(block.id);
+    if (block.type === 'motor') {
+      const on = !r.error && r.value >= 0.5;
+      const body = fcEl.querySelector('[data-fc-part="body"]');
+      if (!body) { fcEl.innerHTML = finalControlSymbolSVG(block, r, cx, scale); fcAnimState.set(block.id, on); return; }
+      const color = on ? 'var(--green)' : 'var(--text-faint)';
+      fcEl.querySelector('[data-fc-part="glow"]').setAttribute('fill-opacity', on ? 0.18 : 0);
+      body.setAttribute('fill', on ? 'var(--green)' : 'var(--bg-dark, #0d1117)');
+      body.setAttribute('fill-opacity', on ? 0.25 : 1);
+      body.setAttribute('stroke', color);
+      const rotor = fcEl.querySelector('[data-fc-part="rotor"]');
+      rotor.setAttribute('stroke', color);
+      rotor.classList.toggle('running', on);
+      fcEl.querySelector('[data-fc-part="letter"]').setAttribute('fill', color);
+      const state = fcEl.querySelector('[data-fc-part="state"]');
+      state.setAttribute('fill', color);
+      state.textContent = on ? 'RUNNING' : 'STOPPED';
+      fcAnimState.set(block.id, on);
+      return;
+    }
+    if (block.type === 'controlValve' || block.type === 'controlValveDynamic' || block.type === 'motorOperatedValve') {
+      const stemGroup = fcEl.querySelector('[data-fc-part="stemGroup"]');
+      if (!stemGroup) { fcEl.innerHTML = finalControlSymbolSVG(block, r, cx, scale); return; }
+      const pct = r.error ? 0 : Math.max(0, Math.min(100, r.value ?? 0));
+      const fillColor = r.error ? 'var(--red)' : pct > 0 ? 'var(--cyan)' : 'var(--text-faint)';
+      const fillOpacity = (0.15 + 0.55 * (pct / 100)).toFixed(2);
+      const travel = (-(pct / 100) * 8 * scale).toFixed(2);
+      stemGroup.style.transform = `translateY(${travel}px)`;
+      ['actuator', 'stemFixed', 'stem'].forEach((part) => fcEl.querySelector(`[data-fc-part="${part}"]`).setAttribute('stroke', fillColor));
+      ['plugL', 'plugR'].forEach((part) => {
+        const el = fcEl.querySelector(`[data-fc-part="${part}"]`);
+        el.setAttribute('fill', fillColor);
+        el.setAttribute('fill-opacity', fillOpacity);
+        el.setAttribute('stroke', fillColor);
+      });
+      const flowOn = pct > 1 && !r.error;
+      const flow = fcEl.querySelector('[data-fc-part="flow"]');
+      flow.setAttribute('stroke', fillColor);
+      flow.classList.toggle('running', flowOn);
+      flow.style.opacity = flowOn ? Math.min(1, 0.35 + (pct / 100) * 0.65).toFixed(2) : 0;
+      flow.style.animationDuration = `${(1.7 - (pct / 100) * 1.2).toFixed(2)}s`;
+      const pctEl = fcEl.querySelector('[data-fc-part="pct"]');
+      pctEl.setAttribute('fill', fillColor);
+      pctEl.textContent = r.error ? 'ERR' : fmt(pct, 1) + '% OPEN';
+      return;
+    }
+    if (block.type === 'sov') {
+      const plugL = fcEl.querySelector('[data-fc-part="plugL"]');
+      if (!plugL) { fcEl.innerHTML = finalControlSymbolSVG(block, r, cx, scale); fcAnimState.set(block.id, !r.error && r.value >= 0.5); return; }
+      const on = !r.error && r.value >= 0.5;
+      const color = on ? 'var(--green)' : 'var(--text-faint)';
+      fcEl.querySelector('[data-fc-part="coil"]').setAttribute('stroke', color);
+      fcEl.querySelector('[data-fc-part="stem"]').setAttribute('stroke', color);
+      const plugGroup = fcEl.querySelector('[data-fc-part="plugGroup"]');
+      ['plugL', 'plugR'].forEach((part) => {
+        const el = fcEl.querySelector(`[data-fc-part="${part}"]`);
+        el.setAttribute('fill', on ? color : 'var(--bg-panel)');
+        el.setAttribute('fill-opacity', on ? 0.35 : 1);
+        el.setAttribute('stroke', color);
+      });
+      const state = fcEl.querySelector('[data-fc-part="state"]');
+      state.setAttribute('fill', color);
+      state.textContent = on ? 'OPEN' : 'CLOSED';
+      // A solenoid actuates in a fraction of a second, with a small
+      // mechanical bounce as the armature hits its stop -- fire that
+      // one-shot snap only on the actual transition, not on every scan.
+      if (prevOn !== undefined && prevOn !== on) {
+        plugGroup.classList.remove('sama-fc-snap-anim');
+        void plugGroup.offsetWidth; // restart the animation even if it's still mid-run from a fast toggle
+        plugGroup.classList.add('sama-fc-snap-anim');
+      }
+      fcAnimState.set(block.id, on);
+      return;
+    }
+    if (block.type === 'bulb') {
+      const body = fcEl.querySelector('[data-fc-part="body"]');
+      if (!body) { fcEl.innerHTML = finalControlSymbolSVG(block, r, cx, scale); fcAnimState.set(block.id, !r.error && r.value >= 0.5); return; }
+      const on = !r.error && r.value >= 0.5;
+      const color = r.error ? 'var(--red)' : on ? '#fbbf24' : 'var(--text-faint)';
+      const glow = fcEl.querySelector('[data-fc-part="glow"]');
+      glow.setAttribute('fill', color);
+      glow.setAttribute('fill-opacity', on ? 0.25 : 0);
+      body.setAttribute('fill', on ? color : 'var(--bg-dark, #0d1117)');
+      body.setAttribute('fill-opacity', on ? 0.3 : 1);
+      body.setAttribute('stroke', color);
+      fcEl.querySelector('[data-fc-part="cross"]').setAttribute('stroke', color);
+      const state = fcEl.querySelector('[data-fc-part="state"]');
+      state.setAttribute('fill', color);
+      state.textContent = r.error ? 'ERR' : on ? 'LIT' : 'DARK';
+      // A real lamp filament doesn't jump straight to full brightness --
+      // flicker up once, only on the actual off-to-on transition.
+      if (prevOn !== undefined && !prevOn && on) {
+        body.classList.remove('sama-fc-flicker-anim');
+        void body.offsetWidth;
+        body.classList.add('sama-fc-flicker-anim');
+      }
+      fcAnimState.set(block.id, on);
+      return;
+    }
   }
 
   function portPositions(block) {
@@ -8242,14 +9351,19 @@ function pageSamaLogic() {
       let shape;
       // Enclosure shapes follow the actual MCAA/ISA functional-diagramming
       // standard (Section 4.1.2), not just a category color: circle for
-      // measuring/readout, rectangle for automatic signal processing,
-      // diamond for manual signal processing, isosceles trapezoid for
-      // final controlling, and square specifically for timers (distinct
-      // from the general rectangle used for other processing blocks).
+      // measuring/readout only, rectangle for automatic signal processing
+      // (the default enclosure for the great majority of blocks --
+      // summers, gains, selects, limiters, PID, lag, integrator, logic
+      // gates, etc. -- verified against the official MCAA standard PDF
+      // and corroborating sources; there is no separate triangle or
+      // circle for summing/averaging/gain in the real standard), diamond
+      // for manual signal processing, isosceles trapezoid for final
+      // controlling, and square specifically for timers (distinct from
+      // the general rectangle used for other processing blocks).
       if (block.type === 'di' || block.type === 'ai') {
-        // Circle -- measuring/readout function.
+        // Circle -- measuring/readout function only (Section 4.1.2.1).
         shape = `<ellipse cx="${cx}" cy="${cy}" rx="${bw / 2}" ry="${bh / 2}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${strokeWidth}"${strokeClass}/>`;
-      } else if (['do_', 'ao_', 'motor', 'controlValve', 'sov', 'bulb'].includes(block.type)) {
+      } else if (['do_', 'ao_', 'motor', 'controlValve', 'controlValveDynamic', 'motorOperatedValve', 'sov', 'bulb'].includes(block.type)) {
         // Isosceles trapezoid -- final controlling function.
         const peak = 16 * scale;
         shape = `<polygon points="${block.x},${block.y} ${block.x + bw},${block.y} ${block.x + bw},${block.y + bh - peak} ${cx},${block.y + bh} ${block.x},${block.y + bh - peak}" fill="var(--bg-panel)" stroke="${color}" stroke-width="${strokeWidth}"${strokeClass}/>`;
@@ -8273,7 +9387,7 @@ function pageSamaLogic() {
       const portR = Math.max(3, 6 * scale), hitR = Math.max(8, 15 * scale);
       svgContent += `<g data-block-id="${block.id}" class="sama-node" style="cursor:grab;touch-action:none;">
         ${shape}
-        <text x="${cx}" y="${block.y + 20 * scale}" text-anchor="middle" font-size="${(10.5 * scale).toFixed(1)}" fill="${color}" font-weight="600" style="pointer-events:none;">${def.label}</text>
+        <text x="${cx}" y="${block.y + 20 * scale}" text-anchor="middle" font-size="${(def.symbol ? 13 : 10.5) * scale}" fill="${color}" font-weight="700" style="pointer-events:none;" title="${def.label}">${def.symbol || def.label}</text>
         <text x="${cx}" y="${block.y + 34 * scale}" text-anchor="middle" font-size="${(8.5 * scale).toFixed(1)}" fill="${block.tag || block.type === 'tagRef' ? 'var(--cyan)' : 'var(--text-faint)'}" font-weight="${block.tag || block.type === 'tagRef' ? '700' : '400'}" style="pointer-events:none;">${block.type === 'tagRef' ? (block.params.tag ? '\u2192 ' + block.params.tag : block.id) : (block.tag || block.id)}</text>
         ${block.type === 'di' ? (() => {
           const on = !r.error && r.value >= 0.5;
@@ -8310,14 +9424,14 @@ function pageSamaLogic() {
           const mA = r.error ? null : sama.milliamps(r.value, lo, hi);
           return `<text x="${cx}" y="${block.y + 46 * scale}" text-anchor="middle" font-size="${(13 * scale).toFixed(1)}" fill="${r.error ? 'var(--red)' : 'var(--text)'}" font-weight="700" data-diagram-value="${block.id}" style="pointer-events:none;">${r.error ? 'ERR' : (r.value === null ? '\u2014' : fmt(r.value, 3))}</text>
           ${mA !== null ? `<text data-ma-value="${block.id}" x="${cx}" y="${block.y + 59 * scale}" text-anchor="middle" font-size="${(9 * scale).toFixed(1)}" fill="var(--text-faint)" font-family="var(--font-mono)" style="pointer-events:none;">${fmt(mA, 2)} mA</text>` : ''}`;
-        })() : ['motor', 'controlValve', 'sov', 'bulb'].includes(block.type) ? `<g data-fc-symbol="${block.id}">${finalControlSymbolSVG(block, r, cx, scale)}</g>`
+        })() : ['motor', 'controlValve', 'controlValveDynamic', 'motorOperatedValve', 'sov', 'bulb'].includes(block.type) ? `<g data-fc-symbol="${block.id}">${finalControlSymbolSVG(block, r, cx, scale)}</g>`
         : `<text x="${cx}" y="${block.y + 52 * scale}" text-anchor="middle" font-size="${(13 * scale).toFixed(1)}" fill="${r.error ? 'var(--red)' : 'var(--text)'}" font-weight="700" data-diagram-value="${block.id}" style="pointer-events:none;">${r.error ? 'ERR' : (r.value === null ? '—' : fmt(r.value, 3))}</text>`}
         <circle data-port="out" data-block-id="${block.id}" cx="${out.x}" cy="${out.y}" r="${portR}" fill="var(--bg-panel)" stroke="var(--cyan)" stroke-width="2" style="pointer-events:none;"/>
         <circle data-port="out" data-block-id="${block.id}" cx="${out.x}" cy="${out.y}" r="${hitR}" fill="transparent" style="cursor:crosshair;touch-action:none;"/>
         ${ins.map((p, i) => `
         <circle data-port="in" data-block-id="${block.id}" data-input-idx="${i}" cx="${p.x}" cy="${p.y}" r="${portR}" fill="${block.inputs[i].source === 'block' ? CONNECT_OK_COLOR : 'var(--bg-panel)'}" stroke="${block.inputs[i].source === 'block' ? CONNECT_OK_COLOR : 'var(--cyan)'}" stroke-width="2" style="pointer-events:none;"/>
         <circle data-port="in" data-block-id="${block.id}" data-input-idx="${i}" cx="${p.x}" cy="${p.y}" r="${hitR}" fill="transparent" style="cursor:crosshair;touch-action:none;"/>
-        ${def.inputLabels?.[i] ? `<text x="${p.x - hitR - 3}" y="${p.y + 3}" text-anchor="end" font-size="${(8 * scale).toFixed(1)}" fill="var(--text-faint)" style="pointer-events:none;">${def.inputLabels[i]}</text>` : ''}`).join('')}
+        <text x="${p.x - hitR - 3}" y="${p.y + 3}" text-anchor="end" font-size="${(8 * scale).toFixed(1)}" fill="var(--text-faint)" style="pointer-events:none;">${def.inputLabels?.[i] || `In ${i + 1}`}</text>`).join('')}
         <text x="${block.x + bw - 4}" y="${block.y - 6}" text-anchor="end" font-size="13" fill="var(--red)" class="remove-btn" data-remove-block="${block.id}" style="cursor:pointer;font-weight:700;opacity:${isSelected ? 1 : 0};">✕</text>
       </g>`;
     });
@@ -8361,7 +9475,7 @@ function pageSamaLogic() {
     const r = results.get(block.id) || { value: null, error: null };
     body.innerHTML = `
       <div style="font-weight:600;margin-bottom:4px;">${def.label} <span style="color:var(--text-faint);font-weight:400;font-size:.78rem;">(${block.id})</span></div>
-      ${['di', 'ai', 'do_', 'ao_', 'motor', 'controlValve', 'sov', 'bulb'].includes(block.type) ? `
+      ${['di', 'ai', 'do_', 'ao_', 'motor', 'controlValve', 'controlValveDynamic', 'motorOperatedValve', 'sov', 'bulb'].includes(block.type) ? `
       <div class="field"><label>Instrument tag</label>
         <select data-block-tag>
           <option value="">(none \u2014 shows ${block.id})</option>
@@ -8369,7 +9483,7 @@ function pageSamaLogic() {
         </select>
       </div>
       ${tagLibrary.length === 0 ? '<div class="hint" style="margin-top:-6px;margin-bottom:10px;">No tags defined yet \u2014 use the Tags button in the toolbar to add real instrument tags like FT-101.</div>' : ''}
-      ${block.tag && ['ai', 'ao_', 'controlValve'].includes(block.type) ? `
+      ${block.tag && ['ai', 'ao_', 'controlValve', 'controlValveDynamic', 'motorOperatedValve'].includes(block.type) ? `
       <div style="border-top:1px solid var(--line);margin:10px 0 8px;padding-top:8px;">
         <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" data-alarm-enabled ${block.alarm && block.alarm.enabled ? 'checked' : ''} style="width:auto;"> <span style="font-weight:600;">Alarm limits</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;${block.alarm && block.alarm.enabled ? '' : 'opacity:.4;pointer-events:none;'}" data-alarm-fields>
@@ -8509,6 +9623,7 @@ function pageSamaLogic() {
     blocks.forEach((b) => b.inputs.forEach((inp) => { if (inp.source === 'block' && inp.blockId === id) { inp.source = 'const'; inp.value = 0; } }));
     blocks = blocks.filter((b) => b.id !== id);
     if (selectedId === id) selectedId = null;
+    fcAnimState.delete(id); // a deleted block's actuator state is gone with it
     clearAlarmsForBlock(id); // a deleted block can't still be in alarm
     renderAlarmBanner();
     structureChanged();
@@ -8805,6 +9920,7 @@ function pageSamaLogic() {
       exportedAt: new Date().toISOString(),
       pages: samaPages.map((p) => ({ name: p.name, blocks: p.blocks })), // undo/redo history isn't meaningful to save/restore across a save/load boundary
       tagLibrary: samaTagLibrary,
+      scenarios: samaScenarios,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -8848,6 +9964,7 @@ function pageSamaLogic() {
           undoStack = samaPages[0].undoStack;
           redoStack = samaPages[0].redoStack;
           if (Array.isArray(parsed.tagLibrary)) { samaTagLibrary = parsed.tagLibrary; tagLibrary = samaTagLibrary; }
+          if (Array.isArray(parsed.scenarios)) samaScenarios = parsed.scenarios;
           selectedId = null;
           structureChanged();
           renderPageTabs();
@@ -8869,6 +9986,7 @@ function pageSamaLogic() {
         // this feature is not evidence the user wants their current
         // tags cleared.
         if (Array.isArray(parsed.tagLibrary)) { samaTagLibrary = parsed.tagLibrary; tagLibrary = samaTagLibrary; }
+        if (Array.isArray(parsed.scenarios)) samaScenarios = parsed.scenarios;
         selectedId = null;
         structureChanged();
         toast(`Imported ${blocks.length} block${blocks.length === 1 ? '' : 's'} into the current page.`);
@@ -8962,6 +10080,38 @@ function pageSamaLogic() {
     trendHistory.clear();
     refreshTrendBlockSelect();
     renderTrend();
+  });
+  trendPanel.querySelector('#trendExportBtn').addEventListener('click', () => {
+    if (trendedIds.length === 0) { toast('Nothing trended yet — add a signal to the trend first.'); return; }
+    // Every trended series is recorded on the SAME simulation tick (see
+    // recordTrend above), so their timestamps line up except where a
+    // block happened to error out on a given tick -- build one shared,
+    // sorted timestamp axis and look each series up by it, leaving a
+    // blank cell (not a zero, which would misrepresent a real reading)
+    // wherever that series has no point at that instant.
+    const seriesByTime = trendedIds.map((id) => {
+      const m = new Map();
+      (trendHistory.get(id) || []).forEach((p) => m.set(p.t, p.v));
+      return m;
+    });
+    const allTimes = [...new Set(trendedIds.flatMap((id) => (trendHistory.get(id) || []).map((p) => p.t)))].sort((a, b) => a - b);
+    const header = ['time_s', ...trendedIds.map((id) => {
+      const block = blocks.find((b) => b.id === id);
+      const label = block ? (sama.SAMA_BLOCK_TYPES[block.type]?.label || block.type) : id;
+      return `"${label.replace(/"/g, '""')} (${id})"`;
+    })].join(',');
+    const rows = allTimes.map((t) => [t.toFixed(2), ...seriesByTime.map((m) => (m.has(t) ? m.get(t) : ''))].join(','));
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sama-trend-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast(`Exported ${allTimes.length} sample${allTimes.length === 1 ? '' : 's'} across ${trendedIds.length} signal${trendedIds.length === 1 ? '' : 's'}.`);
   });
 
   render();
@@ -11436,6 +12586,271 @@ function pageFormulaLibrary() {
   }, 50);
 }
 
+// ---------- KKS Code Reference ----------
+function pageKksReference() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Reference</div><h1>KKS Code Reference \u2014 Supercritical Thermal Plant</h1>
+    <p class="lead">Kraftwerk-Kennzeichensystem (Power Plant Identification System) codes for a coal-fired supercritical unit, with a full tag-building methodology and a click-down Area \u2192 System \u2192 Subsystem explorer \u2014 boiler, turbine-generator, coal handling, cooling water, water treatment, electrical, and I&amp;C \u2014 plus the finer signal suffix codes (XB, XG, XH, XQ...) appended after an equipment tag to identify an individual command or feedback signal. Searchable by code or by what a system actually does.</p></div>`));
+
+  // ------------------------------------------------------------------
+  // KKS Tag Methodology -- how a real tag like 10HAC01AP001 is actually
+  // built up, level by level, with a worked example. This is background
+  // for the cascading explorer just below it: the explorer lets you
+  // click down to a specific F1F2F3 process code (e.g. HAC); this
+  // section explains what gets attached before and after it to form a
+  // complete, unique tag for one physical piece of equipment.
+  // ------------------------------------------------------------------
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:4px;">KKS Tag Methodology</h2>'));
+  app.appendChild(h(`<div class="card">
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;">A complete KKS tag is built from four breakdown levels, read left to right, each narrowing the identification further. Worked example \u2014 a specific pump on the economizer system of Unit 1:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;font-family:monospace;font-size:1.05rem;">
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(96,165,250,.15);color:var(--blue);">10</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(251,191,36,.15);color:var(--amber);">HAC</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(74,222,128,.15);color:var(--green);">01</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(244,114,182,.15);color:#f472b6;">AP</span>
+      <span style="padding:6px 10px;border-radius:6px;background:rgba(168,85,247,.15);color:#a855f7;">001</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 0 \u2014 Total Plant Key: <code>10</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">Identifies the unit itself (e.g. Unit 1 of a multi-unit station). Plant-and-project-specific, agreed once at project start.</div></div>
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 1 \u2014 Function Key (Process Code): <code>HAC</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">The area/system/subsystem code covered by the explorer below: F1 (H, the main group \u2014 boiler), F2 (A, narrows to the pressure system), F3 (C, narrows to the economizer specifically). This is the part that says WHAT the equipment does, independent of how many identical ones exist.</div></div>
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 2 \u2014 Equipment Unit Key: <code>01</code> + <code>AP</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">A sequence number (01 = the first economizer on this system, distinguishing it from a second if one exists) followed by an equipment-unit letter code from a separate table (AP = pump, AA = valve, AC = heat exchanger, and so on) identifying WHAT KIND of physical device this specific item is.</div></div>
+      <div><h3 style="font-weight:600;color:var(--text);font-size:.95rem;margin:0;">Level 3 \u2014 Component Key: <code>001</code></h3>
+        <div style="color:var(--text-dim);font-size:.87rem;margin-top:4px;line-height:1.55;">Numbers one individual component belonging to that equipment unit, e.g. a specific motor, sensor, or terminal box mounted on the pump itself. Not every tag needs this level \u2014 it\u2019s only added when identifying a part OF the equipment unit, not the unit as a whole.</div></div>
+    </div>
+    <p style="color:var(--text-dim);font-size:.85rem;line-height:1.6;margin-top:14px;">Put together: <code>10HAC01AP001</code> reads as "Unit 1, economizer system, first instance, a pump, component 001 of it" \u2014 unique, and readable without a lookup table once you know the four levels. The area/system/subsystem explorer below builds exactly the Level 1 portion of this \u2014 pick an area, then a system, then a subsystem, to land on its F1F2F3 code.</p>
+  </div>`));
+
+  // ------------------------------------------------------------------
+  // Cascading Area -> System -> Subsystem explorer. Three steps, each
+  // narrowing the previous: picking an Area filters which Systems show,
+  // picking a System reveals its Subsystems with their KKS codes. This
+  // is the click-down way to reach a code without already knowing which
+  // of the ~50 systems to search for by name.
+  // ------------------------------------------------------------------
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:28px;">Explore by Area \u2192 System \u2192 Subsystem</h2>'));
+  const explorerCard = h('<div class="card"></div>');
+  app.appendChild(explorerCard);
+  const breadcrumb = h('<div style="color:var(--text-dim);font-size:.82rem;margin-bottom:10px;min-height:1.2em;"></div>');
+  explorerCard.appendChild(breadcrumb);
+  const areaRow = h('<div class="tabs" id="kksExpAreas" style="flex-wrap:wrap;"></div>');
+  explorerCard.appendChild(areaRow);
+  const systemRow = h('<div class="tabs" id="kksExpSystems" style="flex-wrap:wrap;margin-top:10px;"></div>');
+  explorerCard.appendChild(systemRow);
+  const subsystemGrid = h('<div class="grid cols-2" id="kksExpSubsystems" style="margin-top:14px;"></div>');
+  explorerCard.appendChild(subsystemGrid);
+
+  let expArea = null;
+  let expSystem = null;
+
+  function renderBreadcrumb() {
+    const parts = ['Select an area to begin'];
+    if (expArea) parts[0] = expArea.area;
+    if (expSystem) parts.push(`${expSystem.code} \u2014 ${expSystem.name}`);
+    breadcrumb.textContent = parts.join('  \u203a  ');
+  }
+
+  function renderAreas() {
+    areaRow.innerHTML = '';
+    for (const a of KKS_HIERARCHY) {
+      const t = h(`<div class="tab ${expArea === a ? 'active' : ''}">${a.area}</div>`);
+      t.addEventListener('click', () => { expArea = a; expSystem = null; renderAreas(); renderSystems(); renderSubsystems(); renderBreadcrumb(); });
+      areaRow.appendChild(t);
+    }
+  }
+  function renderSystems() {
+    systemRow.innerHTML = '';
+    if (!expArea) return;
+    for (const s of expArea.systems) {
+      const t = h(`<div class="tab ${expSystem === s ? 'active' : ''}">${s.code} \u2014 ${s.name}</div>`);
+      t.addEventListener('click', () => { expSystem = s; renderSystems(); renderSubsystems(); renderBreadcrumb(); });
+      systemRow.appendChild(t);
+    }
+  }
+  function renderSubsystems() {
+    subsystemGrid.innerHTML = '';
+    if (!expSystem) return;
+    if (!expSystem.subsystems.length) {
+      subsystemGrid.appendChild(h(`<div class="empty-state">No further subsystem breakdown recorded for ${expSystem.code} \u2014 this system code itself is the most specific KKS tag for it.</div>`));
+      return;
+    }
+    for (const sub of expSystem.subsystems) {
+      subsystemGrid.appendChild(h(`
+        <div class="card fl-card">
+          <h4>${sub.code} <span style="color:var(--text-dim);font-weight:400;">\u2014 ${sub.name}</span></h4>
+          ${sub.note ? `<p>${sub.note}</p>` : ''}
+        </div>
+      `));
+    }
+  }
+  renderBreadcrumb();
+  const waitForHierarchy = setInterval(() => {
+    if (KKS_HIERARCHY.length) { clearInterval(waitForHierarchy); renderAreas(); }
+  }, 50);
+
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:28px;">Full Code List</h2>'));
+  const searchWrap = h(`<div class="field" style="max-width:420px;"><input type="text" id="kksSearch" placeholder="Search by code or system, e.g. 'HAG', 'economizer', 'circulating water'..."></div>`);
+  app.appendChild(searchWrap);
+  const catBar = h('<div class="tabs" id="kksCats" style="flex-wrap:wrap;"></div>');
+  app.appendChild(catBar);
+  const grid = h('<div class="grid cols-2" id="kksGrid"></div>');
+  app.appendChild(grid);
+
+  let activeCat = 'All';
+  function renderCats() {
+    const cats = ['All', ...new Set(KKS_CODES.map((k) => k.area))];
+    catBar.innerHTML = '';
+    cats.forEach((c) => {
+      const t = h(`<div class="tab ${c === activeCat ? 'active' : ''}">${c}</div>`);
+      t.addEventListener('click', () => { activeCat = c; renderCats(); renderGrid(); });
+      catBar.appendChild(t);
+    });
+  }
+  function renderGrid() {
+    const q = searchWrap.querySelector('#kksSearch').value.toLowerCase();
+    grid.innerHTML = '';
+    const items = KKS_CODES.filter((k) =>
+      (activeCat === 'All' || k.area === activeCat) &&
+      (!q || `${k.code} ${k.name} ${k.note}`.toLowerCase().includes(q))
+    );
+    if (!items.length) { grid.appendChild(h('<div class="empty-state">No KKS codes match.</div>')); return; }
+    for (const k of items) {
+      grid.appendChild(h(`
+        <div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">${k.area}</span></div>
+          <h4>${k.code} <span style="color:var(--text-dim);font-weight:400;">\u2014 ${k.name}</span></h4>
+          ${k.note ? `<p>${k.note}</p>` : ''}
+        </div>
+      `));
+    }
+  }
+  searchWrap.querySelector('#kksSearch').addEventListener('input', renderGrid);
+  const waitForData = setInterval(() => {
+    if (KKS_CODES.length) { clearInterval(waitForData); renderCats(); renderGrid(); }
+  }, 50);
+
+  // ------------------------------------------------------------------
+  // Signal suffix codes -- a distinct, finer layer within the same KKS
+  // system: where the area codes above identify equipment (e.g. a
+  // specific drive or valve), a signal suffix appended after that
+  // equipment's own KKS tag identifies one individual I/O point on it
+  // -- which command or feedback bit a given signal actually is (e.g.
+  // TagName+XB01 for an "on" command or its feedback, TagName+XQ01 for
+  // its first analog reading). This is the real answer to "how is a
+  // specific feedback/command signal named", one level more detailed
+  // than the equipment-area codes above.
+  // ------------------------------------------------------------------
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:28px;">Signal Suffix Codes</h2>'));
+  app.appendChild(h(`<div class="card">
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;">A KKS equipment tag identifies a device (a drive, a valve). A <b>signal suffix</b> appended after it identifies one individual command or feedback bit on that device: <code>MAB10AA001</code> might be a specific pump, and <code>MAB10AA001XB01</code> its "on" <b>feedback</b> \u2014 XB is the signal category letter, 01 is the specific function within it. This is the layer that actually answers "which signal is the ON feedback": an X-prefix code specifically marks a signal coming back FROM the field (a status/confirmation), as distinct from a command going TO it, which instead uses the separate <b>Application Code</b> scheme (Y-prefix, e.g. <code>MAB10AA001YB01</code>) covered further down \u2014 real projects commonly also wire the complementary "confirmed OFF" feedback 50 numbers later (XB51) alongside XB01, so a genuine OFF state can be told apart from a stuck or failed-to-report contact.</p>
+  </div>`));
+  const sigSearchWrap = h(`<div class="field" style="max-width:420px;margin-top:10px;"><input type="text" id="kksSigSearch" placeholder="Search by code or meaning, e.g. 'XB01', 'feedback', 'auto mode'..."></div>`);
+  app.appendChild(sigSearchWrap);
+  const sigCatBar = h('<div class="tabs" id="kksSigCats" style="flex-wrap:wrap;"></div>');
+  app.appendChild(sigCatBar);
+  const sigGrid = h('<div class="grid cols-2" id="kksSigGrid"></div>');
+  app.appendChild(sigGrid);
+
+  let activeSigCat = 'All';
+  function renderSigCats() {
+    const cats = ['All', ...new Set(KKS_SIGNALS.map((s) => s.category))];
+    sigCatBar.innerHTML = '';
+    cats.forEach((c) => {
+      const t = h(`<div class="tab ${c === activeSigCat ? 'active' : ''}">${c}</div>`);
+      t.addEventListener('click', () => { activeSigCat = c; renderSigCats(); renderSigGrid(); });
+      sigCatBar.appendChild(t);
+    });
+  }
+  function renderSigGrid() {
+    const q = sigSearchWrap.querySelector('#kksSigSearch').value.toLowerCase();
+    sigGrid.innerHTML = '';
+    const items = KKS_SIGNALS.filter((s) =>
+      (activeSigCat === 'All' || s.category === activeSigCat) &&
+      (!q || `${s.code} ${s.meaning} ${s.note}`.toLowerCase().includes(q))
+    );
+    if (!items.length) { sigGrid.appendChild(h('<div class="empty-state">No signal codes match.</div>')); return; }
+    for (const s of items) {
+      sigGrid.appendChild(h(`
+        <div class="card fl-card">
+          <div class="fl-meta"><span class="fl-cat">${s.category}</span></div>
+          <h4>${s.code} <span style="color:var(--text-dim);font-weight:400;">\u2014 ${s.meaning}</span></h4>
+          ${s.note ? `<p>${s.note}</p>` : ''}
+        </div>
+      `));
+    }
+  }
+  sigSearchWrap.querySelector('#kksSigSearch').addEventListener('input', renderSigGrid);
+  const waitForSigData = setInterval(() => {
+    if (KKS_SIGNALS.length) { clearInterval(waitForSigData); renderSigCats(); renderSigGrid(); }
+  }, 50);
+}
+
+// ---------- ISA-5.1 Instrument Tag Reference ----------
+function pageIsaTagReference() {
+  app.appendChild(h(`<div class="page-head"><div class="eyebrow">Reference</div><h1>ISA-5.1 Instrument Tag Reference</h1>
+    <p class="lead">The companion identification system to KKS: where KKS identifies plant systems and equipment (area-first), ANSI/ISA-5.1 identifies the individual field instrument itself, by the variable it measures and the function it performs \u2014 the FT/PIC/LAH-style tags you see in a P&amp;ID bubble. Complete official letter table, plus the everyday tag combinations built from it.</p></div>`));
+
+  app.appendChild(h(`<div class="card">
+    <h2 class="panel-title" style="margin-top:0;">How a tag is built \u2014 and how it relates to KKS</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;">An ISA-5.1 tag reads left to right as: <b>first letter</b> (the measured/initiating variable, or a modifier) + <b>one or more succeeding letters</b> (the function the instrument performs) + a <b>loop number</b>. <code>PT-101</code> is a Pressure Transmitter on loop 101; <code>TIC-205</code> is a Temperature Indicating Controller on loop 205. Redundant instruments on one loop add a trailing letter \u2014 <code>FT-101A</code> and <code>FT-101B</code> are two transmitters on the same loop.</p>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;">KKS and ISA-5.1 solve genuinely different halves of the same identification problem, and a real plant typically carries both: KKS\u2019s multi-segment code (e.g. <code>10LAC01CT001</code>) identifies <i>where</i> a device sits in the plant \u2014 unit, system, sub-system, item number \u2014 largely independent of what the device actually does. An ISA-5.1 tag (e.g. <code>FT-101</code>) identifies <i>what the device does</i> \u2014 measures flow, transmits it \u2014 largely independent of where it physically sits. KKS is the dominant convention in German-influenced and much of European/Indian power-station engineering; ISA-5.1 dominates North America and most international process-industry P&amp;IDs. On a real project using both, the same physical transmitter can carry a KKS location tag on the plant equipment list and an ISA-5.1 loop tag on the P&amp;ID and instrument index \u2014 two labels for one device, answering two different questions.</p>
+  </div>`));
+
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:20px;">Complete Letter Table</h2>'));
+  const letterSearchWrap = h(`<div class="field" style="max-width:420px;"><input type="text" id="isaLetterSearch" placeholder="Search by letter or meaning, e.g. 'F', 'flow', 'totalize'..."></div>`);
+  app.appendChild(letterSearchWrap);
+  const letterGrid = h('<div class="grid cols-2" id="isaLetterGrid"></div>');
+  app.appendChild(letterGrid);
+
+  function renderLetterGrid() {
+    const q = letterSearchWrap.querySelector('#isaLetterSearch').value.toLowerCase();
+    letterGrid.innerHTML = '';
+    const items = ISA_LETTERS.filter((l) => !q || `${l.letter} ${l.first} ${l.readout} ${l.output} ${l.modifier}`.toLowerCase().includes(q));
+    if (!items.length) { letterGrid.appendChild(h('<div class="empty-state">No letters match.</div>')); return; }
+    for (const l of items) {
+      letterGrid.appendChild(h(`
+        <div class="card fl-card">
+          <h4>${l.letter}</h4>
+          <div class="result-grid">
+            ${resultRow('As first letter', l.first || '\u2014')}
+            ${resultRow('Readout/passive function', l.readout || '\u2014')}
+            ${resultRow('Output/active function', l.output || '\u2014')}
+            ${resultRow('Function modifier', l.modifier || '\u2014')}
+          </div>
+        </div>
+      `));
+    }
+  }
+  letterSearchWrap.querySelector('#isaLetterSearch').addEventListener('input', renderLetterGrid);
+
+  app.appendChild(h('<h2 class="panel-title" style="margin-top:20px;">Common Tag Combinations</h2>'));
+  const comboSearchWrap = h(`<div class="field" style="max-width:420px;"><input type="text" id="isaComboSearch" placeholder="Search by tag or name, e.g. 'PSHH', 'flow controller'..."></div>`);
+  app.appendChild(comboSearchWrap);
+  const comboGrid = h('<div class="grid cols-2" id="isaComboGrid"></div>');
+  app.appendChild(comboGrid);
+
+  function renderComboGrid() {
+    const q = comboSearchWrap.querySelector('#isaComboSearch').value.toLowerCase();
+    comboGrid.innerHTML = '';
+    const items = ISA_COMBOS.filter((c) => !q || `${c.tag} ${c.name} ${c.note}`.toLowerCase().includes(q));
+    if (!items.length) { comboGrid.appendChild(h('<div class="empty-state">No tag combinations match.</div>')); return; }
+    for (const c of items) {
+      comboGrid.appendChild(h(`
+        <div class="card fl-card">
+          <h4>${c.tag} <span style="color:var(--text-dim);font-weight:400;">\u2014 ${c.name}</span></h4>
+          ${c.note ? `<p>${c.note}</p>` : ''}
+        </div>
+      `));
+    }
+  }
+  comboSearchWrap.querySelector('#isaComboSearch').addEventListener('input', renderComboGrid);
+
+  const waitForData = setInterval(() => {
+    if (ISA_LETTERS.length && ISA_COMBOS.length) { clearInterval(waitForData); renderLetterGrid(); renderComboGrid(); }
+  }, 50);
+}
+
 // ---------- History ----------
 async function pageHistory() {
   app.appendChild(h(`<div class="page-head"><div class="eyebrow">Reference</div><h1>Calculation History</h1>
@@ -11547,7 +12962,7 @@ if (adminLoginLink) {
 // build -- the version.json update-check mechanism depends on that file
 // being stamped correctly -- only the visible "build XXXXXXXX" text in
 // the footer has been removed, since it was just clutter for a visitor.)
-const APP_BUILD = '20260919191009';
+const APP_BUILD = '20261017180212';
 (function showBuild() {
   const foot = document.querySelector('.app-foot');
   if (foot && !document.getElementById('causeTag')) {
@@ -11593,12 +13008,22 @@ const APP_BUILD = '20260919191009';
 // through navigate() instead -- functionally identical for the visitor,
 // just without a real address for that preview sandbox to notice.
 if (isEmbeddedFrame) {
-  document.querySelectorAll('.app-foot a[href^="?page="]').forEach((a) => {
-    const targetRoute = new URLSearchParams(a.getAttribute('href').slice(1)).get('page');
+  document.querySelectorAll('.app-foot a[data-route]').forEach((a) => {
+    const targetRoute = a.dataset.route;
     a.removeAttribute('href');
     a.setAttribute('tabindex', '0');
     a.addEventListener('click', (e) => { e.preventDefault(); navigate(targetRoute); });
     a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(targetRoute); } });
+  });
+}
+if (!isEmbeddedFrame) {
+  // Real href stays (crawlers, new-tab opens); a plain left click navigates in-app without a reload.
+  document.querySelectorAll('.app-foot a[data-route]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      navigate(a.dataset.route);
+    });
   });
 }
 

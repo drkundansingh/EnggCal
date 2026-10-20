@@ -50,6 +50,7 @@ export function milliamps(value, lo, hi) {
 export const SAMA_BLOCK_TYPES = {
   summer: {
     label: 'Summer (\u03a3)', category: 'analog', inputs: { min: 2, max: 6 },
+    symbol: "Σ",
     params: [{ id: 'bias', label: 'Bias', default: 0 }],
     description: 'Weighted sum of its inputs, plus a bias. Each input has its own +/- gain (sign), the standard SAMA summing junction.',
     compute(inputs, params, gains) {
@@ -59,30 +60,37 @@ export const SAMA_BLOCK_TYPES = {
   },
   average: {
     label: 'Averaging (\u03a3/n)', category: 'analog', inputs: { min: 2, max: 6 },
+    symbol: "Σ/n",
     params: [],
     description: 'The algebraic sum of its inputs divided by the number of inputs: m = (x\u2081 + x\u2082 + ... + x\u2099) / n. The standard SAMA averaging junction \u2014 distinct from Summer, which does not divide by the input count.',
     compute(inputs) { return inputs.reduce((sum, v) => sum + v, 0) / inputs.length; },
   },
   gain: {
     label: 'Gain (K)', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "K",
+    inputLabels: ['Input'],
     params: [{ id: 'k', label: 'Gain (K)', default: 1 }],
     description: 'Multiplies its single input by a constant K.',
     compute(inputs, params) { return inputs[0] * (params.k ?? 1); },
   },
   bias: {
     label: 'Bias (+/-)', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "+",
+    inputLabels: ['Input'],
     params: [{ id: 'offset', label: 'Offset', default: 0 }],
     description: 'Adds a fixed offset to its input.',
     compute(inputs, params) { return inputs[0] + (params.offset ?? 0); },
   },
   multiply: {
     label: 'Multiply (\u00d7)', category: 'analog', inputs: { min: 2, max: 2 },
+    symbol: "×",
     params: [],
     description: 'Product of its two inputs.',
     compute(inputs) { return inputs[0] * inputs[1]; },
   },
   divide: {
     label: 'Divide (\u00f7)', category: 'analog', inputs: { min: 2, max: 2 },
+    symbol: "÷",
     inputLabels: ['Numerator', 'Denominator'],
     params: [],
     description: 'First input divided by the second.',
@@ -91,44 +99,63 @@ export const SAMA_BLOCK_TYPES = {
       return inputs[0] / inputs[1];
     },
   },
+  ratioStation: {
+    label: 'Ratio Station (\u00d7 ratio + bias)', category: 'analog', inputs: { min: 2, max: 2 },
+    symbol: "×R",
+    inputLabels: ['Wild (measured)', 'Ratio setpoint'],
+    params: [{ id: 'bias', label: 'Bias (added after ratio)', default: 0 }],
+    description: 'The standard SAMA ratio-control station: output = Wild \u00d7 Ratio + Bias, where the RATIO ITSELF is a live second input, not a fixed gain \u2014 exactly the distinction that makes this different from a plain Gain (K) block. This is the real building block behind fuel/air ratio control, feedwater/steam ratio, or any "slave follows master by a settable proportion" loop: wire a flow transmitter (or another controller\u2019s output) into Wild, and a ratio setpoint \u2014 fixed, or itself the output of a trim controller \u2014 into Ratio, and the demand this station produces tracks the wild variable at whatever ratio is currently commanded, updating immediately if either input changes.',
+    compute(inputs, params) { return inputs[0] * inputs[1] + (params.bias ?? 0); },
+  },
   highSelect: {
     label: 'High Select (>)', category: 'analog', inputs: { min: 2, max: 6 },
+    symbol: ">",
     params: [],
     description: 'Outputs the HIGHEST of its inputs \u2014 the standard SAMA high-select used to make one demand win.',
     compute(inputs) { return Math.max(...inputs); },
   },
   lowSelect: {
     label: 'Low Select (<)', category: 'analog', inputs: { min: 2, max: 6 },
+    symbol: "<",
     params: [],
     description: 'Outputs the LOWEST of its inputs.',
     compute(inputs) { return Math.min(...inputs); },
   },
   medianSelect: {
     label: 'Median Select', category: 'analog', inputs: { min: 3, max: 3 },
+    symbol: "MED",
     params: [],
     description: 'Outputs the MIDDLE value of exactly three inputs \u2014 the standard SAMA/DCS approach to triple-redundant analog sensor validation. Unlike averaging (which lets a single wildly-failed transmitter still skew the result) or a simple high/low select (which a single failed-high or failed-low transmitter can dominate outright), median select is genuinely tolerant of any ONE input failing in either direction: the two still-good sensors always outvote it, since the middle of three values can only be wrong if at least two of the three are wrong the same way.',
     compute(inputs) { const s = [...inputs].sort((a, b) => a - b); return s[1]; },
   },
   absoluteValue: {
     label: 'Absolute Value', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "|x|",
+    inputLabels: ['Input'],
     params: [],
     description: 'Outputs |x| \u2014 the magnitude of its input regardless of sign. Useful after a difference/summer block when only the SIZE of a deviation matters, not its direction \u2014 e.g. alarming on a large temperature mismatch between two redundant sensors, whichever one happens to read higher.',
     compute(inputs) { return Math.abs(inputs[0]); },
   },
   highLimit: {
     label: 'High Limit', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "H",
+    inputLabels: ['Input'],
     params: [{ id: 'limit', label: 'Upper limit', default: 100 }],
     description: 'Clamps the input so it can never exceed the set limit.',
     compute(inputs, params) { return Math.min(inputs[0], params.limit ?? 100); },
   },
   lowLimit: {
     label: 'Low Limit', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "L",
+    inputLabels: ['Input'],
     params: [{ id: 'limit', label: 'Lower limit', default: 0 }],
     description: 'Clamps the input so it can never fall below the set limit.',
     compute(inputs, params) { return Math.max(inputs[0], params.limit ?? 0); },
   },
   deadband: {
     label: 'Deadband', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "DB",
+    inputLabels: ['Input'],
     params: [{ id: 'band', label: 'Deadband (\u00b1)', default: 1 }],
     description: 'Outputs zero for any input within +/- the deadband of zero; passes the input through unchanged outside that band.',
     compute(inputs, params) {
@@ -138,6 +165,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   sqrt: {
     label: 'Square Root', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "√",
+    inputLabels: ['Input'],
     params: [],
     description: 'Square root extractor \u2014 the classic SAMA symbol for linearizing a DP flow signal.',
     compute(inputs) {
@@ -147,6 +176,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   power: {
     label: 'Exponential (x\u207f)', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "xⁿ",
+    inputLabels: ['Input'],
     params: [{ id: 'n', label: 'Exponent (n)', default: 2 }],
     description: 'Raises its input to a power: m = x\u207f. Covers both a squaring/cubing block (n=2, n=3) and, with a fractional exponent, a general root extractor \u2014 n=0.5 is equivalent to the dedicated Square Root block above.',
     compute(inputs, params) {
@@ -157,6 +188,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   functionBlock: {
     label: 'Function (f(x))', category: 'analog', inputs: { min: 1, max: 1 },
+    symbol: "f(x)",
+    inputLabels: ['Input'],
     params: [
       { id: 'x1', label: 'Point 1 \u2014 x', default: 0 }, { id: 'y1', label: 'Point 1 \u2014 y', default: 0 },
       { id: 'x2', label: 'Point 2 \u2014 x', default: 25 }, { id: 'y2', label: 'Point 2 \u2014 y', default: 25 },
@@ -187,6 +220,7 @@ export const SAMA_BLOCK_TYPES = {
   and: {
     signalType: 'digital',
     label: 'AND', category: 'logic', inputs: { min: 2, max: 6 },
+    symbol: "AND",
     params: [],
     description: 'TRUE only when ALL inputs are TRUE (>= 0.5).',
     compute(inputs) { return inputs.every((v) => v >= 0.5) ? 1 : 0; },
@@ -194,6 +228,7 @@ export const SAMA_BLOCK_TYPES = {
   or: {
     signalType: 'digital',
     label: 'OR', category: 'logic', inputs: { min: 2, max: 6 },
+    symbol: "OR",
     params: [],
     description: 'TRUE when ANY input is TRUE (>= 0.5).',
     compute(inputs) { return inputs.some((v) => v >= 0.5) ? 1 : 0; },
@@ -201,6 +236,8 @@ export const SAMA_BLOCK_TYPES = {
   not: {
     signalType: 'digital',
     label: 'NOT', category: 'logic', inputs: { min: 1, max: 1 },
+    symbol: "NOT",
+    inputLabels: ['Input'],
     params: [],
     description: 'Inverts its single input.',
     compute(inputs) { return inputs[0] >= 0.5 ? 0 : 1; },
@@ -208,6 +245,7 @@ export const SAMA_BLOCK_TYPES = {
   xor: {
     signalType: 'digital',
     label: 'XOR', category: 'logic', inputs: { min: 2, max: 6 },
+    symbol: "XOR",
     params: [],
     description: 'TRUE when an ODD number of inputs are TRUE \u2014 for exactly two inputs (the common case) this is the familiar "exactly one, not both" exclusive-or; with more inputs it follows the same parity rule real XOR gate chains do. A genuinely different function from AND/OR, not just their opposite \u2014 useful for detecting a MISMATCH between two signals that should normally agree (e.g. two redundant digital status inputs) rather than requiring both or either.',
     compute(inputs) { return inputs.filter((v) => v >= 0.5).length % 2 === 1 ? 1 : 0; },
@@ -215,6 +253,7 @@ export const SAMA_BLOCK_TYPES = {
   nand: {
     signalType: 'digital',
     label: 'NAND', category: 'logic', inputs: { min: 2, max: 6 },
+    symbol: "NAND",
     params: [],
     description: 'TRUE unless ALL inputs are TRUE \u2014 the inverse of AND. Wiring a NOT after an AND gives the identical result; this block exists as its own gate purely to match the standard logic-gate family (AND, OR, NOT, NAND, NOR, XOR) and to keep a diagram\u2019s block count and label matching what a real PLC/relay logic drawing would show, rather than a NOT tacked on after every AND that needs inverting.',
     compute(inputs) { return inputs.every((v) => v >= 0.5) ? 0 : 1; },
@@ -222,6 +261,7 @@ export const SAMA_BLOCK_TYPES = {
   nor: {
     signalType: 'digital',
     label: 'NOR', category: 'logic', inputs: { min: 2, max: 6 },
+    symbol: "NOR",
     params: [],
     description: 'TRUE only when ALL inputs are FALSE \u2014 the inverse of OR, and (with a single input tied to itself) the simplest possible NOT-latch building block in real relay logic. Same reasoning as NAND: its own gate for a complete, standard logic-gate family rather than requiring a separate NOT block after every OR.',
     compute(inputs) { return inputs.some((v) => v >= 0.5) ? 0 : 1; },
@@ -229,6 +269,7 @@ export const SAMA_BLOCK_TYPES = {
   voter: {
     signalType: 'digital',
     label: 'M-out-of-N Voter', category: 'logic', inputs: { min: 2, max: 3 },
+    symbol: "M/N",
     params: [{ id: 'votesNeeded', label: 'Votes needed (M)', default: 2, options: [{ value: 1, label: '1 (any one \u2014 1oo2/1oo3)' }, { value: 2, label: '2 (majority \u2014 2oo2/2oo3)' }, { value: 3, label: '3 (all \u2014 3oo3)' }] }],
     description: 'The standard SIS/safety voting architecture (1oo2, 2oo2, 2oo3, 1oo3, 3oo3...) as one configurable block: TRUE when at least M of the connected inputs are TRUE. With 2 inputs and M=1 this is 1oo2 (identical to OR); with 2 inputs and M=2 this is 2oo2 (identical to AND) \u2014 the real value is with 3 inputs and M=2 (2oo3), the industry-standard architecture for triple-redundant sensor voting that genuinely cannot be built from a single AND or OR gate, since it must tolerate any ONE input disagreeing (a single failed or spuriously-tripped sensor) without either a nuisance trip (like 3oo3/AND would give) or a loss of protection from a stuck-low sensor (like 1oo3/OR would give).',
     compute(inputs, params) {
@@ -239,6 +280,7 @@ export const SAMA_BLOCK_TYPES = {
   comparator: {
     signalType: 'digital',
     label: 'Comparator (>)', category: 'logic', inputs: { min: 2, max: 2 },
+    symbol: ">",
     inputLabels: ['A', 'B'],
     params: [],
     description: 'TRUE when input 1 is greater than input 2 \u2014 wire a constant setpoint into input 2 for a fixed-setpoint trip.',
@@ -246,6 +288,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   transfer: {
     label: 'Transfer (T)', category: 'analog', inputs: { min: 3, max: 3 },
+    symbol: "T",
     inputLabels: ['Auto', 'Manual', 'Select'],
     params: [],
     description: 'The real manual/auto control station (drawn as a diamond in the actual standard): outputs the Auto signal when Select is FALSE, or the Manual signal when Select is TRUE, with the switch state set by external means \u2014 an operator flipping a station between automatic control and manual override, without any bump calculation modeled here (a real station also tracks the unselected input so the transfer is bumpless; this block reports the ideal switched value only).',
@@ -253,6 +296,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   lag: {
     label: 'Lag (1st order)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "1/(1+Ts)",
+    inputLabels: ['Input'],
     params: [{ id: 'tau', label: 'Time constant \u03c4 (s)', default: 10 }],
     description: 'First-order time lag \u2014 the standard SAMA symbol for a thermal, sensor, or process time constant. Output chases the input exponentially, reaching ~63% of a step change after one \u03c4.',
     createState(params) { return new Lag(Math.max(params.tau ?? 10, 0.01), 0); },
@@ -260,6 +305,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   derivative: {
     label: 'Derivative (d/dt)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "d/dt",
+    inputLabels: ['Input'],
     params: [{ id: 'td', label: 'Derivative time T\u1d05 (s)', default: 1 }],
     description: 'Output proportional to the rate of change of the input: m = T\u1d05 \u00b7 dx/dt, the standalone SAMA derivative function (distinct from a PID\u2019s built-in D term). A pure derivative reacts instantly to a step change in the input and is genuinely noise-sensitive \u2014 exactly like a real derivative element, which is why real controllers almost always filter it; this block implements the standard\u2019s ideal, unfiltered definition.',
     createState() { return { prevInput: null }; },
@@ -273,6 +320,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   leadLag: {
     label: 'Lead-Lag', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "LL(s)",
+    inputLabels: ['Input'],
     params: [{ id: 'leadT', label: 'Lead time (s)', default: 5 }, { id: 'lagT', label: 'Lag time (s)', default: 20 }],
     description: 'Standard dynamic compensator (1+T\u2097\u2091\u2090\u2094s)/(1+T\u2097\u2090\u2093s) \u2014 speeds up (lead) or slows down (lag) a signal\u2019s response while keeping steady-state gain of exactly 1. Implemented as a lag filter plus a proportional lead boost, the standard noise-avoiding DCS realization.',
     createState() { return { yLag: 0 }; },
@@ -285,6 +334,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   integrator: {
     label: 'Integrator (\u222b)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "∫",
+    inputLabels: ['Input'],
     params: [{ id: 'gain', label: 'Gain', default: 1 }, { id: 'min', label: 'Output min', default: 0 }, { id: 'max', label: 'Output max', default: 100 }],
     description: 'Integrates its input over time \u2014 the standard SAMA symbol for level, inventory, or any accumulating quantity with no self-regulation.',
     createState(params) { return new Integrator(params.gain ?? 1, 0, params.min ?? -Infinity, params.max ?? Infinity); },
@@ -295,6 +346,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   totalizer: {
     label: 'Totalizer (\u03a3, resettable)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "∫dt",
     inputLabels: ['Rate', 'Reset'],
     params: [
       { id: 'rateTimeBase', label: 'Rate is per...', default: 3600, options: [{ value: 1, label: 'second' }, { value: 60, label: 'minute' }, { value: 3600, label: 'hour' }] },
@@ -312,6 +364,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   rateLimit: {
     label: 'Rate Limiter', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "RL",
+    inputLabels: ['Input'],
     params: [{ id: 'rate', label: 'Max rate (units/s)', default: 5 }],
     description: 'Limits how fast its output can change \u2014 the standard SAMA symbol for a real actuator or setpoint that cannot slew instantly.',
     createState(params) { return new RateLimit(Math.abs(params.rate ?? 5), 0); },
@@ -319,6 +373,8 @@ export const SAMA_BLOCK_TYPES = {
   },
   deadTime: {
     label: 'Dead Time', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "e⁻ᵀˢ",
+    inputLabels: ['Input'],
     params: [{ id: 'delay', label: 'Delay (s)', default: 5 }],
     description: 'Pure transport delay \u2014 the input reappears unchanged after the set delay, the standard SAMA symbol for pipeline or conveyor transport lag.',
     createState(params, dt) { return new DeadTime(Math.max(params.delay ?? 5, dt), dt, 0); },
@@ -326,6 +382,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   pid: {
     label: 'PID Controller', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "PID",
     inputLabels: ['SP', 'PV'],
     params: [
       { id: 'kp', label: 'Kp', default: 1 }, { id: 'ki', label: 'Ki', default: 0.1 }, { id: 'kd', label: 'Kd', default: 0 },
@@ -351,6 +408,7 @@ export const SAMA_BLOCK_TYPES = {
   srLatch: {
     signalType: 'digital',
     label: 'SR Latch (Reset-Dominant)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "SR",
     inputLabels: ['Set', 'Reset'],
     params: [],
     description: 'Set-Reset memory latch \u2014 input 1 is Set, input 2 is Reset. Output goes TRUE when Set is TRUE, goes FALSE when Reset is TRUE, and HOLDS its last value when both are FALSE. Reset-dominant (the standard\u2019s "R\u2080 dominant" memory): if both are TRUE at once, the output goes FALSE \u2014 the standard choice for a stop/trip circuit, where a simultaneous start-and-stop command should always stop, never start.',
@@ -364,6 +422,7 @@ export const SAMA_BLOCK_TYPES = {
   srLatchSetDominant: {
     signalType: 'digital',
     label: 'SR Latch (Set-Dominant)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "SR·S",
     inputLabels: ['Set', 'Reset'],
     params: [],
     description: 'The same Set-Reset memory as the Reset-dominant latch above, but with the priority reversed (the standard\u2019s "S\u2080 dominant" memory): if Set and Reset are both TRUE at once, the output goes TRUE. Genuinely useful for the opposite real case \u2014 a permissive or enable latch where you want a simultaneous set-and-clear command to favor staying enabled rather than clearing.',
@@ -377,6 +436,8 @@ export const SAMA_BLOCK_TYPES = {
   timeDelay: {
     signalType: 'digital',
     label: 'Time Delay (TON/TOF)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "T",
+    inputLabels: ['Input'],
     params: [{ id: 'delaySec', label: 'Delay (s)', default: 5 }, { id: 'mode', label: 'Mode', default: 0, options: [{ value: 0, label: 'ON-delay (delays TRUE)' }, { value: 1, label: 'OFF-delay (delays FALSE)' }] }],
     description: 'Delays a boolean transition by a set time \u2014 the standard interlock pattern for "confirm this has been true for N seconds before acting." ON-delay (mode 0) delays the TRUE transition; the timer resets if the input drops before the delay completes. OFF-delay (mode 1) delays the FALSE transition instead.',
     createState() { return { elapsed: 0, out: 0 }; },
@@ -397,6 +458,8 @@ export const SAMA_BLOCK_TYPES = {
   pulseTimer: {
     signalType: 'digital',
     label: 'Pulse Timer (one-shot)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "PULSE",
+    inputLabels: ['Trigger'],
     params: [{ id: 'pulseDurSec', label: 'Pulse duration (s)', default: 2 }],
     description: 'Outputs a single fixed-duration TRUE pulse on each rising edge of its input, then returns to FALSE on its own regardless of what the input does afterward \u2014 the standard "momentary output" pattern (e.g. pulsing a solenoid for exactly N seconds). Needs a new rising edge to retrigger; holding the input TRUE does not extend or repeat the pulse.',
     createState() { return { prevInput: false, pulsing: false, elapsed: 0 }; },
@@ -417,6 +480,8 @@ export const SAMA_BLOCK_TYPES = {
   toggle: {
     signalType: 'digital',
     label: 'Toggle (Alternator)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "ALT",
+    inputLabels: ['Trigger'],
     params: [],
     description: 'Flips its output between 0 and 1 on each rising edge of its input \u2014 the real duty/standby alternation pattern used to swap which pump or fan takes the lead role each time it starts, so run-hours stay balanced across redundant equipment instead of always loading the same machine. Holding the input high does not re-toggle; it needs a fresh rising edge, exactly like a real pump-alternator relay.',
     createState() { return { out: 0, prevInput: 0 }; },
@@ -429,6 +494,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   counter: {
     label: 'Counter', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "CNT",
     inputLabels: ['Count', 'Reset'],
     params: [],
     description: 'Counts rising edges on its Count input \u2014 motor starts, batch cycles, alarm occurrences \u2014 and holds the running total until Reset goes TRUE, which zeroes it (reset-dominant, like the SR Latch: if both are TRUE at once, the count clears).',
@@ -443,6 +509,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   peakHold: {
     label: 'Peak Hold (Max)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "PEAK",
     inputLabels: ['Value', 'Reset'],
     params: [],
     description: 'Holds the highest Value seen since the last Reset \u2014 the real pattern behind a peak-demand meter or a "highest alarm reading since last acknowledged" indicator. Reset does not clear to zero; it restarts tracking from whatever Value is present at that instant, so the output is never a meaningless dip to zero right after a reset.',
@@ -455,6 +522,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   trackHold: {
     label: 'Track/Hold (Sample & Hold)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "S/H",
     inputLabels: ['Signal', 'Hold'],
     params: [],
     description: 'While Hold is FALSE, the output tracks Signal live, exactly like a wire. The instant Hold goes TRUE, the output freezes at whatever value it held at that moment and stays there \u2014 the standard SAMA sample-and-hold pattern for capturing a value at a specific instant (e.g. "batch weight at the moment a valve closes") or freezing a display during a known noisy period rather than showing garbage.',
@@ -467,6 +535,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   onOffController: {
     label: 'On/Off Controller (Hysteresis)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "ON/OFF",
     inputLabels: ['SP', 'PV'],
     params: [
       { id: 'deadband', label: 'Deadband (\u00b1 around SP)', default: 2 },
@@ -491,6 +560,7 @@ export const SAMA_BLOCK_TYPES = {
   firstOut: {
     signalType: 'digital',
     label: 'First-Out Annunciator', category: 'dynamic', dynamic: true, inputs: { min: 5, max: 5 },
+    symbol: "1stOUT",
     inputLabels: ['Cause 1', 'Cause 2', 'Cause 3', 'Cause 4', 'Reset'],
     params: [],
     description: 'The real sequence-of-events pattern behind a plant\u2019s first-out annunciator panel: when several trip causes are wired in, the FIRST one to go TRUE latches (output = that cause\u2019s number, 1-4) and every later cause is ignored until Reset \u2014 exactly what an operator needs after a trip, since the first cause is very often the root cause and everything after it is frequently a consequence, not an independent trip. Output 0 means nothing has latched yet. Pairs naturally with the Turbine & Boiler Protection registry\u2019s own trip parameters as the Cause inputs.',
@@ -508,6 +578,7 @@ export const SAMA_BLOCK_TYPES = {
   pulseGenerator: {
     signalType: 'digital',
     label: 'Pulse Generator', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "CLK",
     inputLabels: ['Enable'],
     params: [
       { id: 'onTimeSec', label: 'ON time (s)', default: 1 },
@@ -528,6 +599,7 @@ export const SAMA_BLOCK_TYPES = {
   },
   ramp: {
     label: 'Ramp Generator (f(t))', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "f(t)",
     inputLabels: ['Enable', 'Target'],
     params: [{ id: 'rate', label: 'Rate (units/s)', default: 1 }],
     description: 'The standard SAMA time-function generator, m = f(t): while Enable is TRUE, the output ramps toward Target at the set Rate and then holds there \u2014 it does not overshoot or oscillate, it simply stops changing once it arrives. The real use: testing how downstream control responds to a slowly-changing setpoint or process value instead of an instant step, e.g. ramping a turbine\u2019s target load or a furnace\u2019s target temperature the way a real operator or startup sequencer would, rather than snapping it to a new value immediately. Enable FALSE freezes the output at its current value \u2014 it does not reset to zero \u2014 so pausing and resuming continues the ramp from wherever it left off.',
@@ -542,27 +614,180 @@ export const SAMA_BLOCK_TYPES = {
       return state.value;
     },
   },
+  faultInsert: {
+    label: 'Fault Insert (Diagnostic)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "FAULT",
+    inputLabels: ['Signal', 'Fault active'],
+    params: [
+      { id: 'mode', label: 'Failure mode', default: 0, options: [
+        { value: 0, label: 'Force high' },
+        { value: 1, label: 'Force low' },
+        { value: 2, label: 'Freeze (stuck-at)' },
+        { value: 3, label: 'Drift' },
+        { value: 4, label: 'Noise' },
+      ] },
+      { id: 'forceValue', label: 'Force value (Force high/low)', default: 100 },
+      { id: 'driftRate', label: 'Drift rate, units/s (Drift)', default: 2 },
+      { id: 'noiseAmplitude', label: 'Noise amplitude, +/- (Noise)', default: 5 },
+    ],
+    description: 'Injects a chosen instrument/actuator failure mode onto a signal on command — the real point of a simulator like this one is to prove an interlock or permissive actually catches a bad transmitter or a stuck valve, not just to show the healthy case. While Fault active is FALSE, Signal passes straight through unchanged. While TRUE, the selected failure mode takes over: Force high/low pins the output at a set value (a transmitter railed to its stop); Freeze holds the value the signal had at the exact instant the fault activated (a stuck-at failure — the classic case a "signal not changing" or rate-of-change alarm exists to catch); Drift ramps steadily away from the real signal at a settable rate (slow calibration drift, not caught by a simple high/low alarm until it crosses a limit); Noise adds random +/- amplitude on top of the real signal (a flaky connection or EMI-corrupted 4-20mA loop). Deactivating the fault immediately returns to passing Signal through, and the next activation starts the freeze/drift state fresh from whatever Signal is at that moment.',
+    createState() { return { frozen: null, driftValue: null }; },
+    stepCompute(state, inputs, params, dt) {
+      const signal = inputs[0];
+      const active = inputs[1] >= 0.5;
+      if (!active) { state.frozen = null; state.driftValue = null; return signal; }
+      const mode = params.mode ?? 0;
+      if (mode === 0) return params.forceValue ?? 100; // Force high
+      if (mode === 1) return params.forceValue ?? 0; // Force low
+      if (mode === 2) { // Freeze (stuck-at)
+        if (state.frozen === null) state.frozen = signal;
+        return state.frozen;
+      }
+      if (mode === 3) { // Drift
+        if (state.driftValue === null) state.driftValue = signal;
+        state.driftValue += (params.driftRate ?? 2) * dt;
+        return state.driftValue;
+      }
+      if (mode === 4) return signal + (Math.random() * 2 - 1) * (params.noiseAmplitude ?? 5); // Noise
+      return signal;
+    },
+  },
+  signalGenerator: {
+    label: 'Signal Generator (Sine/Square/Triangle/Sawtooth)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "∿",
+    inputLabels: ['Enable'],
+    params: [
+      { id: 'waveform', label: 'Waveform', default: 0, options: [
+        { value: 0, label: 'Sine' }, { value: 1, label: 'Square' }, { value: 2, label: 'Triangle' }, { value: 3, label: 'Sawtooth' },
+      ] },
+      { id: 'amplitude', label: 'Amplitude (+/-)', default: 10 },
+      { id: 'offset', label: 'Offset (center value)', default: 50 },
+      { id: 'periodSec', label: 'Period (s)', default: 10 },
+    ],
+    description: 'A repeating test waveform — the real bench-test tool for exercising a loop or a chain of logic with a moving signal instead of manually dragging a slider by hand. While Enable is TRUE, the output cycles continuously between offset−amplitude and offset+amplitude at the chosen period; useful for checking a PID’s response to a genuinely oscillating process value, driving a Trend chart with something worth watching, or feeding a steady, repeatable stimulus into a Fault Insert / Rate-of-Change Alarm pair while you tune its threshold. Enable FALSE holds the output at its last value and freezes the waveform’s phase, so re-enabling resumes exactly where it left off rather than jumping back to the start of the cycle.',
+    createState() { return { t: 0, value: null }; },
+    stepCompute(state, inputs, params, dt) {
+      if (inputs[0] < 0.5) return state.value ?? (params.offset ?? 50);
+      state.t += dt;
+      const period = Math.max(params.periodSec ?? 10, 0.01);
+      const amp = params.amplitude ?? 10;
+      const offset = params.offset ?? 50;
+      const phase = (state.t % period) / period; // 0..1
+      let shape;
+      const waveform = params.waveform ?? 0;
+      if (waveform === 0) shape = Math.sin(2 * Math.PI * phase);
+      else if (waveform === 1) shape = Math.sin(2 * Math.PI * phase) >= 0 ? 1 : -1;
+      else if (waveform === 2) shape = 1 - 4 * Math.abs(Math.round(phase - 0.25) - (phase - 0.25)); // triangle, -1..1
+      else shape = 2 * (phase - Math.floor(phase + 0.5)); // sawtooth, -1..1
+      state.value = offset + amp * shape;
+      return state.value;
+    },
+  },
+  rateOfChangeAlarm: {
+    signalType: 'digital',
+    label: 'Rate-of-Change Alarm (d/dt)', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "dx/dt!",
+    inputLabels: ['Input'],
+    params: [
+      { id: 'threshold', label: 'Rate threshold (units/s)', default: 5 },
+      { id: 'filterT', label: 'Filter time constant (s)', default: 1 },
+    ],
+    description: 'Trips TRUE when its input is changing faster than a set rate — the real detection method behind a "transmitter reading is jumping/dropping too fast" alarm, and exactly the kind of check that catches a Fault Insert block’s Drift or Noise failure modes in a test diagram. The signal is filtered first (over the set filter time constant) before its rate is measured, the same way a real rate alarm can’t just difference two raw noisy samples — doing that would trip constantly on ordinary instrument noise, so the filter genuinely has to happen before the rate calculation, not after.',
+    createState() { return { filtered: null }; },
+    stepCompute(state, inputs, params, dt) {
+      const signal = inputs[0];
+      if (state.filtered === null) { state.filtered = signal; return 0; }
+      const filterT = Math.max(params.filterT ?? 1, 0.01);
+      const alpha = 1 - Math.exp(-dt / filterT);
+      const prevFiltered = state.filtered;
+      state.filtered += alpha * (signal - state.filtered);
+      const rate = (state.filtered - prevFiltered) / dt;
+      return Math.abs(rate) > Math.max(params.threshold ?? 5, 0) ? 1 : 0;
+    },
+  },
+  deviationAlarm: {
+    signalType: 'digital',
+    label: 'Deviation Alarm (SP vs PV)', category: 'dynamic', dynamic: true, inputs: { min: 2, max: 2 },
+    symbol: "|Δ|!",
+    inputLabels: ['SP', 'PV'],
+    params: [
+      { id: 'tripBand', label: 'Trip deviation (+/- units)', default: 5 },
+      { id: 'resetBand', label: 'Reset deviation (+/- units, ≤ trip)', default: 3 },
+    ],
+    description: 'Trips TRUE when the process value has drifted too far from setpoint — the standard deviation alarm on a real controller faceplate, distinct from a plain Comparator because it has genuine hysteresis: it trips once |SP−PV| reaches the trip band, then stays tripped until the deviation falls all the way back inside the (smaller) reset band, rather than chattering on and off right at one single threshold the way a plain comparator would whenever the deviation happens to sit near the limit. Set the reset band smaller than the trip band (the block clamps it there if you don’t) for that gap to actually do anything.',
+    createState() { return { out: 0 }; },
+    stepCompute(state, inputs, params) {
+      const deviation = Math.abs(inputs[0] - inputs[1]);
+      const trip = Math.max(params.tripBand ?? 5, 0);
+      const reset = Math.min(Math.max(params.resetBand ?? 3, 0), trip);
+      if (deviation >= trip) state.out = 1;
+      else if (deviation <= reset) state.out = 0;
+      return state.out;
+    },
+  },
+  highLimitAlarm: {
+    signalType: 'digital',
+    label: 'High Limit Alarm', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "H!",
+    inputLabels: ['Input'],
+    params: [
+      { id: 'tripLimit', label: 'Trip limit (high)', default: 100 },
+      { id: 'resetLimit', label: 'Reset limit (≤ trip, hysteresis)', default: 95 },
+    ],
+    description: 'A DIGITAL high-limit trip, companion to the analog High Limit block above: instead of clamping the signal, this goes TRUE the instant the input reaches or exceeds the set Trip limit, and stays latched TRUE — the standard SAMA sealed-in alarm behavior — until the input falls back below a slightly lower Reset limit. That small gap between Trip and Reset is the standard hysteresis band that stops a signal sitting right at the setpoint from chattering the alarm on and off; set Reset limit equal to Trip limit for a plain, no-hysteresis threshold that trips and clears at exactly the same value.',
+    createState() { return { out: 0 }; },
+    stepCompute(state, inputs, params) {
+      const trip = params.tripLimit ?? 100;
+      const reset = Math.min(params.resetLimit ?? trip, trip);
+      if (inputs[0] >= trip) state.out = 1;
+      else if (inputs[0] <= reset) state.out = 0;
+      return state.out;
+    },
+  },
+  lowLimitAlarm: {
+    signalType: 'digital',
+    label: 'Low Limit Alarm', category: 'dynamic', dynamic: true, inputs: { min: 1, max: 1 },
+    symbol: "L!",
+    inputLabels: ['Input'],
+    params: [
+      { id: 'tripLimit', label: 'Trip limit (low)', default: 0 },
+      { id: 'resetLimit', label: 'Reset limit (≥ trip, hysteresis)', default: 5 },
+    ],
+    description: 'A DIGITAL low-limit trip, companion to the analog Low Limit block above: goes TRUE the instant the input reaches or falls below the set Trip limit, and stays latched TRUE until the input rises back above a slightly higher Reset limit — the same hysteresis convention as High Limit Alarm, mirrored for a low trip (low level, low flow, low pressure, low lube-oil pressure, and similar real trip alarms). Set Reset limit equal to Trip limit for a plain, no-hysteresis threshold.',
+    createState() { return { out: 0 }; },
+    stepCompute(state, inputs, params) {
+      const trip = params.tripLimit ?? 0;
+      const reset = Math.max(params.resetLimit ?? trip, trip);
+      if (inputs[0] <= trip) state.out = 1;
+      else if (inputs[0] >= reset) state.out = 0;
+      return state.out;
+    },
+  },
   di: {
     signalType: 'digital',
     label: 'DI (Digital Input)', category: 'io', inputs: { min: 0, max: 0 },
+    symbol: "DI",
     params: [{ id: 'state', label: 'State (0=OFF, 1=ON)', default: 0 }],
     description: 'Field digital input terminal \u2014 represents a real ON/OFF signal (limit switch, permissive contact, etc.) entering the logic. Has no inputs of its own; its value is the field state you set directly.',
     compute(inputs, params) { return params.state >= 0.5 ? 1 : 0; },
   },
   manualValue: {
     label: 'Manual Value (A)', category: 'analog', inputs: { min: 0, max: 0 },
+    symbol: "A",
     params: [{ id: 'value', label: 'Value (+/-)', default: 0 }],
     description: 'The standard\u2019s Variable Signal Generator (m = A): a manually-set number, positive or negative, with no calibrated range or process-parameter meaning attached \u2014 unlike an AI field terminal, which represents a real transmitter clamped to its calibrated span. Use this for a plain manual entry, bias reference, or test value that should pass straight through to whatever it\u2019s wired into.',
     compute(inputs, params) { return params.value ?? 0; },
   },
   tagRef: {
     label: 'Tag Reference', category: 'analog', inputs: { min: 0, max: 0 },
+    symbol: "TAG",
     params: [],
     description: 'A real DCS-style cross-reference \u2014 the SAME instrument tag used on one page (e.g. an AI transmitter, a computed setpoint) can be read here on any OTHER page without redrawing the wiring, exactly like placing the same tag on multiple graphics or control schemes in a real distributed control system. Its value is kept in sync from wherever that tag is actually computed; if the source page has not been run, the value shown is whatever it last was, not a live guarantee.',
     compute(inputs, params) { return params.value ?? 0; },
   },
   ai: {
     label: 'AI (Analog Input)', category: 'io', inputs: { min: 0, max: 0 },
+    symbol: "AI",
     params: [
       { id: 'paramType', label: 'Process parameter', default: 'generic', options: [
         { value: 'generic', label: 'Generic' }, { value: 'temperature', label: 'Temperature (\u00b0C)' }, { value: 'pressure', label: 'Pressure (bar)' },
@@ -579,12 +804,16 @@ export const SAMA_BLOCK_TYPES = {
   do_: {
     signalType: 'digital',
     label: 'DO (Digital Output)', category: 'io', inputs: { min: 1, max: 1 },
+    symbol: "DO",
+    inputLabels: ['Command'],
     params: [],
     description: 'Field digital output terminal \u2014 represents a real ON/OFF signal (starting a pump, energizing a solenoid) leaving the logic. Displays its input rounded to ON/OFF; wire the logic that should drive it into this block.',
     compute(inputs) { return inputs[0] >= 0.5 ? 1 : 0; },
   },
   ao_: {
     label: 'AO (Analog Output)', category: 'io', inputs: { min: 1, max: 1 },
+    symbol: "AO",
+    inputLabels: ['Command'],
     params: [
       { id: 'min', label: 'Range minimum', default: 0 },
       { id: 'max', label: 'Range maximum', default: 100 },
@@ -595,19 +824,53 @@ export const SAMA_BLOCK_TYPES = {
   motor: {
     signalType: 'digital',
     label: 'Motor (M)', category: 'finalControl', inputs: { min: 1, max: 1 },
+    inputLabels: ['Run cmd'],
     params: [],
     description: 'A real final controlling element \u2014 a motor started/stopped by a run command (limit switch, contactor auxiliary, whatever your logic decides). Shown RUNNING (green, filled) or STOPPED (gray) based on its input, and passes the same value through so you can still monitor or chain off it, the way a real motor auxiliary contact feeds back into other logic.',
     compute(inputs) { return inputs[0] >= 0.5 ? 1 : 0; },
   },
   controlValve: {
     label: 'Control Valve', category: 'finalControl', inputs: { min: 1, max: 1 },
+    inputLabels: ['Position cmd'],
     params: [],
-    description: 'A real modulating final control element \u2014 a control valve driven to a continuous 0-100% position by its input (typically a PID or manual station output), not just open/closed. The valve\u2019s drawn opening fills to match the live position, and the value passes through unchanged for monitoring or chaining.',
+    description: 'A real modulating final control element \u2014 a control valve driven to a continuous 0-100% position by its input (typically a PID or manual station output), not just open/closed. The valve\u2019s drawn opening fills to match the live position, and the value passes through unchanged for monitoring or chaining. Assumes an instant, ideal actuator; use Control Valve (Actuator Dynamics) below when the actuator\u2019s own travel time and deadband genuinely matter to what you\u2019re testing.',
     compute(inputs) { return inputs[0]; },
+  },
+  controlValveDynamic: {
+    label: 'Control Valve (Actuator Dynamics)', category: 'finalControl', dynamic: true, inputs: { min: 1, max: 1 },
+    inputLabels: ['Position cmd'],
+    params: [
+      { id: 'strokeTime', label: 'Full-stroke time (s, 0\u2192100%)', default: 15 },
+      { id: 'deadband', label: 'Deadband (% commanded change ignored)', default: 0.5 },
+    ],
+    description: 'The same modulating final control element as Control Valve, except the actuator now genuinely takes time to move \u2014 the position you see and pass downstream is the ACTUAL stem position, not the instantaneous command. Full-stroke time is how long a real pneumatic or electric actuator takes to travel the complete 0\u2192100% range (a large control valve is commonly 10\u201330+ seconds, not instant); a smaller commanded change takes proportionally less time, exactly like a real actuator moving at a fixed speed. Deadband mimics real packing friction and linkage backlash: a commanded change smaller than the deadband is ignored rather than causing the actuator to hunt back and forth for a fraction of a percent. This is what actually distinguishes testing a loop\u2019s STABILITY (does it oscillate against a real, non-instant final element?) from testing its steady-state logic alone \u2014 wire a PID\u2019s output into this instead of the plain Control Valve when that distinction matters.',
+    createState(params) { return new RateLimit(100 / Math.max(params.strokeTime ?? 15, 0.1), 0); },
+    stepCompute(state, inputs, params, dt) {
+      state.rate = 100 / Math.max(params.strokeTime ?? 15, 0.1);
+      const commanded = Math.max(0, Math.min(100, inputs[0]));
+      const deadband = Math.max(params.deadband ?? 0.5, 0);
+      if (Math.abs(commanded - state.y) < deadband) return state.y;
+      return state.step(commanded, dt);
+    },
+  },
+  motorOperatedValve: {
+    label: 'Motor-Operated Valve (MOV)', category: 'finalControl', dynamic: true, inputs: { min: 2, max: 2 },
+    inputLabels: ['Open cmd', 'Close cmd'],
+    params: [{ id: 'travelTime', label: 'Full travel time (s)', default: 20 }],
+    description: 'A real motor-operated valve (MOV), the standard BTG/BOP final element for isolation and block valves rather than continuous modulating control: it moves only while actively commanded, driven by a motor at a fixed travel speed, not chasing a continuous position setpoint the way Control Valve does. While Open cmd is TRUE and Close cmd is FALSE, it drives toward 100% open at the rate implied by the full travel time; while Close cmd is TRUE and Open cmd is FALSE, it drives toward 0% closed the same way. With neither command TRUE, or — an invalid, real-world command state a genuine MOV motor starter interlock should never allow — both commands TRUE at once, it simply holds its current position, matching how a real MOV motor stops the instant its run permissive is removed rather than coasting to an end position. Shares the same 0–100% position display as the modulating valves above.',
+    createState(params) { return new RateLimit(100 / Math.max(params.travelTime ?? 20, 0.1), 0); },
+    stepCompute(state, inputs, params, dt) {
+      state.rate = 100 / Math.max(params.travelTime ?? 20, 0.1);
+      const openCmd = inputs[0] >= 0.5, closeCmd = inputs[1] >= 0.5;
+      if (openCmd && !closeCmd) return state.step(100, dt);
+      if (closeCmd && !openCmd) return state.step(0, dt);
+      return state.y; // neither, or both (an invalid command) -> hold position
+    },
   },
   sov: {
     signalType: 'digital',
     label: 'SOV (Solenoid Valve)', category: 'finalControl', inputs: { min: 1, max: 1 },
+    inputLabels: ['Command'],
     params: [],
     description: 'A real solenoid-operated on/off valve \u2014 genuinely discrete, unlike a control valve: it is either fully OPEN or fully CLOSED, energized directly by a digital command (a permissive satisfied, an interlock cleared). Shown OPEN (green) or CLOSED (gray), and passes the same value through for monitoring or chaining.',
     compute(inputs) { return inputs[0] >= 0.5 ? 1 : 0; },
@@ -615,6 +878,7 @@ export const SAMA_BLOCK_TYPES = {
   bulb: {
     signalType: 'digital',
     label: 'Indicator Lamp', category: 'finalControl', inputs: { min: 1, max: 1 },
+    inputLabels: ['Command'],
     params: [],
     description: 'A real panel indicator lamp \u2014 lit (bright amber) when its input is TRUE, dark (dim gray) when FALSE, the standard status/alarm indication on a control panel or annunciator. Passes the same value through for monitoring or chaining.',
     compute(inputs) { return inputs[0] >= 0.5 ? 1 : 0; },

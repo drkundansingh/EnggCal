@@ -254,3 +254,223 @@ export function steamState(pressureBarA, tempC) {
   }
   return { densityKgM3: rho, specificVolumeM3Kg: 1 / rho, enthalpyKJKg: h, phase, saturationTempC: tSatC, note };
 }
+
+// =====================================================================
+// ADDITIONS FOR FLOW-MEASUREMENT WORK
+// Everything below is purely additive: it reuses the SAME verified IF97
+// Region 1 / Region 2 coefficient tables above and does not change any
+// function exported earlier in this file.
+//
+// WHY: an ISO 5167 differential-pressure flow calculation needs more than
+// density. It needs the dynamic VISCOSITY (to get the pipe Reynolds number,
+// which sets the discharge coefficient) and the real isentropic exponent
+// KAPPA (which sets the expansibility factor for steam). Using a fixed
+// "kappa = 1.3" or an ideal-gas density at power-plant conditions is a
+// direct, avoidable error in the reported flow.
+// =====================================================================
+
+const TC_VISC = 647.096;   // K, IAPWS reference temperature for viscosity
+const RHOC_VISC = 322.0;   // kg/m3, IAPWS reference density for viscosity
+
+/** Validate (p, T), pick the IF97 region, return p [MPa], T [K], region. */
+function resolveState(pressureBarA, tempC, what) {
+  if (!Number.isFinite(pressureBarA) || pressureBarA <= 0) {
+    throw new Error('Pressure must be greater than zero (absolute bar).');
+  }
+  if (!Number.isFinite(tempC)) throw new Error('Temperature must be a number (°C).');
+  const p = pressureBarA / 10;
+  const T = tempC + 273.15;
+  const r = region(p, T);
+  if (r === null) {
+    throw new Error(`State ${pressureBarA} bar a / ${tempC} °C is outside the IF97 range implemented here (0–100 MPa, 0–800 °C).`);
+  }
+  if (r === 3) {
+    throw new Error(`State ${pressureBarA} bar a / ${tempC} °C falls in IAPWS Region 3 (near-critical), which is not implemented. Supply ${what} directly from your own steam tables for this condition.`);
+  }
+  return { p, T, r };
+}
+
+/** Region 1 dimensionless Gibbs-energy derivatives (IF97 Table 4). */
+function r1Derivs(p, T) {
+  const pi = p / 16.53;
+  const tau = 1386 / T;
+  const a = 7.1 - pi;
+  const b = tau - 1.222;
+  let gp = 0, gpp = 0, gt = 0, gtt = 0, gpt = 0;
+  for (let i = 0; i < R1_n.length; i++) {
+    const n = R1_n[i], I = R1_I[i], J = R1_J[i];
+    gp += -n * I * Math.pow(a, I - 1) * Math.pow(b, J);
+    gpp += n * I * (I - 1) * Math.pow(a, I - 2) * Math.pow(b, J);
+    gt += n * Math.pow(a, I) * J * Math.pow(b, J - 1);
+    gtt += n * Math.pow(a, I) * J * (J - 1) * Math.pow(b, J - 2);
+    gpt += -n * I * Math.pow(a, I - 1) * J * Math.pow(b, J - 1);
+  }
+  return { pi, tau, gp, gpp, gt, gtt, gpt };
+}
+
+/** Region 2 dimensionless Gibbs-energy derivatives, ideal + residual (IF97 Tables 11, 12). */
+function r2Derivs(p, T) {
+  const pi = p;
+  const tau = 540 / T;
+  const b = tau - 0.5;
+  let g0tt = 0;
+  for (let i = 0; i < R2_n0.length; i++) g0tt += R2_n0[i] * R2_J0[i] * (R2_J0[i] - 1) * Math.pow(tau, R2_J0[i] - 2);
+  let grp = 0, grpp = 0, grtt = 0, grpt = 0;
+  for (let i = 0; i < R2_n.length; i++) {
+    const n = R2_n[i], I = R2_I[i], J = R2_J[i];
+    grp += n * I * Math.pow(pi, I - 1) * Math.pow(b, J);
+    grpp += n * I * (I - 1) * Math.pow(pi, I - 2) * Math.pow(b, J);
+    grtt += n * Math.pow(pi, I) * J * (J - 1) * Math.pow(b, J - 2);
+    grpt += n * I * Math.pow(pi, I - 1) * J * Math.pow(b, J - 1);
+  }
+  return { pi, tau, g0tt, grp, grpp, grtt, grpt };
+}
+
+/** Specific isobaric heat capacity cp, kJ/(kg·K) — IF97 Region 1 or 2. */
+export function cp(pressureBarA, tempC) {
+  const { p, T, r } = resolveState(pressureBarA, tempC, 'cp');
+  if (r === 1) {
+    const d = r1Derivs(p, T);
+    return -R * d.tau * d.tau * d.gtt;
+  }
+  const d = r2Derivs(p, T);
+  return -R * d.tau * d.tau * (d.g0tt + d.grtt);
+}
+
+/** Speed of sound w, m/s — IF97 Region 1 or 2 (Tables 3 and 12). */
+export function speedOfSound(pressureBarA, tempC) {
+  const { p, T, r } = resolveState(pressureBarA, tempC, 'the speed of sound');
+  if (r === 1) {
+    const d = r1Derivs(p, T);
+    const w2 = (1000 * R * T * d.gp * d.gp) /
+      (((d.gp - d.tau * d.gpt) ** 2) / (d.tau * d.tau * d.gtt) - d.gpp);
+    return Math.sqrt(w2);
+  }
+  const d = r2Derivs(p, T);
+  const w2 = (1000 * R * T * (1 + 2 * d.pi * d.grp + d.pi * d.pi * d.grp * d.grp)) /
+    ((1 - d.pi * d.pi * d.grpp) +
+      ((1 + d.pi * d.grp - d.tau * d.pi * d.grpt) ** 2) / (d.tau * d.tau * (d.g0tt + d.grtt)));
+  return Math.sqrt(w2);
+}
+
+/**
+ * Real-fluid isentropic exponent kappa = -(v/p)(dp/dv)_s = rho*w^2/p.
+ * This is the kappa ISO 5167 means in its expansibility factor — NOT the
+ * ideal-gas heat-capacity ratio. For superheated power-plant steam it sits
+ * around 1.28–1.33 and varies with state, so a fixed constant is an error.
+ */
+export function isentropicExponent(pressureBarA, tempC) {
+  const rho = density(pressureBarA, tempC);
+  const w = speedOfSound(pressureBarA, tempC);
+  return (rho * w * w) / (pressureBarA * 1e5);
+}
+
+/**
+ * Dynamic viscosity from density and temperature, Pa·s — IAPWS 2008
+ * formulation (Release R12-08), industrial form: the critical-enhancement
+ * term mu2 is taken as 1, which the release explicitly permits away from the
+ * critical point (it is irrelevant at the states reachable in Regions 1 and 2
+ * here).
+ */
+export function viscosityFromDensity(rhoKgM3, TK) {
+  const Tr = TK / TC_VISC;
+  const Dr = rhoKgM3 / RHOC_VISC;
+  const H = [1.67752, 2.20462, 0.6366564, -0.241605];
+  let den = 0;
+  for (let i = 0; i < 4; i++) den += H[i] / Math.pow(Tr, i);
+  const mu0 = 100 * Math.sqrt(Tr) / den;
+  const Li = [0, 1, 2, 3, 0, 1, 2, 3, 5, 0, 1, 2, 3, 4, 0, 1, 0, 3, 4, 3, 5];
+  const Lj = [0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 4, 4, 5, 6, 6];
+  const Hij = [0.520094, 0.850895e-1, -0.108374e1, -0.289555, 0.222531, 0.999115,
+    0.188797e1, 0.126613e1, 0.120573, -0.281378, -0.906851, -0.772479,
+    -0.489837, -0.257040, 0.161913, 0.257399, -0.325372e-1, 0.698452e-1,
+    0.872102e-2, -0.435673e-2, -0.593264e-3];
+  let s = 0;
+  for (let k = 0; k < Hij.length; k++) s += Math.pow(1 / Tr - 1, Li[k]) * Hij[k] * Math.pow(Dr - 1, Lj[k]);
+  const mu1 = Math.exp(Dr * s);
+  return mu0 * mu1 * 1e-6;
+}
+
+/** Dynamic viscosity of water or steam, Pa·s, at (bar a, °C). */
+export function viscosity(pressureBarA, tempC) {
+  resolveState(pressureBarA, tempC, 'the viscosity');
+  return viscosityFromDensity(density(pressureBarA, tempC), tempC + 273.15);
+}
+
+/**
+ * One call returning everything a DP-flow calculation needs at the upstream
+ * tap: density, viscosity, isentropic exponent, plus phase information.
+ */
+export function fluidProps(pressureBarA, tempC) {
+  const st = steamState(pressureBarA, tempC);
+  return {
+    densityKgM3: st.densityKgM3,
+    specificVolumeM3Kg: st.specificVolumeM3Kg,
+    enthalpyKJKg: st.enthalpyKJKg,
+    cpKJKgK: cp(pressureBarA, tempC),
+    speedOfSoundMs: speedOfSound(pressureBarA, tempC),
+    isentropicExponent: isentropicExponent(pressureBarA, tempC),
+    viscosityPaS: viscosity(pressureBarA, tempC),
+    phase: st.phase,
+    saturationTempC: st.saturationTempC,
+    note: st.note,
+  };
+}
+
+/**
+ * Saturated-liquid / saturated-vapour properties at a given absolute
+ * pressure (bar). Used for wet-steam enthalpy (h = hf + x*hfg) in heat
+ * balances. Evaluated by forcing Region 1 (liquid) or Region 2 (vapour) at
+ * the saturation temperature, exactly as IF97 prescribes.
+ */
+export function saturation(pressureBarA) {
+  if (!Number.isFinite(pressureBarA) || pressureBarA <= 0) throw new Error('Pressure must be greater than zero (absolute bar).');
+  const p = pressureBarA / 10;
+  const T = tsat(p);   // throws a clear message outside 0.000611–22.064 MPa
+  if (T > 623.15) {
+    throw new Error(`Saturation at ${pressureBarA} bar a (${(T - 273.15).toFixed(1)} °C) lies in IF97 Region 3 (above 350 °C), which this tool does not implement — saturation properties are limited to about 165.29 bar a.`);
+  }
+  const hf = h1(p, T), hg = h2(p, T);
+  return {
+    tsatC: T - 273.15, hfKJKg: hf, hgKJKg: hg, hfgKJKg: hg - hf,
+    rhoLiquidKgM3: 1 / v1(p, T), rhoVaporKgM3: 1 / v2(p, T),
+  };
+}
+
+/** Enthalpy of wet steam, kJ/kg, from pressure (bar a) and dryness fraction x (0–1). */
+export function wetSteamEnthalpy(pressureBarA, x) {
+  if (!(x >= 0 && x <= 1)) throw new Error('Steam dryness fraction x must be between 0 and 1.');
+  const s = saturation(pressureBarA);
+  return s.hfKJKg + x * s.hfgKJKg;
+}
+
+/**
+ * Specific enthalpy of COMPRESSED LIQUID water, kJ/kg, forced to Region 1.
+ * Unlike enthalpy(), a liquid exactly at (or numerically a hair above) its
+ * saturation temperature is accepted as saturated liquid instead of being
+ * flipped to the steam side — which matters for heater drains and condensate,
+ * routinely reported right at saturation.
+ */
+export function liquidEnthalpy(pressureBarA, tempC) {
+  if (!Number.isFinite(pressureBarA) || pressureBarA <= 0) throw new Error('Pressure must be greater than zero (absolute bar).');
+  if (!Number.isFinite(tempC)) throw new Error('Temperature must be a number (°C).');
+  const p = pressureBarA / 10;
+  const T = tempC + 273.15;
+  if (T < 273.15 || T > 623.15 || p > 100) {
+    throw new Error(`Liquid state ${pressureBarA} bar a / ${tempC} °C is outside IF97 Region 1 (0–350 °C, up to 100 MPa).`);
+  }
+  if (p <= PC) {
+    if (p < 0.000611212677) throw new Error(`Pressure ${pressureBarA} bar a is below the triple-point pressure, so liquid water cannot exist there.`);
+    const ts = tsat(p);
+    if (T > ts + 1e-6) {
+      throw new Error(`At ${pressureBarA} bar a the saturation temperature is ${(ts - 273.15).toFixed(2)} °C, so ${tempC} °C is steam, not liquid water.`);
+    }
+  }
+  return h1(p, T);
+}
+
+/** Density of COMPRESSED LIQUID water, kg/m³, forced to Region 1 (same saturation tolerance as liquidEnthalpy). */
+export function liquidDensity(pressureBarA, tempC) {
+  liquidEnthalpy(pressureBarA, tempC); // reuse its validation and clear errors
+  return 1 / v1(pressureBarA / 10, tempC + 273.15);
+}

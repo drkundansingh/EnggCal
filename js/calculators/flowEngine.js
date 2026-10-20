@@ -22,13 +22,19 @@
 import * as units from './units.js';
 import { estimateEnthalpyRiseKcalKg } from './thermalPlant.js';
 import * as tpa from './thermalPlantAdvanced.js';
+import * as dc from './densityCorrection.js';
 
-export const FLOW_ELEMENT_TYPES = ['orifice', 'venturi', 'nozzle', 'pitot', 'v-cone', 'custom'];
+export const FLOW_ELEMENT_TYPES = ['orifice', 'venturi', 'nozzle', 'pitot', 'airfoil', 'v-cone', 'custom'];
+
+/** Elements that read the mean duct velocity over the full cross-section (area = whole pipe/duct). */
+export const FULL_AREA_ELEMENTS = ['pitot', 'airfoil'];
 
 /** Typical discharge coefficients by element type — starting points, always
  * user-overridable (spec: never rely on Flow=K√DP with an uncalibrated K). */
 export const DEFAULT_CD = {
-  orifice: 0.6, venturi: 0.98, nozzle: 0.96, pitot: 0.84, 'v-cone': 0.82, custom: null,
+  // airfoil: proprietary, individually calibrated averaging element - no generic value exists, so the
+  // datasheet/calibration-certificate coefficient must be supplied (same rule as 'custom').
+  orifice: 0.6, venturi: 0.98, nozzle: 0.96, pitot: 0.84, airfoil: null, 'v-cone': 0.82, custom: null,
 };
 
 export const FLUID_CLASSES = ['liquid', 'gas', 'steam'];
@@ -109,16 +115,34 @@ export function expansionFactor(beta, dpPa, upstreamPressurePa, kappa = 1.4) {
  * @param {number} [opts.densityKgM3] — direct density override (e.g. from a steam table lookup); if omitted, computed via ideal-gas law for gas/steam, or must be supplied for liquid
  * @param {number} [opts.cd] — discharge coefficient override; defaults per elementType
  * @param {number} [opts.viscosityPaS] — for Reynolds number; optional
+ * @param {string} [opts.pipeShape] — 'circular' (default, uses pipeIdM) or 'rectangular' (uses ductWidthM x ductHeightM)
  * @param {number} [opts.kappa] — isentropic exponent for expansion factor; default 1.4 (air), use ~1.3 for steam
  */
+/**
+ * Cross-section geometry of the pipe or duct: flow area and hydraulic diameter.
+ * Circular: A = pi/4 D^2, Dh = D.   Rectangular: A = W*H, Dh = 4A/P = 2WH/(W+H).
+ * Dh is the length scale that goes into the Reynolds number of a non-circular duct.
+ */
+export function ductGeometry({ pipeShape = 'circular', pipeIdM, ductWidthM, ductHeightM }) {
+  if (pipeShape === 'rectangular') {
+    if (!(ductWidthM > 0) || !(ductHeightM > 0)) throw new Error('Duct width and height must both be > 0');
+    const areaM2 = ductWidthM * ductHeightM;
+    return { shape: 'rectangular', areaM2, hydraulicDiameterM: (2 * ductWidthM * ductHeightM) / (ductWidthM + ductHeightM), equivalentCircularDiameterM: Math.sqrt((4 * areaM2) / Math.PI) };
+  }
+  if (!(pipeIdM > 0)) throw new Error('Pipe ID must be > 0');
+  return { shape: 'circular', areaM2: (Math.PI / 4) * pipeIdM * pipeIdM, hydraulicDiameterM: pipeIdM, equivalentCircularDiameterM: pipeIdM };
+}
+
 export function calculateDPFlow(opts) {
   const {
     elementType, dpPa, upstreamPressurePa, tempC, pipeIdM, boreM, fluidClass,
     densityKgM3, cd, viscosityPaS, kappa = fluidClass === 'steam' ? 1.3 : 1.4,
+    pipeShape = 'circular', ductWidthM, ductHeightM,
+    gas = 'air', humidity = 0, compressibilityZ,
   } = opts;
   if (!FLOW_ELEMENT_TYPES.includes(elementType)) throw new Error(`Unknown flow element type: ${elementType}`);
   if (!(dpPa >= 0)) throw new Error('DP cannot be negative');
-  if (!(pipeIdM > 0)) throw new Error('Pipe ID must be > 0');
+  const geo = ductGeometry({ pipeShape, pipeIdM, ductWidthM, ductHeightM });
   if (!(upstreamPressurePa > 0)) throw new Error('Upstream pressure must be > 0');
   if (dpPa >= upstreamPressurePa) {
     throw new Error('Differential pressure cannot equal or exceed the upstream absolute pressure — the downstream pressure would be zero or negative. Check for a units mix-up (e.g. DP in kPa but pressure in Pa) or a pressure reference error.');
@@ -126,50 +150,64 @@ export function calculateDPFlow(opts) {
 
   const usedCd = cd ?? DEFAULT_CD[elementType];
   if (usedCd === null || usedCd === undefined) {
-    throw new Error(`No default discharge coefficient for '${elementType}' — this element must be individually calibrated; supply cd explicitly.`);
+    throw new Error(elementType === 'airfoil'
+      ? 'An airfoil (averaging) element is individually calibrated by its manufacturer — enter the flow coefficient K from its datasheet or calibration certificate (Q = K·A·√(2Δp/ρ)). If you only have the calibrated flow range, use the Calibrated Range option instead.'
+      : `No default discharge coefficient for '${elementType}' — this element must be individually calibrated; supply cd explicitly.`);
   }
 
   let density = densityKgM3;
+  let densityInfo = { method: 'user-supplied density', standard: 'user' };
   if (density === undefined || density === null) {
     if (fluidClass === 'liquid') throw new Error('Liquid density must be supplied — no ideal-gas approximation applies to liquids.');
-    density = fluidClass === 'steam' ? steamDensityApprox(upstreamPressurePa, tempC) : airDensity(upstreamPressurePa, tempC);
+    // Real-fluid density at the upstream tap (ISO 5167-1): IF97 for steam, CIPM-2007 moist air, Papay-Z real gas otherwise.
+    const fd = fluidClass === 'steam'
+      ? dc.flowingDensity({ kind: 'steam', pPa: upstreamPressurePa, tC: tempC })
+      : dc.flowingDensity({ kind: gas === 'air' ? 'air' : 'gas', gas, pPa: upstreamPressurePa, tC: tempC, rh: humidity, z: compressibilityZ });
+    density = fd.density; densityInfo = fd;
   }
 
-  const beta = elementType === 'pitot' ? null : boreM / pipeIdM;
-  if (beta !== null && !(beta > 0 && beta < 1)) throw new Error('Beta ratio must be between 0 and 1');
+  const fullArea = FULL_AREA_ELEMENTS.includes(elementType);
+  // Restriction elements: beta is the AREA ratio basis, beta^2 = throat area / pipe area. For a circular pipe
+  // this is exactly d/D; for a rectangular duct it is the general form of the same velocity-of-approach term.
+  const throatArea = fullArea ? null : (Math.PI / 4) * boreM * boreM;
+  const beta = fullArea ? null : Math.sqrt(throatArea / geo.areaM2);
+  if (!fullArea && !(boreM > 0)) throw new Error('Bore / throat diameter must be > 0');
+  if (beta !== null && !(beta > 0 && beta < 1)) throw new Error(geo.shape === 'rectangular' ? 'The throat area must be smaller than the duct cross-section area' : 'Beta ratio must be between 0 and 1');
 
   const Y = (fluidClass === 'gas' || fluidClass === 'steam') && beta !== null
     ? expansionFactor(beta, dpPa, upstreamPressurePa, kappa)
     : 1;
 
   let volumetricFlowM3s;
-  if (elementType === 'pitot') {
-    // Averaging pitot/Annubar: velocity-based, area = full pipe bore
+  if (fullArea) {
+    // Averaging pitot / Annubar / airfoil: Q = K * A_duct * sqrt(2*dP/rho), A = actual cross-section area
+    // (pi/4 D^2 for a round pipe, W x H for a rectangular duct).
     const velocity = usedCd * Math.sqrt((2 * dpPa) / density);
-    const area = (Math.PI / 4) * pipeIdM * pipeIdM;
-    volumetricFlowM3s = velocity * area;
+    volumetricFlowM3s = velocity * geo.areaM2;
   } else {
-    const area = (Math.PI / 4) * boreM * boreM;
     const E = 1 / Math.sqrt(1 - Math.pow(beta, 4));
-    volumetricFlowM3s = usedCd * E * Y * area * Math.sqrt((2 * dpPa) / density);
+    volumetricFlowM3s = usedCd * E * Y * throatArea * Math.sqrt((2 * dpPa) / density);
   }
 
   const massFlowKgS = volumetricFlowM3s * density;
-  const pipeArea = (Math.PI / 4) * pipeIdM * pipeIdM;
+  const pipeArea = geo.areaM2;
   const velocity = volumetricFlowM3s / pipeArea;
   let reynolds = null;
-  if (viscosityPaS) reynolds = (4 * massFlowKgS) / (Math.PI * viscosityPaS * pipeIdM);
+  // Re = rho*v*Dh/mu = m_dot*Dh/(A*mu); equals 4*m_dot/(pi*D*mu) for a circular pipe.
+  if (viscosityPaS) reynolds = (massFlowKgS * geo.hydraulicDiameterM) / (pipeArea * viscosityPaS);
 
   return {
-    elementType, beta, cd: usedCd, expansionFactor: Y, density, velocityMs: velocity,
+    elementType, beta, cd: usedCd, expansionFactor: Y, density, densityMethod: densityInfo.method, densityStandard: densityInfo.standard, compressibilityZ: densityInfo.Z ?? null, densityNote: densityInfo.note ?? null, velocityMs: velocity,
+    pipeShape: geo.shape, pipeAreaM2: pipeArea, hydraulicDiameterM: geo.hydraulicDiameterM,
     reynolds, massFlowKgS, volumetricFlowM3s,
     massFlowTh: massFlowKgS * 3.6, volumetricFlowM3h: volumetricFlowM3s * 3600,
     trace: [
       { step: 'DP', value: dpPa, unit: 'Pa' },
       { step: 'Absolute pressure', value: upstreamPressurePa, unit: 'Pa' },
       { step: 'Temperature', value: tempC, unit: '°C' },
-      { step: 'Density', value: density, unit: 'kg/m³' },
-      { step: 'Pipe area', value: pipeArea, unit: 'm²' },
+      { step: 'Density (' + densityInfo.method + ')', value: density, unit: 'kg/m³' },
+      { step: geo.shape === 'rectangular' ? 'Duct area (W × H)' : 'Pipe area', value: pipeArea, unit: 'm²' },
+      { step: 'Hydraulic diameter (used for Reynolds number)', value: geo.hydraulicDiameterM, unit: 'm' },
       { step: 'Beta ratio', value: beta, unit: '-' },
       { step: 'Discharge coefficient (Cd)', value: usedCd, unit: '-' },
       { step: 'Expansion factor (Y)', value: Y, unit: '-' },
@@ -401,19 +439,20 @@ export function convertVolFlow(value, from, to) {
  * double-apply a temperature correction if chained with a different
  * reference temperature here.
  */
-export function actualToReferenceFlow(actualM3h, actualTempC, actualPressureKPa, refTempC, refPressureKPa = 101.325) {
+export function actualToReferenceFlow(actualM3h, actualTempC, actualPressureKPa, refTempC, refPressureKPa = 101.325, zActual = 1, zRef = 1) {
   const Tactual = actualTempC + 273.15;
   const Tref = refTempC + 273.15;
   if (!(Tactual > 0 && Tref > 0)) throw new Error('Temperatures must be above absolute zero');
   if (!(actualPressureKPa > 0 && refPressureKPa > 0)) throw new Error('Pressures must be > 0');
-  return actualM3h * (actualPressureKPa / refPressureKPa) * (Tref / Tactual);
+  if (!(zActual > 0 && zRef > 0)) throw new Error('Compressibility factors must be > 0');
+  return actualM3h * (actualPressureKPa / refPressureKPa) * (Tref / Tactual) * (zRef / zActual);
 }
-export function referenceToActualFlow(refM3h, actualTempC, actualPressureKPa, refTempC, refPressureKPa = 101.325) {
+export function referenceToActualFlow(refM3h, actualTempC, actualPressureKPa, refTempC, refPressureKPa = 101.325, zActual = 1, zRef = 1) {
   const Tactual = actualTempC + 273.15;
   const Tref = refTempC + 273.15;
   if (!(Tactual > 0 && Tref > 0)) throw new Error('Temperatures must be above absolute zero');
   if (!(actualPressureKPa > 0 && refPressureKPa > 0)) throw new Error('Pressures must be > 0');
-  return refM3h * (refPressureKPa / actualPressureKPa) * (Tactual / Tref);
+  return refM3h * (refPressureKPa / actualPressureKPa) * (Tactual / Tref) * (zActual / zRef);
 }
 
 // ============================================================

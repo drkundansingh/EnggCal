@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZZ6H0JNGP6"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-ZZ6H0JNGP6');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- ============================================================
+     Google AdSense
+     Site-ownership / crawler requirement: the account meta tag and the
+     adsbygoogle.js loader are present in the RAW HTML <head>, exactly as
+     AdSense's "connect your site" step requires -- a crawler that only reads
+     the initial page source must be able to find them.
+     This does NOT recreate the "ads on screens without publisher content"
+     problem: every page is served as a pre-rendered static file that already
+     contains its full content (see prerender.js), and the actual <ins> ad
+     unit is still created only by applySeo() in js/app.js, after the page's
+     content exists, and never on noindex/utility screens.
+     ca-pub-6794299102016509  ->  AdSense publisher/client ID
+     ============================================================ -->
+<meta name="google-adsense-account" content="ca-pub-6794299102016509">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6794299102016509" crossorigin="anonymous"></script>
+
+<title>SAMA Logic Diagram Simulator | EngCalc Hub</title>
+<meta name="description" content="Build and simulate control logic from standard SAMA function blocks — summers, selects, limiters, logic gates, timers — chained together with live values.">
+<link rel="canonical" href="https://engineeringhubcalc.com/sama-logic/">
+<meta name="robots" content="index, follow">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Engineering Calculator Hub">
+<meta property="og:title" content="SAMA Logic Diagram Simulator | EngCalc Hub">
+<meta property="og:description" content="Build and simulate control logic from standard SAMA function blocks — summers, selects, limiters, logic gates, timers — chained together with live values.">
+<meta property="og:url" content="https://engineeringhubcalc.com/sama-logic/">
+<meta property="og:image" content="https://engineeringhubcalc.com/assets/logo.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="SAMA Logic Diagram Simulator | EngCalc Hub">
+<meta name="twitter:description" content="Build and simulate control logic from standard SAMA function blocks — summers, selects, limiters, logic gates, timers — chained together with live values.">
+<meta name="twitter:image" content="https://engineeringhubcalc.com/assets/logo.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Engineering Calculator Hub",
+  "url": "https://engineeringhubcalc.com/",
+  "description": "Free professional engineering calculators for thermal power plant, instrumentation, process, and electrical protection engineers.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web-based)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dr. Kundan" }
+}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What’s the difference between this and the Control Loops page?","acceptedAnswer":{"@type":"Answer","text":"Control Loops shows complete, pre-built simulations of specific real plant control loops (drum level, combustion control, and so on), each already wired up and ready to run. This tool is for building your OWN logic from individual SAMA blocks — summers, selects, AND/OR gates, and genuine dynamic blocks like PID, lag, and timers — to check how a specific piece of interlock, permissive, or control logic behaves for exactly the combination you need, not just the pre-built examples."}},{"@type":"Question","name":"Why can a block only reference an earlier block, not a later one?","acceptedAnswer":{"@type":"Answer","text":"A real SAMA diagram is read left to right — signals flow forward, never backward into an earlier summing junction on the same sheet. Enforcing that here means the chain evaluates in one deterministic pass with no risk of a circular reference, exactly matching how the diagram would actually be drawn and read. A genuine feedback loop (like a PID controlling the process it reads back from) is still fully supported — it’s resolved correctly using a one-step simulation delay once you add a dynamic block, the same way a real control loop’s feedback path works."}},{"@type":"Question","name":"What happens if I remove a block that another block depends on?","acceptedAnswer":{"@type":"Answer","text":"The dependent block’s input automatically falls back to a constant value (0) instead of being left broken — you’ll see it change and can re-wire it to a different source if needed."}},{"@type":"Question","name":"Are dynamic blocks like lag, integrator, or timers included?","acceptedAnswer":{"@type":"Answer","text":"Yes — lag, derivative, lead-lag, integrator, a resettable totalizer, rate limiter, dead time, a ramp/time-function generator, a full anti-windup PID controller (with a real Auto/Manual faceplate mode and bumpless transfer, just like a real DCS), an on/off hysteresis controller, a track/hold (sample-and-hold), both Reset-dominant and Set-dominant SR latches, a first-out sequence annunciator, a time-delay (ON/OFF-delay) timer, a one-shot pulse timer, and a free-running pulse generator are all available alongside the static/algebraic SAMA blocks (summers, averaging, differencing, high/low/median selects, an M-out-of-N safety voter, limiters, exponential, manual/auto transfer stations, AND/OR/NOT/NAND/NOR/XOR, comparators). Add any dynamic block to a diagram and Simulate mode activates automatically, stepping the whole chain forward in time with a Run/Pause/Reset clock and an optional live trend chart."}},{"@type":"Question","name":"Can I build real safety voting logic like 2oo3, not just plain AND/OR?","acceptedAnswer":{"@type":"Answer","text":"Yes — the M-out-of-N Voter block is the standard SIS architecture (1oo2, 2oo2, 2oo3, 1oo3, 3oo3) as one configurable block: it outputs TRUE once at least M of its connected inputs are TRUE. 2oo3 specifically is genuinely different from a plain AND or OR gate — it tolerates any single input disagreeing (a stuck or spurious sensor) without either a nuisance trip or a loss of protection, which is exactly why real safety instrumented systems use it. Median Select does the equivalent job for analog signals: it outputs the middle of three inputs, so one wildly failed transmitter (high or low) never affects the result."}},{"@type":"Question","name":"Can I configure alarm limits and see them on the diagram?","acceptedAnswer":{"@type":"Answer","text":"Yes — any block with an assigned instrument tag can have Hi-Hi/Hi/Lo/Lo-Lo alarm limits configured in its Properties panel. An active, unacknowledged alarm shows a pulsing red or amber border directly on the block, and every alarm across every page of the diagram appears in the Alarm Summary panel with an acknowledge workflow and a timestamped event log — the same alarm banner pattern a real DCS operator station uses."}}]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":2,"name":"Logic Simulator","item":"https://engineeringhubcalc.com/"},{"@type":"ListItem","position":3,"name":"SAMA Logic Diagram Simulator","item":"https://engineeringhubcalc.com/sama-logic/"}]}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<link rel="icon" href="/assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
+</head>
+<body data-theme="dark">
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="/assets/logo.png" alt="Engineering Calculator Hub logo">
+      <div class="brand-text">Engineering<br><span class="brand-accent">Calculator Hub</span><small><span class="tag-1">Calculate &bull; Convert</span> &bull; <span class="tag-2">Analyze &bull; Learn</span></small></div>
+    </div>
+    <nav class="nav" id="nav-root"><div class="nav-group"><div class="nav-label">Overview</div><a class="nav-item " href="/">
+        <span class="ic">▣</span>Dashboard
+      </a></div><div class="nav-group"><div class="nav-label">Logic Simulator</div><a class="nav-item active" href="/sama-logic/">
+        <span class="ic">⌗</span>Simulator
+      </a></div><div class="nav-group"><div class="nav-label">Power Plant</div><a class="nav-item " href="/thermal-plant/">
+        <span class="ic">⚡</span>Thermal Plant Estimator
+      </a><a class="nav-item " href="/protection/">
+        <span class="ic">🛡</span>Turbine &amp; Boiler Protection
+      </a><a class="nav-item " href="/control-loops/">
+        <span class="ic">↻</span>Control Loops
+      </a><a class="nav-item " href="/plant-performance/">
+        <span class="ic">📊</span>Plant Performance Indicators
+      </a><a class="nav-item " href="/boiler-blowdown/">
+        <span class="ic">≣</span>Boiler Blowdown Rate
+      </a><a class="nav-item " href="/cooling-tower/">
+        <span class="ic">❄</span>Cooling Tower Performance
+      </a><a class="nav-item " href="/feedwater-heater/">
+        <span class="ic">♨</span>Feedwater Heater (TTD &amp; DCA)
+      </a><a class="nav-item " href="/iso5167-flow/">
+        <span class="ic">⌀</span>DP Flow — ISO 5167
+      </a><a class="nav-item " href="/stodola-flow/">
+        <span class="ic">⚙</span>Turbine Stage Flow (Stodola)
+      </a><a class="nav-item " href="/heater-extraction-flow/">
+        <span class="ic">♨</span>FW Heater Extraction Flow
+      </a><a class="nav-item " href="/desuperheater-spray/">
+        <span class="ic">☔</span>Desuperheater Spray Flow
+      </a><a class="nav-item " href="/condenser-cw-flow/">
+        <span class="ic">≋</span>Condenser Cooling-Water Flow
+      </a><a class="nav-item " href="/tracer-dilution-flow/">
+        <span class="ic">◐</span>Tracer Dilution Flow
+      </a><a class="nav-item " href="/pitot-duct-flow/">
+        <span class="ic">⇥</span>Duct Flow — Pitot Traverse
+      </a><a class="nav-item " href="/ultrasonic-flow/">
+        <span class="ic">〰</span>Ultrasonic Transit-Time Flow
+      </a><a class="nav-item " href="/water-chemistry/">
+        <span class="ic">💧</span>DM Plant Resin Regeneration
+      </a><a class="nav-item " href="/coal-fuel/">
+        <span class="ic">⛏</span>Coal &amp; Fuel Handling
+      </a><a class="nav-item " href="/emissions/">
+        <span class="ic">🏭</span>Combustion Emissions (CO₂/SO₂)
+      </a></div><div class="nav-group"><div class="nav-label">Instrumentation</div><a class="nav-item " href="/dp-flow-wizard/">
+        <span class="ic">🧭</span>DP → Flow Wizard
+      </a><a class="nav-item " href="/dp-flow-cal/">
+        <span class="ic">√</span>DP → Flow (Calibrated)
+      </a><a class="nav-item " href="/steam-props/">
+        <span class="ic">♨</span>Steam Properties
+      </a><a class="nav-item " href="/transmitter/">
+        <span class="ic">↯</span>4–20 mA Transmitter
+      </a><a class="nav-item " href="/dp-level/">
+        <span class="ic">≈</span>DP &amp; Level
+      </a><a class="nav-item " href="/orifice/">
+        <span class="ic">◎</span>Orifice Plate
+      </a><a class="nav-item " href="/control-valve/">
+        <span class="ic">⏛</span>Control Valve Sizing
+      </a><a class="nav-item " href="/ip-converter/">
+        <span class="ic">⇄</span>I/P Converter
+      </a><a class="nav-item " href="/rtd/">
+        <span class="ic">Ω</span>RTD
+      </a><a class="nav-item " href="/thermocouple/">
+        <span class="ic">μV</span>Thermocouple
+      </a><a class="nav-item " href="/pid/">
+        <span class="ic">∫</span>PID Controller
+      </a><a class="nav-item " href="/loop-uncertainty/">
+        <span class="ic">±</span>Loop Uncertainty
+      </a><a class="nav-item " href="/cavitation/">
+        <span class="ic">◌</span>Valve Cavitation
+      </a><a class="nav-item " href="/cable-gland/">
+        <span class="ic">⏚</span>Cable &amp; Gland Sizing
+      </a><a class="nav-item " href="/sil-verification/">
+        <span class="ic">🛡</span>SIL / PFDavg Verification
+      </a><a class="nav-item " href="/gauge-range/">
+        <span class="ic">⏲</span>Pressure Gauge Range Selection
+      </a><a class="nav-item " href="/interface-level/">
+        <span class="ic">≋</span>Interface Level (Two-Liquid DP)
+      </a><a class="nav-item " href="/loop-power/">
+        <span class="ic">🔋</span>4–20 mA Loop Power Budget
+      </a></div><div class="nav-group"><div class="nav-label">Electrical</div><a class="nav-item " href="/short-circuit/">
+        <span class="ic">⚡</span>Short Circuit / Fault
+      </a><a class="nav-item " href="/idmt/">
+        <span class="ic">⌒</span>IDMT Relay Curves
+      </a><a class="nav-item " href="/relay-settings/">
+        <span class="ic">⚙</span>Relay Settings (ABB/Siemens-style)
+      </a><a class="nav-item " href="/ct-sizing/">
+        <span class="ic">⧖</span>CT Sizing &amp; Burden
+      </a><a class="nav-item " href="/transformer-prot/">
+        <span class="ic">⧉</span>Transformer Protection
+      </a><a class="nav-item " href="/motor-prot/">
+        <span class="ic">⟳</span>Motor Protection
+      </a><a class="nav-item " href="/lsig/">
+        <span class="ic">⌶</span>LSIG Breaker Settings
+      </a><a class="nav-item " href="/coordination/">
+        <span class="ic">⇅</span>Relay Coordination
+      </a><a class="nav-item " href="/cable-sizing/">
+        <span class="ic">≡</span>Cable Sizing &amp; Volt Drop
+      </a><a class="nav-item " href="/cable-withstand/">
+        <span class="ic">⚡</span>Short-Circuit Withstand
+      </a><a class="nav-item " href="/motor-start/">
+        <span class="ic">↓</span>Motor Starting Dip
+      </a><a class="nav-item " href="/pf-correction/">
+        <span class="ic">≅</span>Power Factor Correction
+      </a><a class="nav-item " href="/battery-sizing/">
+        <span class="ic">▤</span>Battery / DC Sizing
+      </a><a class="nav-item " href="/tx-loading/">
+        <span class="ic">◱</span>Transformer Loading
+      </a><a class="nav-item " href="/grounding-grid/">
+        <span class="ic">⚓</span>Grounding Grid Design
+      </a><a class="nav-item " href="/ngr-sizing/">
+        <span class="ic">⊙</span>NGR Sizing
+      </a><a class="nav-item " href="/generator-sizing/">
+        <span class="ic">⚡</span>Generator Sizing
+      </a><a class="nav-item " href="/voltage-unbalance/">
+        <span class="ic">≈</span>Voltage Unbalance &amp; Derating
+      </a><a class="nav-item " href="/tx-inrush/">
+        <span class="ic">⤴</span>Transformer Inrush
+      </a></div><div class="nav-group"><div class="nav-label">Process &amp; Mechanical</div><a class="nav-item " href="/pipe-pressure-drop/">
+        <span class="ic">→</span>Pipe Pressure Drop
+      </a><a class="nav-item " href="/pipe-wall-thickness/">
+        <span class="ic">◯</span>Pipe Wall Thickness (ASME B31.3)
+      </a><a class="nav-item " href="/relief-valve/">
+        <span class="ic">⚠</span>Relief Valve Sizing (API 520)
+      </a><a class="nav-item " href="/pump-npsh/">
+        <span class="ic">↻</span>Pump NPSH &amp; Affinity Laws
+      </a><a class="nav-item " href="/pump-specific-speed/">
+        <span class="ic">§</span>Pump Specific Speed
+      </a><a class="nav-item " href="/fan-laws/">
+        <span class="ic">≈</span>Fan / Blower Laws &amp; Power
+      </a><a class="nav-item " href="/compressor-power/">
+        <span class="ic">⇗</span>Compressor Power (Adiabatic)
+      </a><a class="nav-item " href="/bearing-life/">
+        <span class="ic">●</span>Bearing L10 Life (ISO 281)
+      </a><a class="nav-item " href="/heat-exchanger/">
+        <span class="ic">⇌</span>Heat Exchanger LMTD &amp; Area
+      </a><a class="nav-item " href="/horizontal-tank/">
+        <span class="ic">▭</span>Horizontal Tank Volume (Dip Chart)
+      </a><a class="nav-item " href="/vertical-tank/">
+        <span class="ic">▯</span>Vertical Tank Volume
+      </a><a class="nav-item " href="/vessel-wall/">
+        <span class="ic">◎</span>Pressure Vessel Wall Thickness (ASME VIII)
+      </a><a class="nav-item " href="/insulation-loss/">
+        <span class="ic">≋</span>Pipe Insulation Heat Loss
+      </a><a class="nav-item " href="/thermal-expansion/">
+        <span class="ic">↔</span>Thermal (Linear) Expansion
+      </a><a class="nav-item " href="/gas-compression/">
+        <span class="ic">⇑</span>Gas Compression Work
+      </a><a class="nav-item " href="/bolt-torque/">
+        <span class="ic">⚙</span>Bolt Torque &amp; Preload
+      </a><a class="nav-item " href="/gear-ratio/">
+        <span class="ic">⊙</span>Gear Ratio &amp; Speed/Torque
+      </a><a class="nav-item " href="/belt-pulley/">
+        <span class="ic">◐</span>Belt / Pulley Speed Ratio
+      </a></div><div class="nav-group"><div class="nav-label">HVAC &amp; Refrigeration</div><a class="nav-item " href="/hvac-load/">
+        <span class="ic">❄</span>Sensible Heat Load
+      </a><a class="nav-item " href="/duct-sizing/">
+        <span class="ic">▤</span>Duct Sizing (Velocity Method)
+      </a><a class="nav-item " href="/refrigeration-tons/">
+        <span class="ic">≈</span>Refrigeration Tons ⇌ kW/BTU
+      </a></div><div class="nav-group"><div class="nav-label">Civil Engineering</div><a class="nav-item " href="/civil-beam/">
+        <span class="ic">─</span>Beam Analysis (Deflection, Moment, Shear)
+      </a><a class="nav-item " href="/civil-section/">
+        <span class="ic">▭</span>Section Properties (I, S)
+      </a><a class="nav-item " href="/civil-column/">
+        <span class="ic">┃</span>Column Buckling (Euler)
+      </a><a class="nav-item " href="/civil-combined-stress/">
+        <span class="ic">±</span>Combined Axial &amp; Bending Stress
+      </a><a class="nav-item " href="/civil-steel-weight/">
+        <span class="ic">⬛</span>Steel Weight (Bar/Plate/Pipe)
+      </a><a class="nav-item " href="/civil-concrete-volume/">
+        <span class="ic">▦</span>Concrete Volume &amp; Weight
+      </a><a class="nav-item " href="/civil-water-cement/">
+        <span class="ic">≈</span>Water-Cement Ratio
+      </a><a class="nav-item " href="/civil-concrete-mix/">
+        <span class="ic">▤</span>Concrete Nominal Mix (IS 456)
+      </a><a class="nav-item " href="/civil-rebar/">
+        <span class="ic">#</span>Rebar Weight &amp; Quantity
+      </a><a class="nav-item " href="/civil-earth-pressure/">
+        <span class="ic">◺</span>Earth Pressure (Rankine)
+      </a><a class="nav-item " href="/civil-soil-phase/">
+        <span class="ic">○</span>Soil Phase &amp; Effective Stress
+      </a><a class="nav-item " href="/civil-manning/">
+        <span class="ic">≋</span>Manning's Open Channel Flow
+      </a><a class="nav-item " href="/civil-weir/">
+        <span class="ic">⊓</span>Weir Flow (Rectangular)
+      </a><a class="nav-item " href="/civil-earthwork/">
+        <span class="ic">△</span>Land Area &amp; Earthwork Volume
+      </a></div><div class="nav-group"><div class="nav-label">Reference</div><a class="nav-item " href="/converter/">
+        <span class="ic">⇌</span>Unit Converter
+      </a><a class="nav-item " href="/formula-library/">
+        <span class="ic">𝑓</span>Formula Library
+      </a><a class="nav-item " href="/kks-reference/">
+        <span class="ic">🏷</span>KKS Code Reference
+      </a><a class="nav-item " href="/isa-tag-reference/">
+        <span class="ic">🔤</span>ISA-5.1 Tag Reference
+      </a><a class="nav-item " href="/history/">
+        <span class="ic">🕘</span>Calculation History
+      </a><a class="nav-item " href="/support/">
+        <span class="ic">❤</span>Support the Project
+      </a><a class="nav-item " href="/reviews/">
+        <span class="ic">★</span>Reviews &amp; Ratings
+      </a><a class="nav-item " href="/guides/">
+        <span class="ic">📖</span>Engineering Guides
+      </a><a class="nav-item " href="/about/">
+        <span class="ic">ℹ</span>About
+      </a><a class="nav-item " href="/contact/">
+        <span class="ic">✉</span>Contact
+      </a><a class="nav-item " href="/privacy/">
+        <span class="ic">⚿</span>Privacy Policy
+      </a><a class="nav-item " href="/terms/">
+        <span class="ic">§</span>Terms of Use
+      </a></div></nav>
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="themeToggle">☾ Dark</button>
+      <div id="adminLoginLink" role="link" tabindex="0" style="text-align:center;font-size:.68rem;color:var(--text-faint);margin-top:8px;cursor:pointer;">Admin</div>
+    </div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button>
+      <div class="search-box">
+        <span>⌕</span>
+        <input type="text" id="globalSearch" placeholder="Search formulas… (press Enter)">
+      </div>
+      <div class="topbar-actions">
+        <span class="pill free">FREE PLAN</span>
+      </div>
+    </div>
+    <main class="content" id="content"><div class="page-head" style="margin-bottom:12px;padding-bottom:12px;">
+    <div class="eyebrow">Logic Simulator</div><h1>SAMA Logic Diagram Simulator</h1>
+    <p class="lead">Click <b>+ Blocks</b>, drag a block onto the canvas, then drag from a block's output dot to another block's input dot to wire it up. Add any dynamic block (lag, integrator, PID...) and Simulate runs it live over time; a purely static diagram computes instantly.</p><div style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;
+    border:1px solid var(--green);border-radius:20px;font-size:.72rem;color:var(--green);cursor:help;" title="Checked against the named standard’s own equations and, where one exists, a published reference/worked example — not just internal self-consistency.">
+    <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;"></span>
+    Verified against published standard
+  </div></div><div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;">
+    <button class="btn" id="toggleBlocksBtn">+ Blocks</button>
+    <button class="btn secondary" id="clearAllBtn">Clear All</button>
+    <button class="btn secondary" id="undoBtn" title="Undo (Ctrl+Z)" disabled="">↶ Undo</button>
+    <button class="btn secondary" id="redoBtn" title="Redo (Ctrl+Y)" disabled="">↷ Redo</button>
+    <button class="btn secondary" id="manageTagsBtn" title="Define instrument tags (FT-101, PIC-201...) to select when configuring a block">Tags</button>
+    <button class="btn secondary" id="manageScenariosBtn" title="Save/load named snapshots of every field input's value, to quickly switch between operating conditions">Scenarios</button>
+    <button class="btn secondary" id="exportBtn" title="Save this diagram as a file you can reopen or share">Export</button>
+    <button class="btn secondary" id="importBtn" title="Load a diagram you saved earlier">Import</button>
+    <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
+    <div id="simControls" style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap;">
+      <span class="pill" id="simStatusPill" style="background: var(--bg-panel); color: var(--text-faint); border-color: var(--line);">STATIC</span>
+      <button class="btn secondary" id="simPlayPause" disabled="" title="Add a block to the canvas first">Run</button>
+      <button class="btn secondary" id="simReset" disabled="">Reset</button>
+      <select id="simSpeedSelect" style="width:auto;" title="Simulated time advanced per real second" disabled="">
+        <option value="1">1×</option>
+        <option value="2">2×</option>
+        <option value="5">5×</option>
+        <option value="10">10×</option>
+        <option value="20">20×</option>
+      </select>
+      <span id="simClock" style="font-family:var(--font-mono);color:var(--text-faint);font-size:.8rem;">t = 0.0 s</span>
+      <span id="staticNote" style="color:var(--text-faint);font-size:.78rem;">Static diagram — computes instantly. Add a dynamic block to enable Run.</span>
+    </div>
+  </div><div class="donate-modal-backdrop" id="tagModalBackdrop">
+    <div class="donate-modal" role="dialog" aria-modal="true" aria-labelledby="tagModalTitle" style="max-width:560px;">
+      <button class="donate-modal-close" id="tagModalClose" type="button" aria-label="Close">✕</button>
+      <h3 id="tagModalTitle">Instrument Tag Library</h3>
+      <p style="color:var(--text-dim);font-size:.85rem;margin:-8px 0 14px;">Define real instrument tags here (FT-101, PIC-201, XV-301...) once, then select them from a list when configuring a field I/O or final-control block, instead of only ever seeing the generic b1/b2 block id.</p>
+      <div class="input-row">
+        <div class="field"><label>Tag name</label><input type="text" id="newTagName" placeholder="e.g. FT-101"></div>
+        <div class="field"><label>Signal type</label>
+          <select id="newTagType"><option value="analog">Analog</option><option value="digital">Digital</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Description</label><input type="text" id="newTagDesc" placeholder="e.g. Feedwater flow transmitter"></div>
+      <div class="btn-row"><button class="btn" id="addTagBtn">Add Tag</button></div>
+      <div id="tagListBody" style="margin-top:16px;max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div><div class="donate-modal-backdrop" id="scenarioModalBackdrop">
+    <div class="donate-modal" role="dialog" aria-modal="true" aria-labelledby="scenarioModalTitle" style="max-width:560px;">
+      <button class="donate-modal-close" id="scenarioModalClose" type="button" aria-label="Close">✕</button>
+      <h3 id="scenarioModalTitle">Scenario Presets</h3>
+      <p style="color:var(--text-dim);font-size:.85rem;margin:-8px 0 14px;">Save the current value of every field input on THIS page (every DI, AI, and Manual Value block) under a name, then load it back any time to jump straight to that operating condition — "Full Load", "Startup", "Sensor Fault Test" — instead of re-entering each value by hand.</p>
+      <div class="input-row">
+        <div class="field" style="flex:2;"><label>Preset name</label><input type="text" id="newScenarioName" placeholder="e.g. Full Load"></div>
+      </div>
+      <div class="btn-row"><button class="btn" id="saveScenarioBtn">Save current inputs as preset</button></div>
+      <div id="scenarioListBody" style="margin-top:16px;max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div><div style="position:relative;"><div class="card" id="palettePanel" style="display:none;position:absolute;top:6px;left:0;z-index:40;width:min(640px,92vw);max-height:70vh;max-height:70dvh;overflow:auto;box-shadow:0 12px 32px rgba(0,0,0,.45);">
+    
+      <div style="margin-bottom:10px;">
+        <div class="panel-title" style="color:var(--cyan);">Analog (static)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          
+            <div class="palette-chip" data-block-type="summer" title="Weighted sum of its inputs, plus a bias. Each input has its own +/- gain (sign), the standard SAMA summing junction." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Summer (Σ)
+            </div>
+            <div class="palette-chip" data-block-type="average" title="The algebraic sum of its inputs divided by the number of inputs: m = (x₁ + x₂ + ... + xₙ) / n. The standard SAMA averaging junction — distinct from Summer, which does not divide by the input count." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Averaging (Σ/n)
+            </div>
+            <div class="palette-chip" data-block-type="gain" title="Multiplies its single input by a constant K." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Gain (K)
+            </div>
+            <div class="palette-chip" data-block-type="bias" title="Adds a fixed offset to its input." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Bias (+/-)
+            </div>
+            <div class="palette-chip" data-block-type="multiply" title="Product of its two inputs." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Multiply (×)
+            </div>
+            <div class="palette-chip" data-block-type="divide" title="First input divided by the second." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Divide (÷)
+            </div>
+            <div class="palette-chip" data-block-type="ratioStation" title="The standard SAMA ratio-control station: output = Wild × Ratio + Bias, where the RATIO ITSELF is a live second input, not a fixed gain — exactly the distinction that makes this different from a plain Gain (K) block. This is the real building block behind fuel/air ratio control, feedwater/steam ratio, or any &quot;slave follows master by a settable proportion&quot; loop: wire a flow transmitter (or another controller’s output) into Wild, and a ratio setpoint — fixed, or itself the output of a trim controller — into Ratio, and the demand this station produces tracks the wild variable at whatever ratio is currently commanded, updating immediately if either input changes." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Ratio Station (× ratio + bias)
+            </div>
+            <div class="palette-chip" data-block-type="highSelect" title="Outputs the HIGHEST of its inputs — the standard SAMA high-select used to make one demand win." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              High Select (&gt;)
+            </div>
+            <div class="palette-chip" data-block-type="lowSelect" title="Outputs the LOWEST of its inputs." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Low Select (&lt;)
+            </div>
+            <div class="palette-chip" data-block-type="medianSelect" title="Outputs the MIDDLE value of exactly three inputs — the standard SAMA/DCS approach to triple-redundant analog sensor validation. Unlike averaging (which lets a single wildly-failed transmitter still skew the result) or a simple high/low select (which a single failed-high or failed-low transmitter can dominate outright), median select is genuinely tolerant of any ONE input failing in either direction: the two still-good sensors always outvote it, since the middle of three values can only be wrong if at least two of the three are wrong the same way." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Median Select
+            </div>
+            <div class="palette-chip" data-block-type="absoluteValue" title="Outputs |x| — the magnitude of its input regardless of sign. Useful after a difference/summer block when only the SIZE of a deviation matters, not its direction — e.g. alarming on a large temperature mismatch between two redundant sensors, whichever one happens to read higher." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Absolute Value
+            </div>
+            <div class="palette-chip" data-block-type="highLimit" title="Clamps the input so it can never exceed the set limit." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              High Limit
+            </div>
+            <div class="palette-chip" data-block-type="lowLimit" title="Clamps the input so it can never fall below the set limit." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Low Limit
+            </div>
+            <div class="palette-chip" data-block-type="deadband" title="Outputs zero for any input within +/- the deadband of zero; passes the input through unchanged outside that band." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Deadband
+            </div>
+            <div class="palette-chip" data-block-type="sqrt" title="Square root extractor — the classic SAMA symbol for linearizing a DP flow signal." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Square Root
+            </div>
+            <div class="palette-chip" data-block-type="power" title="Raises its input to a power: m = xⁿ. Covers both a squaring/cubing block (n=2, n=3) and, with a fractional exponent, a general root extractor — n=0.5 is equivalent to the dedicated Square Root block above." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Exponential (xⁿ)
+            </div>
+            <div class="palette-chip" data-block-type="functionBlock" title="The standard’s Nonlinear Function, m = f(x): a 5-point piecewise-linear characterizer, the real technique used to linearize a nonlinear sensor curve or shape a control valve’s installed characteristic (e.g. converting a linear controller output into an equal-percentage or quick-opening valve response). Set the five (x, y) points to describe the curve; the output linearly interpolates between whichever two points the input falls between, and holds flat at the first or last point’s y value below or above the defined range — the default points describe a straight y=x line, so an unconfigured block passes its input through unchanged until you shape a real curve." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Function (f(x))
+            </div>
+            <div class="palette-chip" data-block-type="transfer" title="The real manual/auto control station (drawn as a diamond in the actual standard): outputs the Auto signal when Select is FALSE, or the Manual signal when Select is TRUE, with the switch state set by external means — an operator flipping a station between automatic control and manual override, without any bump calculation modeled here (a real station also tracks the unselected input so the transfer is bumpless; this block reports the ideal switched value only)." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Transfer (T)
+            </div>
+            <div class="palette-chip" data-block-type="manualValue" title="The standard’s Variable Signal Generator (m = A): a manually-set number, positive or negative, with no calibrated range or process-parameter meaning attached — unlike an AI field terminal, which represents a real transmitter clamped to its calibrated span. Use this for a plain manual entry, bias reference, or test value that should pass straight through to whatever it’s wired into." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Manual Value (A)
+            </div>
+            <div class="palette-chip" data-block-type="tagRef" title="A real DCS-style cross-reference — the SAME instrument tag used on one page (e.g. an AI transmitter, a computed setpoint) can be read here on any OTHER page without redrawing the wiring, exactly like placing the same tag on multiple graphics or control schemes in a real distributed control system. Its value is kept in sync from wherever that tag is actually computed; if the source page has not been run, the value shown is whatever it last was, not a live guarantee." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--cyan);border-radius:6px;font-size:.8rem;color:var(--cyan);background:var(--bg-panel);">
+              Tag Reference
+            </div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="panel-title" style="color:var(--amber);">Logic (static)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          
+            <div class="palette-chip" data-block-type="and" title="TRUE only when ALL inputs are TRUE (&gt;= 0.5)." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              AND
+            </div>
+            <div class="palette-chip" data-block-type="or" title="TRUE when ANY input is TRUE (&gt;= 0.5)." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              OR
+            </div>
+            <div class="palette-chip" data-block-type="not" title="Inverts its single input." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              NOT
+            </div>
+            <div class="palette-chip" data-block-type="xor" title="TRUE when an ODD number of inputs are TRUE — for exactly two inputs (the common case) this is the familiar &quot;exactly one, not both&quot; exclusive-or; with more inputs it follows the same parity rule real XOR gate chains do. A genuinely different function from AND/OR, not just their opposite — useful for detecting a MISMATCH between two signals that should normally agree (e.g. two redundant digital status inputs) rather than requiring both or either." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              XOR
+            </div>
+            <div class="palette-chip" data-block-type="nand" title="TRUE unless ALL inputs are TRUE — the inverse of AND. Wiring a NOT after an AND gives the identical result; this block exists as its own gate purely to match the standard logic-gate family (AND, OR, NOT, NAND, NOR, XOR) and to keep a diagram’s block count and label matching what a real PLC/relay logic drawing would show, rather than a NOT tacked on after every AND that needs inverting." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              NAND
+            </div>
+            <div class="palette-chip" data-block-type="nor" title="TRUE only when ALL inputs are FALSE — the inverse of OR, and (with a single input tied to itself) the simplest possible NOT-latch building block in real relay logic. Same reasoning as NAND: its own gate for a complete, standard logic-gate family rather than requiring a separate NOT block after every OR." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              NOR
+            </div>
+            <div class="palette-chip" data-block-type="voter" title="The standard SIS/safety voting architecture (1oo2, 2oo2, 2oo3, 1oo3, 3oo3...) as one configurable block: TRUE when at least M of the connected inputs are TRUE. With 2 inputs and M=1 this is 1oo2 (identical to OR); with 2 inputs and M=2 this is 2oo2 (identical to AND) — the real value is with 3 inputs and M=2 (2oo3), the industry-standard architecture for triple-redundant sensor voting that genuinely cannot be built from a single AND or OR gate, since it must tolerate any ONE input disagreeing (a single failed or spuriously-tripped sensor) without either a nuisance trip (like 3oo3/AND would give) or a loss of protection from a stuck-low sensor (like 1oo3/OR would give)." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              M-out-of-N Voter
+            </div>
+            <div class="palette-chip" data-block-type="comparator" title="TRUE when input 1 is greater than input 2 — wire a constant setpoint into input 2 for a fixed-setpoint trip." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid var(--amber);border-radius:6px;font-size:.8rem;color:var(--amber);background:var(--bg-panel);">
+              Comparator (&gt;)
+            </div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="panel-title" style="color:#a78bfa;">Dynamic (time-stepped)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          
+            <div class="palette-chip" data-block-type="lag" title="First-order time lag — the standard SAMA symbol for a thermal, sensor, or process time constant. Output chases the input exponentially, reaching ~63% of a step change after one τ." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Lag (1st order)
+            </div>
+            <div class="palette-chip" data-block-type="derivative" title="Output proportional to the rate of change of the input: m = Tᴅ · dx/dt, the standalone SAMA derivative function (distinct from a PID’s built-in D term). A pure derivative reacts instantly to a step change in the input and is genuinely noise-sensitive — exactly like a real derivative element, which is why real controllers almost always filter it; this block implements the standard’s ideal, unfiltered definition." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Derivative (d/dt)
+            </div>
+            <div class="palette-chip" data-block-type="leadLag" title="Standard dynamic compensator (1+Tₗₑₐₔs)/(1+Tₗₐₓs) — speeds up (lead) or slows down (lag) a signal’s response while keeping steady-state gain of exactly 1. Implemented as a lag filter plus a proportional lead boost, the standard noise-avoiding DCS realization." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Lead-Lag
+            </div>
+            <div class="palette-chip" data-block-type="integrator" title="Integrates its input over time — the standard SAMA symbol for level, inventory, or any accumulating quantity with no self-regulation." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Integrator (∫)
+            </div>
+            <div class="palette-chip" data-block-type="totalizer" title="A real plant flow/energy totalizer: accumulates a RATE signal (e.g. a flow transmitter reading in t/h) into a running TOTAL (e.g. tonnes) over elapsed simulated time, exactly the way a steam or water totalizer accumulates a plant’s consumption. Distinct from the plain Integrator above in two ways that matter for a real totalizer: input 2 is a genuine RESET (holding it TRUE zeros the total immediately, matching a real totalizer’s shift/daily reset button), and the “Rate is per...” selector correctly converts an hourly or per-minute rate into the right accumulated amount per second of simulated time, so a 100 t/h flow genuinely adds up to 100 tonnes over one simulated hour, not one simulated second." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Totalizer (Σ, resettable)
+            </div>
+            <div class="palette-chip" data-block-type="rateLimit" title="Limits how fast its output can change — the standard SAMA symbol for a real actuator or setpoint that cannot slew instantly." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Rate Limiter
+            </div>
+            <div class="palette-chip" data-block-type="deadTime" title="Pure transport delay — the input reappears unchanged after the set delay, the standard SAMA symbol for pipeline or conveyor transport lag." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Dead Time
+            </div>
+            <div class="palette-chip" data-block-type="pid" title="Full PID controller — input 1 is the setpoint (SP), input 2 is the process value (PV). Reuses the same anti-windup PID class used throughout every Control Loops simulation. Switchable to Manual like a real DCS faceplate: the operator drives the output directly with the Manual output slider, while the controller keeps tracking SP/PV behind the scenes and continuously re-biases its own integral term (the standard &quot;manual reset feedback&quot; technique) so switching back to Auto is bumpless — no output jump." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              PID Controller
+            </div>
+            <div class="palette-chip" data-block-type="srLatch" title="Set-Reset memory latch — input 1 is Set, input 2 is Reset. Output goes TRUE when Set is TRUE, goes FALSE when Reset is TRUE, and HOLDS its last value when both are FALSE. Reset-dominant (the standard’s &quot;R₀ dominant&quot; memory): if both are TRUE at once, the output goes FALSE — the standard choice for a stop/trip circuit, where a simultaneous start-and-stop command should always stop, never start." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              SR Latch (Reset-Dominant)
+            </div>
+            <div class="palette-chip" data-block-type="srLatchSetDominant" title="The same Set-Reset memory as the Reset-dominant latch above, but with the priority reversed (the standard’s &quot;S₀ dominant&quot; memory): if Set and Reset are both TRUE at once, the output goes TRUE. Genuinely useful for the opposite real case — a permissive or enable latch where you want a simultaneous set-and-clear command to favor staying enabled rather than clearing." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              SR Latch (Set-Dominant)
+            </div>
+            <div class="palette-chip" data-block-type="timeDelay" title="Delays a boolean transition by a set time — the standard interlock pattern for &quot;confirm this has been true for N seconds before acting.&quot; ON-delay (mode 0) delays the TRUE transition; the timer resets if the input drops before the delay completes. OFF-delay (mode 1) delays the FALSE transition instead." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Time Delay (TON/TOF)
+            </div>
+            <div class="palette-chip" data-block-type="pulseTimer" title="Outputs a single fixed-duration TRUE pulse on each rising edge of its input, then returns to FALSE on its own regardless of what the input does afterward — the standard &quot;momentary output&quot; pattern (e.g. pulsing a solenoid for exactly N seconds). Needs a new rising edge to retrigger; holding the input TRUE does not extend or repeat the pulse." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Pulse Timer (one-shot)
+            </div>
+            <div class="palette-chip" data-block-type="toggle" title="Flips its output between 0 and 1 on each rising edge of its input — the real duty/standby alternation pattern used to swap which pump or fan takes the lead role each time it starts, so run-hours stay balanced across redundant equipment instead of always loading the same machine. Holding the input high does not re-toggle; it needs a fresh rising edge, exactly like a real pump-alternator relay." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Toggle (Alternator)
+            </div>
+            <div class="palette-chip" data-block-type="counter" title="Counts rising edges on its Count input — motor starts, batch cycles, alarm occurrences — and holds the running total until Reset goes TRUE, which zeroes it (reset-dominant, like the SR Latch: if both are TRUE at once, the count clears)." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Counter
+            </div>
+            <div class="palette-chip" data-block-type="peakHold" title="Holds the highest Value seen since the last Reset — the real pattern behind a peak-demand meter or a &quot;highest alarm reading since last acknowledged&quot; indicator. Reset does not clear to zero; it restarts tracking from whatever Value is present at that instant, so the output is never a meaningless dip to zero right after a reset." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Peak Hold (Max)
+            </div>
+            <div class="palette-chip" data-block-type="trackHold" title="While Hold is FALSE, the output tracks Signal live, exactly like a wire. The instant Hold goes TRUE, the output freezes at whatever value it held at that moment and stays there — the standard SAMA sample-and-hold pattern for capturing a value at a specific instant (e.g. &quot;batch weight at the moment a valve closes&quot;) or freezing a display during a known noisy period rather than showing garbage." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Track/Hold (Sample &amp; Hold)
+            </div>
+            <div class="palette-chip" data-block-type="onOffController" title="A genuinely different control philosophy from PID — real bang-bang (two-position) control, the way a domestic thermostat, a sump pump level switch, or a simple immersion heater actually works: fully ON or fully OFF, never a modulating percentage. The deadband is essential, not optional — without it, the output would chatter on and off continuously the instant PV sits exactly at SP; with it, the output only switches when PV crosses the OUTER edge of the deadband, and stays in that state until PV crosses back out the other side, exactly the hysteresis behavior a real mechanical or electronic on/off controller needs to avoid burning out a contactor or pump motor with rapid cycling." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              On/Off Controller (Hysteresis)
+            </div>
+            <div class="palette-chip" data-block-type="firstOut" title="The real sequence-of-events pattern behind a plant’s first-out annunciator panel: when several trip causes are wired in, the FIRST one to go TRUE latches (output = that cause’s number, 1-4) and every later cause is ignored until Reset — exactly what an operator needs after a trip, since the first cause is very often the root cause and everything after it is frequently a consequence, not an independent trip. Output 0 means nothing has latched yet. Pairs naturally with the Turbine &amp; Boiler Protection registry’s own trip parameters as the Cause inputs." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              First-Out Annunciator
+            </div>
+            <div class="palette-chip" data-block-type="pulseGenerator" title="A free-running repeating pulse train (a PLC-style clock pulse), NOT the same thing as the Pulse Timer above — that one fires a single pulse per trigger edge, this one cycles ON/OFF continuously on its own with independently settable ON and OFF times, for as long as Enable is TRUE. The real uses: exercising a Counter or Toggle block with a steady stream of pulses without manually clicking a DI over and over, or simulating a periodic real-world signal such as a turbine flow meter’s pulse output or a panel indicator’s blink rate. Enable FALSE holds the output at 0 and resets the cycle, so re-enabling always starts on a fresh ON phase rather than resuming mid-cycle." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Pulse Generator
+            </div>
+            <div class="palette-chip" data-block-type="ramp" title="The standard SAMA time-function generator, m = f(t): while Enable is TRUE, the output ramps toward Target at the set Rate and then holds there — it does not overshoot or oscillate, it simply stops changing once it arrives. The real use: testing how downstream control responds to a slowly-changing setpoint or process value instead of an instant step, e.g. ramping a turbine’s target load or a furnace’s target temperature the way a real operator or startup sequencer would, rather than snapping it to a new value immediately. Enable FALSE freezes the output at its current value — it does not reset to zero — so pausing and resuming continues the ramp from wherever it left off." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Ramp Generator (f(t))
+            </div>
+            <div class="palette-chip" data-block-type="faultInsert" title="Injects a chosen instrument/actuator failure mode onto a signal on command — the real point of a simulator like this one is to prove an interlock or permissive actually catches a bad transmitter or a stuck valve, not just to show the healthy case. While Fault active is FALSE, Signal passes straight through unchanged. While TRUE, the selected failure mode takes over: Force high/low pins the output at a set value (a transmitter railed to its stop); Freeze holds the value the signal had at the exact instant the fault activated (a stuck-at failure — the classic case a &quot;signal not changing&quot; or rate-of-change alarm exists to catch); Drift ramps steadily away from the real signal at a settable rate (slow calibration drift, not caught by a simple high/low alarm until it crosses a limit); Noise adds random +/- amplitude on top of the real signal (a flaky connection or EMI-corrupted 4-20mA loop). Deactivating the fault immediately returns to passing Signal through, and the next activation starts the freeze/drift state fresh from whatever Signal is at that moment." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Fault Insert (Diagnostic)
+            </div>
+            <div class="palette-chip" data-block-type="signalGenerator" title="A repeating test waveform — the real bench-test tool for exercising a loop or a chain of logic with a moving signal instead of manually dragging a slider by hand. While Enable is TRUE, the output cycles continuously between offset−amplitude and offset+amplitude at the chosen period; useful for checking a PID’s response to a genuinely oscillating process value, driving a Trend chart with something worth watching, or feeding a steady, repeatable stimulus into a Fault Insert / Rate-of-Change Alarm pair while you tune its threshold. Enable FALSE holds the output at its last value and freezes the waveform’s phase, so re-enabling resumes exactly where it left off rather than jumping back to the start of the cycle." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Signal Generator (Sine/Square/Triangle/Sawtooth)
+            </div>
+            <div class="palette-chip" data-block-type="rateOfChangeAlarm" title="Trips TRUE when its input is changing faster than a set rate — the real detection method behind a &quot;transmitter reading is jumping/dropping too fast&quot; alarm, and exactly the kind of check that catches a Fault Insert block’s Drift or Noise failure modes in a test diagram. The signal is filtered first (over the set filter time constant) before its rate is measured, the same way a real rate alarm can’t just difference two raw noisy samples — doing that would trip constantly on ordinary instrument noise, so the filter genuinely has to happen before the rate calculation, not after." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Rate-of-Change Alarm (d/dt)
+            </div>
+            <div class="palette-chip" data-block-type="deviationAlarm" title="Trips TRUE when the process value has drifted too far from setpoint — the standard deviation alarm on a real controller faceplate, distinct from a plain Comparator because it has genuine hysteresis: it trips once |SP−PV| reaches the trip band, then stays tripped until the deviation falls all the way back inside the (smaller) reset band, rather than chattering on and off right at one single threshold the way a plain comparator would whenever the deviation happens to sit near the limit. Set the reset band smaller than the trip band (the block clamps it there if you don’t) for that gap to actually do anything." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Deviation Alarm (SP vs PV)
+            </div>
+            <div class="palette-chip" data-block-type="highLimitAlarm" title="A DIGITAL high-limit trip, companion to the analog High Limit block above: instead of clamping the signal, this goes TRUE the instant the input reaches or exceeds the set Trip limit, and stays latched TRUE — the standard SAMA sealed-in alarm behavior — until the input falls back below a slightly lower Reset limit. That small gap between Trip and Reset is the standard hysteresis band that stops a signal sitting right at the setpoint from chattering the alarm on and off; set Reset limit equal to Trip limit for a plain, no-hysteresis threshold that trips and clears at exactly the same value." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              High Limit Alarm
+            </div>
+            <div class="palette-chip" data-block-type="lowLimitAlarm" title="A DIGITAL low-limit trip, companion to the analog Low Limit block above: goes TRUE the instant the input reaches or falls below the set Trip limit, and stays latched TRUE until the input rises back above a slightly higher Reset limit — the same hysteresis convention as High Limit Alarm, mirrored for a low trip (low level, low flow, low pressure, low lube-oil pressure, and similar real trip alarms). Set Reset limit equal to Trip limit for a plain, no-hysteresis threshold." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #a78bfa;border-radius:6px;font-size:.8rem;color:#a78bfa;background:var(--bg-panel);">
+              Low Limit Alarm
+            </div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="panel-title" style="color:#4ade80;">Field I/O Terminals (DI/DO/AI/AO)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          
+            <div class="palette-chip" data-block-type="di" title="Field digital input terminal — represents a real ON/OFF signal (limit switch, permissive contact, etc.) entering the logic. Has no inputs of its own; its value is the field state you set directly." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #4ade80;border-radius:6px;font-size:.8rem;color:#4ade80;background:var(--bg-panel);">
+              DI (Digital Input)
+            </div>
+            <div class="palette-chip" data-block-type="ai" title="Field analog input terminal — represents a real continuous signal (e.g. a 4-20 mA transmitter reading, already converted to engineering units) entering the logic. Define its process parameter and its calibrated range (min/max) the way a real transmitter has one; the value is always clamped to that range, the same way a real signal cannot read outside its calibrated span. Turning on the live slider lets you drag the value between min and max while a simulation runs, instead of typing a number — useful for exploring how downstream logic responds as a process value moves through its full range." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #4ade80;border-radius:6px;font-size:.8rem;color:#4ade80;background:var(--bg-panel);">
+              AI (Analog Input)
+            </div>
+            <div class="palette-chip" data-block-type="do_" title="Field digital output terminal — represents a real ON/OFF signal (starting a pump, energizing a solenoid) leaving the logic. Displays its input rounded to ON/OFF; wire the logic that should drive it into this block." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #4ade80;border-radius:6px;font-size:.8rem;color:#4ade80;background:var(--bg-panel);">
+              DO (Digital Output)
+            </div>
+            <div class="palette-chip" data-block-type="ao_" title="Field analog output terminal — represents a real continuous signal (e.g. a 4-20 mA output to a control valve) leaving the logic. Define its calibrated range (min/max) the way a real output card channel is scaled; the value is clamped to that range and the equivalent 4-20 mA loop current is shown alongside it, since that is genuinely what travels down the wire to the field device." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #4ade80;border-radius:6px;font-size:.8rem;color:#4ade80;background:var(--bg-panel);">
+              AO (Analog Output)
+            </div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div class="panel-title" style="color:#fb923c;">Final Control Elements</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          
+            <div class="palette-chip" data-block-type="motor" title="A real final controlling element — a motor started/stopped by a run command (limit switch, contactor auxiliary, whatever your logic decides). Shown RUNNING (green, filled) or STOPPED (gray) based on its input, and passes the same value through so you can still monitor or chain off it, the way a real motor auxiliary contact feeds back into other logic." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #fb923c;border-radius:6px;font-size:.8rem;color:#fb923c;background:var(--bg-panel);">
+              Motor (M)
+            </div>
+            <div class="palette-chip" data-block-type="controlValve" title="A real modulating final control element — a control valve driven to a continuous 0-100% position by its input (typically a PID or manual station output), not just open/closed. The valve’s drawn opening fills to match the live position, and the value passes through unchanged for monitoring or chaining. Assumes an instant, ideal actuator; use Control Valve (Actuator Dynamics) below when the actuator’s own travel time and deadband genuinely matter to what you’re testing." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #fb923c;border-radius:6px;font-size:.8rem;color:#fb923c;background:var(--bg-panel);">
+              Control Valve
+            </div>
+            <div class="palette-chip" data-block-type="controlValveDynamic" title="The same modulating final control element as Control Valve, except the actuator now genuinely takes time to move — the position you see and pass downstream is the ACTUAL stem position, not the instantaneous command. Full-stroke time is how long a real pneumatic or electric actuator takes to travel the complete 0→100% range (a large control valve is commonly 10–30+ seconds, not instant); a smaller commanded change takes proportionally less time, exactly like a real actuator moving at a fixed speed. Deadband mimics real packing friction and linkage backlash: a commanded change smaller than the deadband is ignored rather than causing the actuator to hunt back and forth for a fraction of a percent. This is what actually distinguishes testing a loop’s STABILITY (does it oscillate against a real, non-instant final element?) from testing its steady-state logic alone — wire a PID’s output into this instead of the plain Control Valve when that distinction matters." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #fb923c;border-radius:6px;font-size:.8rem;color:#fb923c;background:var(--bg-panel);">
+              Control Valve (Actuator Dynamics)
+            </div>
+            <div class="palette-chip" data-block-type="motorOperatedValve" title="A real motor-operated valve (MOV), the standard BTG/BOP final element for isolation and block valves rather than continuous modulating control: it moves only while actively commanded, driven by a motor at a fixed travel speed, not chasing a continuous position setpoint the way Control Valve does. While Open cmd is TRUE and Close cmd is FALSE, it drives toward 100% open at the rate implied by the full travel time; while Close cmd is TRUE and Open cmd is FALSE, it drives toward 0% closed the same way. With neither command TRUE, or — an invalid, real-world command state a genuine MOV motor starter interlock should never allow — both commands TRUE at once, it simply holds its current position, matching how a real MOV motor stops the instant its run permissive is removed rather than coasting to an end position. Shares the same 0–100% position display as the modulating valves above." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #fb923c;border-radius:6px;font-size:.8rem;color:#fb923c;background:var(--bg-panel);">
+              Motor-Operated Valve (MOV)
+            </div>
+            <div class="palette-chip" data-block-type="sov" title="A real solenoid-operated on/off valve — genuinely discrete, unlike a control valve: it is either fully OPEN or fully CLOSED, energized directly by a digital command (a permissive satisfied, an interlock cleared). Shown OPEN (green) or CLOSED (gray), and passes the same value through for monitoring or chaining." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #fb923c;border-radius:6px;font-size:.8rem;color:#fb923c;background:var(--bg-panel);">
+              SOV (Solenoid Valve)
+            </div>
+            <div class="palette-chip" data-block-type="bulb" title="A real panel indicator lamp — lit (bright amber) when its input is TRUE, dark (dim gray) when FALSE, the standard status/alarm indication on a control panel or annunciator. Passes the same value through for monitoring or chaining." style="cursor:grab;user-select:none;touch-action:none;padding:8px 12px;border:1.5px solid #fb923c;border-radius:6px;font-size:.8rem;color:#fb923c;background:var(--bg-panel);">
+              Indicator Lamp
+            </div>
+        </div>
+      </div>
+    <div style="color:var(--text-faint);font-size:.76rem;">Drag a block onto the canvas to add it, or tap here then tap the canvas.</div>
+  </div></div><div class="card" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-bottom:10px;flex-wrap:wrap;">
+    <span style="color:var(--text-faint);font-size:.78rem;white-space:nowrap;">Pages (shared tag database):</span>
+    <div id="pageTabsRow" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;">
+      <div class="pill" data-page-tab="0" style="cursor:pointer;display:flex;align-items:center;gap:6px;border-color:var(--amber);color:var(--amber);">
+        <span data-page-name="0">Page 1</span>
+        <span data-edit-page="0" title="Rename page" style="color:var(--text-faint);cursor:pointer;font-size:.85em;">✎</span>
+        
+      </div></div>
+    <button class="btn secondary" id="addPageBtn" style="padding:6px 12px;font-size:.8rem;white-space:nowrap;">+ Page</button>
+  </div><div style="display:flex;gap:14px;margin-top:12px;align-items:flex-start;"><div class="card" style="flex:1;min-width:0;padding:0;overflow:hidden;">
+    <div id="samaCanvasWrap" style="position:relative;width:100%;height:calc(100vh - 250px);height:calc(100dvh - 250px);min-height:560px;overflow:auto;background:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, var(--line) 27px, var(--line) 28px),
+      repeating-linear-gradient(90deg, transparent, transparent 27px, var(--line) 27px, var(--line) 28px);
+      background-size:28px 28px; opacity:1;">
+      <svg id="samaSvg" width="1600" height="1100" style="font-family:var(--font-mono);display:block;"><defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"></path></marker>
+      <marker id="arrow-true" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--green)"></path></marker>
+      <marker id="arrow-false" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--text-faint)"></path></marker>
+      <marker id="arrow-err" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--red)"></path></marker>
+    </defs></svg>
+    </div>
+  </div><div class="card" id="propsPanel" style="width:280px;flex:none;display:none;"><div class="panel-title">Block Properties</div><div id="propsBody"></div></div></div><div class="card" id="alarmPanel" style="margin-top:12px;display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div class="panel-title" style="margin:0;" id="alarmPanelTitle">Alarm Summary</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary" id="alarmAckAllBtn" style="display:none;">Acknowledge All</button>
+        <button class="btn secondary" id="alarmLogToggleBtn">Event Log ▾</button>
+      </div>
+    </div>
+    <div id="alarmActiveList" style="margin-top:8px;"><div style="color:var(--text-faint);font-size:.82rem;">No active alarms.</div></div>
+    <div id="alarmEventLogWrap" style="display:none;margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="color:var(--text-faint);font-size:.76rem;">Most recent first — this session only</span>
+        <button class="btn secondary" id="alarmLogClearBtn" style="padding:2px 10px;font-size:.76rem;">Clear Log</button>
+      </div>
+      <div id="alarmEventLogList" style="max-height:220px;overflow-y:auto;margin-top:6px;font-size:.8rem;font-family:var(--font-mono);"></div>
+    </div>
+  </div><div class="card" id="trendPanel" style="margin-top:12px;display:none;">
+    <div class="panel-title">Live Trend</div>
+    <p style="color:var(--text-dim);font-size:.8rem;margin-top:0;">Watch how a signal actually evolves over time, the way a real DCS trend does — not just its current value. Add any block's output to the chart; it starts recording the moment you press Run.</p>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+      <select id="trendBlockSelect" style="width:auto;min-width:200px;"><option value="">Add a signal to watch…</option></select>
+      <button class="btn secondary" id="trendAddBtn">+ Add to Trend</button>
+      <button class="btn secondary" id="trendClearBtn">Clear Trend</button>
+      <button class="btn secondary" id="trendExportBtn" title="Download the trended signals' recorded points (the same 60s scrolling window shown above) as a CSV file">Export CSV</button>
+      <span style="color:var(--text-faint);font-size:.76rem;margin-left:auto;">Last 60 s, scrolling</span>
+    </div>
+    <div style="overflow-x:auto;"><svg id="trendSvg" width="100%" height="240" viewBox="0 0 1000 240" preserveAspectRatio="none" style="background:var(--bg-panel);border:1px solid var(--line);border-radius:6px;min-width:600px;"></svg></div>
+    <div id="trendLegend" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:.78rem;"></div>
+  </div><div class="card" style="margin-top:16px;">
+    <h2 class="panel-title" style="margin-top:0;">About This Calculation</h2>
+    <p style="color:var(--text-dim);font-size:.9rem;line-height:1.65;margin-top:8px;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">SAMA (Scientific Apparatus Makers Association) symbols are the standard notation for control and interlock logic diagrams across the power industry, part of the same lineage as the ISA/MCAA "Functional Diagramming of Instrument and Control Systems" standard — the same summing junctions, high/low/median selects, limiters, and manual/auto transfer stations that appear throughout real combustion control and permissive logic. This tool lets you wire your own chain of standard blocks — static/algebraic blocks, a full logic-gate family (AND/OR/NOT/NAND/NOR/XOR) plus an M-out-of-N safety voter, and genuine time-stepped dynamic blocks (lag, derivative, integrator, a resettable totalizer, a real Auto/Manual PID faceplate, an on/off hysteresis controller, track/hold, ramp generators, timers, a first-out annunciator) — and watch every output update live, including a scrolling trend chart and a full Hi-Hi/Hi/Lo/Lo-Lo alarm summary with acknowledge and event log, rather than only viewing pre-built loops.</p>
+    <h2 class="panel-title" style="margin-top:20px;">Frequently Asked Questions</h2>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What’s the difference between this and the Control Loops page?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Control Loops shows complete, pre-built simulations of specific real plant control loops (drum level, combustion control, and so on), each already wired up and ready to run. This tool is for building your OWN logic from individual SAMA blocks — summers, selects, AND/OR gates, and genuine dynamic blocks like PID, lag, and timers — to check how a specific piece of interlock, permissive, or control logic behaves for exactly the combination you need, not just the pre-built examples.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Why can a block only reference an earlier block, not a later one?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">A real SAMA diagram is read left to right — signals flow forward, never backward into an earlier summing junction on the same sheet. Enforcing that here means the chain evaluates in one deterministic pass with no risk of a circular reference, exactly matching how the diagram would actually be drawn and read. A genuine feedback loop (like a PID controlling the process it reads back from) is still fully supported — it’s resolved correctly using a one-step simulation delay once you add a dynamic block, the same way a real control loop’s feedback path works.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">What happens if I remove a block that another block depends on?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">The dependent block’s input automatically falls back to a constant value (0) instead of being left broken — you’ll see it change and can re-wire it to a different source if needed.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Are dynamic blocks like lag, integrator, or timers included?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Yes — lag, derivative, lead-lag, integrator, a resettable totalizer, rate limiter, dead time, a ramp/time-function generator, a full anti-windup PID controller (with a real Auto/Manual faceplate mode and bumpless transfer, just like a real DCS), an on/off hysteresis controller, a track/hold (sample-and-hold), both Reset-dominant and Set-dominant SR latches, a first-out sequence annunciator, a time-delay (ON/OFF-delay) timer, a one-shot pulse timer, and a free-running pulse generator are all available alongside the static/algebraic SAMA blocks (summers, averaging, differencing, high/low/median selects, an M-out-of-N safety voter, limiters, exponential, manual/auto transfer stations, AND/OR/NOT/NAND/NOR/XOR, comparators). Add any dynamic block to a diagram and Simulate mode activates automatically, stepping the whole chain forward in time with a Run/Pause/Reset clock and an optional live trend chart.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Can I build real safety voting logic like 2oo3, not just plain AND/OR?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Yes — the M-out-of-N Voter block is the standard SIS architecture (1oo2, 2oo2, 2oo3, 1oo3, 3oo3) as one configurable block: it outputs TRUE once at least M of its connected inputs are TRUE. 2oo3 specifically is genuinely different from a plain AND or OR gate — it tolerates any single input disagreeing (a stuck or spurious sensor) without either a nuisance trip or a loss of protection, which is exactly why real safety instrumented systems use it. Median Select does the equivalent job for analog signals: it outputs the middle of three inputs, so one wildly failed transmitter (high or low) never affects the result.</div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-weight:600;color:var(--text);font-size:1rem;margin:0;">Can I configure alarm limits and see them on the diagram?</h3>
+      <div style="color:var(--text-dim);font-size:.88rem;margin-top:4px;line-height:1.55;text-align:justify;-webkit-hyphens:auto;hyphens:auto;">Yes — any block with an assigned instrument tag can have Hi-Hi/Hi/Lo/Lo-Lo alarm limits configured in its Properties panel. An active, unacknowledged alarm shows a pulsing red or amber border directly on the block, and every alarm across every page of the diagram appears in the Alarm Summary panel with an acknowledge workflow and a timestamped event log — the same alarm banner pattern a real DCS operator station uses.</div>
+    </div>
+  </div></main>
+    <footer class="app-foot">Engineering Calculator Hub — for education, estimation, and reference. Not a substitute for calibrated instruments or qualified engineering review. <a href="/about/" data-route="about" style="color:inherit;text-decoration:underline;">About</a> · <a href="/guides/" data-route="guides" style="color:inherit;text-decoration:underline;">Guides</a> · <a href="/contact/" data-route="contact" style="color:inherit;text-decoration:underline;">Contact</a> · <a href="/privacy/" data-route="privacy" style="color:inherit;text-decoration:underline;">Privacy Policy</a> · <a href="/terms/" data-route="terms" style="color:inherit;text-decoration:underline;">Terms of Use</a></footer>
+
+    <!-- ============================================================
+         Razorpay Payment Button.
+         Placed directly below the footer (which carries the build number
+         and the "revenue goes to..." line, appended by JS in app.js) so
+         the button sits right under that text, not after the ad further
+         down. Outside #content (the router-controlled area), so it
+         persists across every page navigation instead of getting wiped
+         out. Embed code used exactly as provided by Razorpay, wrapped
+         only in centering/spacing — data-payment_button_id is a real ID
+         (pl_TYqV9ui5mTXTad), not a placeholder.
+         ============================================================ -->
+    <div style="max-width:100%;overflow:hidden;margin:8px 16px 16px;text-align:center;">
+      <form>
+        <script src="https://checkout.razorpay.com/v1/payment-button.js" data-payment_button_id="pl_TYqV9ui5mTXTad" async></script>
+      </form>
+    </div>
+
+    <!-- ============================================================
+         Google AdSense — responsive display ad unit.
+         Deliberately empty here. The <ins> element and its push() call
+         are created by JS in applySeo() (js/app.js), only after the
+         current page's real content already exists in the DOM -- see
+         the note in index.html's <head> for why. This container sits
+         OUTSIDE #content (the router-controlled area the app clears
+         and rebuilds on every navigation), so once populated it
+         persists correctly across page changes instead of being wiped
+         out, and it sits below the calculator itself rather than
+         inside or above it.
+         data-ad-client: ca-pub-6794299102016509 (same as applySeo()'s injected script)
+         data-ad-slot:   2008953298 (your ad unit's slot ID)
+         ============================================================ -->
+    <div id="mainAdUnit" style="max-width:100%;overflow:hidden;margin:0 16px 12px;"></div>
+
+    <!-- Moved out of position:fixed (was overlapping diagram content in
+         the Control Loops simulator whenever a node happened to render in
+         the bottom-right of the viewport) and into normal document flow,
+         as the last item on every page instead. -->
+    <div class="app-signature">Built with <span class="heart">&hearts;</span> &mdash; Dr. Kundan</div>
+  </div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
